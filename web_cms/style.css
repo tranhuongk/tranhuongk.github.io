@@ -1,0 +1,270 @@
+*{
+    padding: 0;
+    margin: 0;
+    font-size: 12px;
+}
+body{
+    background-color: rgb(218, 218, 218);
+    font-family: Georgia, 'Times New Roman', Times, serif;
+}
+
+.container{
+    margin: auto;
+    max-width: 1000px;
+}
+
+#header{
+    border-bottom: 5px solid #ff4653;
+    background-color: black;
+    max-width: 1000px;
+}
+
+#sign-up{
+    padding: 21px 0 20px 21px;
+    color: #c4c4c4;
+    font-size: 12px;
+}
+
+#search-field{
+    position: relative;
+    margin: 15px 0 15px 5px;
+    height: 25px;
+    width: 210px;
+}
+
+#search-input{
+    height: 25px;
+    width: 210px;
+    padding: 0 32px 0 10px;
+    font-size: 12px;
+    border-radius: 12.5px;
+    outline: none;
+    border: none;
+}
+
+#search-button{
+    position: absolute;
+    top: 4px;
+    right: 7px;
+    width: 18px;
+    height: 18px;
+    font-size: 9px;
+    padding: 2px;
+    border-radius: 100%;
+    outline: none;
+    border: none;
+    background-color: black;
+    color: white;
+}
+
+#header2{
+    background-color: white;
+    max-width: 1000px;
+}
+
+#banner{
+    padding: 45px 20px 45px 5px;
+}
+#logo{
+    padding: 47px 0px 45px 19px;
+}
+
+#navigator{
+    background-color: white;
+    max-width: 1000px;
+    padding-left: 20px;
+    padding-right: 20px;
+    box-sizing: border-box;
+}
+
+#menu{
+    margin: 0;
+    padding: 0;
+    background-color: #f2f2f2;
+    border: 1px solid #dbdbdb;
+}
+
+#nav{
+    padding: 0;
+}
+
+#menu a {
+    height: 50px;
+    display: block;
+    text-align: center;
+    color: #666666;
+    text-align: center;
+    padding: 19px 16px 19px 16px;
+    text-decoration: none;
+}
+  
+#menu a:active {
+    background-color: #ff4653;
+    color: white;
+}
+#menu .active {
+    background-color: #ff4653;
+    color: white;
+}
+
+#button-toggle{
+    border: none;
+    outline: none;
+    height: 50px;
+}
+
+#slider{
+    max-width: 1000px;
+    padding-left: 20px;
+    padding-right: 20px;
+    padding-top: 50px;
+    background-color: white;
+}
+
+.carousel-indicators{
+    all: unset;
+}
+
+.dots{
+    position: absolute;
+    top: 67px;
+    right: 41px;
+    margin: 0;
+    z-index: 15;
+}
+
+.dots li{
+    color: #ff4653;
+}
+
+.dots .dot{
+    width: 10px;
+    height: 10px;
+    margin: 1px;
+    border: 5px solid #ff4653;
+    border-radius: 5px;
+    box-sizing: border-box;
+    opacity: 1;
+}
+
+.dots .active{
+    border: 2px solid #ff4653;
+    background-color: transparent;
+}
+
+.dots .dot:hover{
+    cursor: pointer;
+}
+
+.caption{
+    background-color: black;
+    text-align: left;
+    color: #c2c2c2;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 15px 11px 11px 20px;
+}
+
+.caption h3{
+    font-size: 20px;
+}
+
+.caption p{
+    font-size: 13px;
+}
+
+#intro{
+    padding: 60px 20px 60px 20px;
+    background-color: white;
+    box-sizing: border-box;
+}
+
+#content-left, #content-right{
+    padding: 0;
+}
+
+#intro .title p{
+    font-size: 46px;
+    color: #535f6b;
+    line-height: 55.2px;
+}
+#intro .content p{
+    font-size: 18px;
+    color: #666666;
+    line-height: 28.8px;
+}
+
+.sth{
+    width: 225px;
+    margin-top: 30px;
+    margin-bottom: 10px;
+    border-bottom: solid 10px #333333;
+}
+
+.content-right {
+    cursor: pointer;
+}
+.content-right:hover .sth {
+    border-bottom-color: #ff4653;
+}
+
+#view-gallery{
+    margin-top: 10px;
+    margin-bottom: 0;
+}
+
+#view-gallery p{
+    position: absolute;
+    right: 20px;
+    font-size: 18px;
+    color: #ff4653;
+    text-align: right;
+    justify-content: right;
+    cursor: pointer;
+}
+
+#footer{
+    border-top: solid 5px #ff4653;
+    margin: 0 -15px;
+    background-color: #1a1b1d;
+}
+#footer #info{
+    padding: 50px 20px 55px 20px;
+}
+
+.tit{
+    font-size: 13px;
+    color: white;
+    margin-bottom: 30px;
+}
+
+.cont{
+    text-decoration: none;
+    font-size: 13px;
+    color: #999999;
+    line-height: 19.2px;
+}
+
+#footer #copy-right{
+    padding-bottom: 20px;
+    padding-top: 25px;
+    padding-left: 20px;
+    padding-right: 20px;
+}
+
+hr{
+    margin: 0 20px;
+    border-top: 0.5px #373432 solid;
+}
+
+
+
+#copy-right .copy-right{
+    font-size: 12px;
+    color: #737373;
+}
+
+#copy-right .templ{
+    text-align: right;
+}
