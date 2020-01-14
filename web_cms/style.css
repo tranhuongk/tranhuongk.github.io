@@ -230,10 +230,11 @@ body{
     background-color: #1a1b1d;
 }
 #footer #info{
-    padding: 50px 20px 55px 20px;
+    padding: 0px 20px 55px 20px;
 }
 
 .tit{
+    margin-top: 50px;
     font-size: 13px;
     color: white;
     margin-bottom: 30px;
