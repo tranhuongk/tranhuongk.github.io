@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="./WeMap-Web-SDK-Release/assets/js/wemap-gl.js" type="text/javascript"></script>
+    <link href="./WeMap-Web-SDK-Release/assets/css/wemap.min.css" rel="stylesheet" />
+    <script src="extract_without_vertex.js" type="text/javascript"></script>
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js"
+        integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+    <script src="calculate.js" type="text/javascript"></script>
+    <title>test interpolation</title>
+    <style>
+        #map {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .marker {
+            top: -19.4px;
+            background-image: url('origin.png');
+            background-size: contain;
+            width: 28px;
+            height: 38.9px;
+            cursor: pointer;
+            content: "hello";
+        }
+        .marker-proj {
+            top: -19.4px;
+            background-image: url('destination.png');
+            background-size: contain;
+            width: 28px;
+            height: 38.9px;
+            cursor: pointer;
+            content: "hello";
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div class="marker"></div>
+    <div class="marker-proj"></div>
+</body>
+
+<script>
+    const map = new wemapgl.WeMap({
+        container: 'map',
+        key: 'IqzJukzUWpWrcDHJeDpUPLSGndDx',
+        style: 'bright',
+        center: [105.7773214, 21.0402127],
+        zoom: 13,
+        urlController: "true",
+        reverse: "false"
+    });
+
+    // Định nghĩa một control
+    const geolocation = new wemapgl.GeolocateControl();
+    // Thêm control này vào bản đồ
+    map.addControl(geolocation, 'bottom-right');
+
+    // create a HTML element for each feature
+    var marker = document.createElement('div');
+    marker.className = 'marker';
+    var marker_proj = document.createElement('div');
+    marker_proj.className = 'marker-proj';
+
+</script>
+
+</html>
