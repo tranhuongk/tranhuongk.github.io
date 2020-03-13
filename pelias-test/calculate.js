@@ -28,7 +28,7 @@ $(document).ready(function () {
                 'circle-radius': 8,
                 'circle-color': '#B42222'
             },
-            'filter': ['==', '$type', 'Point']
+            'filter': ['==', 'source', 'VERTEX']
         });
     });
 
