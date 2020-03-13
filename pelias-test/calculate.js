@@ -1,5 +1,56 @@
 $(document).ready(function () {
+
+    var type = getUrlVars()["type"]
+    var data
+    if (type == null) {
+        type = 1;
+        window.location.href += `?type=${type}`
+    }
+
+    switch (type) {
+        case "2":
+            data = data2;
+            $("select.custom-select").val("2").change();
+            break
+        case "3":
+            $("select.custom-select").val("3").change();
+            data = data3
+            break
+        case "4":
+            $("select.custom-select").val("4").change();
+            data = data4
+            break
+        default:
+            $("select.custom-select").val("1").change();
+            data = data1
+            break
+    }
+
+    $("select.custom-select").change(function () {
+        var selectedCountry = $(this).children("option:selected").val();
+        let url
+        switch (selectedCountry) {
+            case "1":
+                url = window.location.href.replace(`type=${type}`, `type=1`)
+                window.location.href = url
+                break
+            case "2":
+                url = window.location.href.replace(`type=${type}`, `type=2`)
+                window.location.href = url
+                break
+            case "3":
+                url = window.location.href.replace(`type=${type}`, `type=3`)
+                window.location.href = url
+                break
+            default:
+                url = window.location.href.replace(`type=${type}`, `type=4`)
+                window.location.href = url
+                break
+        }
+    });
+
     map.on('load', function () {
+
         map.addSource('national-park', {
             'type': 'geojson',
             'data': data
@@ -35,14 +86,40 @@ $(document).ready(function () {
     data.features.forEach(element => {
         if (element.properties.source == "OSM") {
             // make a marker for each feature and add to the map
-            new wemapgl.Marker(marker.cloneNode(true))
+            let marker = new wemapgl.Marker(marker_real.cloneNode(true))
                 .setLngLat([element.properties.lon, element.properties.lat])
                 .addTo(map);
 
-            new wemapgl.Marker(marker_proj.cloneNode(true))
+            let marker2 = new wemapgl.Marker(marker_proj.cloneNode(true))
                 .setLngLat([element.properties.proj_lon, element.properties.proj_lat])
                 .addTo(map);
-
+            let viewPopup = document.createElement("div");
+            viewPopup.classList.add("viewPopup2");
+            viewPopup.innerHTML = element.properties.housenumber
+            let markerElement = marker2._element;
+            markerElement.appendChild(viewPopup);
+        }
+        if (element.properties.source == "VERTEX") {
+            let vertex = new wemapgl.Marker()
+                .setLngLat([element.properties.proj_lon, element.properties.proj_lat])
+                .addTo(map);
+            let viewPopup = document.createElement("div");
+            viewPopup.classList.add("viewPopup2");
+            viewPopup.innerHTML = element.properties.housenumber
+            let markerElement = vertex._element;
+            markerElement.appendChild(viewPopup);
         }
     })
+
+
+    function getUrlVars() {
+        var vars = [], hash;
+        var hashes = window.location.href.slice(window.location.href.indexOf('?') + 1).split('&');
+        for (var i = 0; i < hashes.length; i++) {
+            hash = hashes[i].split('=');
+            vars.push(hash[0]);
+            vars[hash[0]] = hash[1];
+        }
+        return vars;
+    }
 })
