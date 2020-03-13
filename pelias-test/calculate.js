@@ -71,16 +71,16 @@ $(document).ready(function () {
             'filter': ['==', '$type', 'LineString']
         });
 
-        map.addLayer({
-            'id': 'park-volcanoes',
-            'type': 'circle',
-            'source': 'national-park',
-            'paint': {
-                'circle-radius': 8,
-                'circle-color': '#B42222'
-            },
-            'filter': ['==', 'source', 'VERTEX']
-        });
+        // map.addLayer({
+        //     'id': 'park-volcanoes',
+        //     'type': 'circle',
+        //     'source': 'national-park',
+        //     'paint': {
+        //         'circle-radius': 8,
+        //         'circle-color': '#B42222'
+        //     },
+        //     'filter': ['==', 'source', 'VERTEX']
+        // });
     });
 
     data.features.forEach(element => {
