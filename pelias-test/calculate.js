@@ -20,6 +20,22 @@ $(document).ready(function () {
             $("select.custom-select").val("4").change();
             data = data4
             break
+        case "5":
+            $("select.custom-select").val("5").change();
+            data = data1
+            interpolation_data.features.forEach(element => {
+                if (element.properties.type == "interpolated") {
+                    let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
+                        .setLngLat([element.properties.lon, element.properties.lat])
+                        .addTo(map)
+                    let viewPopup = document.createElement("div");
+                    viewPopup.classList.add("viewPopup2");
+                    viewPopup.innerHTML = element.properties.number
+                    let markerElement = interpolation_marker._element;
+                    markerElement.appendChild(viewPopup);
+                }
+            })
+            break
         default:
             $("select.custom-select").val("1").change();
             data = data1
@@ -42,6 +58,10 @@ $(document).ready(function () {
                 url = window.location.href.replace(`type=${type}`, `type=3`)
                 window.location.href = url
                 break
+            case "5":
+                url = window.location.href.replace(`type=${type}`, `type=5`)
+                window.location.href = url
+                break
             default:
                 url = window.location.href.replace(`type=${type}`, `type=4`)
                 window.location.href = url
@@ -50,7 +70,6 @@ $(document).ready(function () {
     });
 
     map.on('load', function () {
-
         map.addSource('national-park', {
             'type': 'geojson',
             'data': data
@@ -109,8 +128,17 @@ $(document).ready(function () {
             let markerElement = vertex._element;
             markerElement.appendChild(viewPopup);
         }
+        // if (element.properties.type == "interpolated") {
+        //     let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
+        //         .setLngLat([element.properties.lon, element.properties.lat])
+        //         .addTo(map)
+        //     let viewPopup = document.createElement("div");
+        //     viewPopup.classList.add("viewPopup2");
+        //     viewPopup.innerHTML = element.properties.number
+        //     let markerElement = interpolation_marker._element;
+        //     markerElement.appendChild(viewPopup);
+        // }
     })
-
 
     function getUrlVars() {
         var vars = [], hash;
