@@ -36,6 +36,10 @@ $(document).ready(function () {
                 }
             })
             break
+        case "6":
+            $("select.custom-select").val("6").change();
+            data = data6
+            break
         default:
             $("select.custom-select").val("1").change();
             data = data1
@@ -60,6 +64,10 @@ $(document).ready(function () {
                 break
             case "5":
                 url = window.location.href.replace(`type=${type}`, `type=5`)
+                window.location.href = url
+                break
+            case "6":
+                url = window.location.href.replace(`type=${type}`, `type=6`)
                 window.location.href = url
                 break
             default:
