@@ -116,6 +116,11 @@ $(document).ready(function () {
             let marker = new wemapgl.Marker(marker_real.cloneNode(true))
                 .setLngLat([element.properties.lon, element.properties.lat])
                 .addTo(map);
+            let viewPopup1 = document.createElement("div");
+            viewPopup1.classList.add("viewPopup2");
+            viewPopup1.innerHTML = element.properties.housenumber
+            let markerElement1 = marker._element;
+            markerElement1.appendChild(viewPopup1);
 
             let marker2 = new wemapgl.Marker(marker_proj.cloneNode(true))
                 .setLngLat([element.properties.proj_lon, element.properties.proj_lat])
