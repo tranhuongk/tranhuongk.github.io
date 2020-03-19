@@ -2,6 +2,8 @@ $(document).ready(function () {
 
     var type = getUrlVars()["type"]
     var data
+    var street1
+    var street2
     if (type == null) {
         type = 1;
         window.location.href += `?type=${type}`
@@ -10,19 +12,27 @@ $(document).ready(function () {
     switch (type) {
         case "2":
             data = data2;
+            street1 = xuanthuy_f1
+            street2 = xuanthuy_f2
             $("select.custom-select").val("2").change();
             break
         case "3":
             $("select.custom-select").val("3").change();
             data = data3
+            street1 = xuanthuy_f1
+            street2 = xuanthuy_f2
             break
         case "4":
             $("select.custom-select").val("4").change();
             data = data4
+            street1 = xuanthuy_f1
+            street2 = xuanthuy_f2
             break
         case "5":
             $("select.custom-select").val("5").change();
             data = data1
+            street1 = xuanthuy_s1
+            street2 = xuanthuy_s2
             interpolation_data.features.forEach(element => {
                 if (element.properties.type == "interpolated") {
                     let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
@@ -39,10 +49,14 @@ $(document).ready(function () {
         case "6":
             $("select.custom-select").val("6").change();
             data = data6
+            street1 = xuanthuy_s1
+            street2 = xuanthuy_s2
             break
         default:
             $("select.custom-select").val("1").change();
-            data = data1
+            data = data_44_22
+            street1 = xuanthuy_s1
+            street2 = xuanthuy_s2
             break
     }
 
@@ -94,6 +108,44 @@ $(document).ready(function () {
             'paint': {
                 'line-color': '#035afc',
                 'line-width': 8
+            },
+            'filter': ['==', '$type', 'LineString']
+        });
+        map.addSource('national-park2', {
+            'type': 'geojson',
+            'data': street1
+        });
+
+        map.addLayer({
+            'id': 'park-boundary2',
+            'type': 'line',
+            'source': 'national-park2',
+            'layout': {
+                'line-join': 'round',
+                'line-cap': 'round'
+            },
+            'paint': {
+                'line-color': '#ff00ff',
+                'line-width': 10
+            },
+            'filter': ['==', '$type', 'LineString']
+        });
+        map.addSource('national-park3', {
+            'type': 'geojson',
+            'data': street2
+        });
+
+        map.addLayer({
+            'id': 'park-boundary3',
+            'type': 'line',
+            'source': 'national-park3',
+            'layout': {
+                'line-join': 'round',
+                'line-cap': 'round'
+            },
+            'paint': {
+                'line-color': '#00ffff',
+                'line-width': 10
             },
             'filter': ['==', '$type', 'LineString']
         });
