@@ -55,6 +55,8 @@ $(document).ready(function () {
         case "7":
             $("select.custom-select").val("7").change();
             data = data7
+            street1 = xuanthuy_s1
+            street2 = xuanthuy_s2
             break
         default:
             $("select.custom-select").val("1").change();
