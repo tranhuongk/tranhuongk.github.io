@@ -31,8 +31,8 @@ $(document).ready(function () {
         case "5":
             $("select.custom-select").val("5").change();
             data = data1
-            street1 = xuanthuy_s1
-            street2 = xuanthuy_s2
+            street1 = xuanthuy_f1
+            street2 = xuanthuy_f2
             interpolation_data.features.forEach(element => {
                 if (element.properties.type == "interpolated") {
                     let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
@@ -49,14 +49,14 @@ $(document).ready(function () {
         case "6":
             $("select.custom-select").val("6").change();
             data = data6
-            street1 = xuanthuy_s1
-            street2 = xuanthuy_s2
+            street1 = xuanthuy_f1
+            street2 = xuanthuy_f2
             break
         case "7":
             $("select.custom-select").val("7").change();
             data = data7
-            street1 = xuanthuy_s1
-            street2 = xuanthuy_s2
+            street1 = xuanthuy_f1
+            street2 = xuanthuy_f2
             break
         default:
             $("select.custom-select").val("1").change();
