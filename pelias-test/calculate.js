@@ -52,6 +52,10 @@ $(document).ready(function () {
             street1 = xuanthuy_s1
             street2 = xuanthuy_s2
             break
+        case "7":
+            $("select.custom-select").val("7").change();
+            data = data7
+            break
         default:
             $("select.custom-select").val("1").change();
             data = data_44_22
@@ -82,6 +86,10 @@ $(document).ready(function () {
                 break
             case "6":
                 url = window.location.href.replace(`type=${type}`, `type=6`)
+                window.location.href = url
+                break
+            case "7":
+                url = window.location.href.replace(`type=${type}`, `type=7`)
                 window.location.href = url
                 break
             default:
@@ -168,6 +176,11 @@ $(document).ready(function () {
             let marker = new wemapgl.Marker(marker_real.cloneNode(true))
                 .setLngLat([element.properties.lon, element.properties.lat])
                 .addTo(map);
+            let viewPopup1 = document.createElement("div");
+            viewPopup1.classList.add("viewPopup2");
+            viewPopup1.innerHTML = element.properties.housenumber
+            let markerElement1 = marker._element;
+            markerElement1.appendChild(viewPopup1);
 
             let marker2 = new wemapgl.Marker(marker_proj.cloneNode(true))
                 .setLngLat([element.properties.proj_lon, element.properties.proj_lat])
