@@ -10,8 +10,14 @@ $(document).ready(function () {
     }
 
     switch (type) {
+        case "0":
+            data = data0;
+            street1 = xuanthuy_v1
+            street2 = xuanthuy_v2
+            $("select.custom-select").val("0").change();
+            break
         case "2":
-            data = data2;
+            data = data1;
             street1 = xuanthuy_f1
             street2 = xuanthuy_f2
             $("select.custom-select").val("2").change();
@@ -70,6 +76,10 @@ $(document).ready(function () {
         switch (selectedCountry) {
             case "1":
                 url = window.location.href.replace(`type=${type}`, `type=1`)
+                window.location.href = url
+                break
+            case "0":
+                url = window.location.href.replace(`type=${type}`, `type=0`)
                 window.location.href = url
                 break
             case "2":
