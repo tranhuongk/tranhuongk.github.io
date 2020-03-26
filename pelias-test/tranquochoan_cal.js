@@ -2,74 +2,20 @@ $(document).ready(function () {
 
     var type = getUrlVars()["type"]
     var data
-    var street1
-    var street2
     var tqh = tqh_street
     if (type == null) {
-        type = 1;
+        type = 0;
         window.location.href += `?type=${type}`
     }
 
     switch (type) {
         case "0":
-            data = data0;
-            street1 = xuanthuy_v1
-            street2 = xuanthuy_v2
+            data = tqh1
             $("select.custom-select").val("0").change();
-            break
-        case "2":
-            data = data1;
-            street1 = xuanthuy_f1
-            street2 = xuanthuy_f2
-            $("select.custom-select").val("2").change();
-            break
-        case "3":
-            $("select.custom-select").val("3").change();
-            data = data3
-            street1 = xuanthuy_f1
-            street2 = xuanthuy_f2
-            break
-        case "4":
-            $("select.custom-select").val("4").change();
-            data = data4
-            street1 = xuanthuy_f1
-            street2 = xuanthuy_f2
-            break
-        case "5":
-            $("select.custom-select").val("5").change();
-            data = data1
-            street1 = xuanthuy_f1
-            street2 = xuanthuy_f2
-            interpolation_data.features.forEach(element => {
-                if (element.properties.type == "interpolated") {
-                    let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
-                        .setLngLat([element.properties.lon, element.properties.lat])
-                        .addTo(map)
-                    let viewPopup = document.createElement("div");
-                    viewPopup.classList.add("viewPopup2");
-                    viewPopup.innerHTML = element.properties.number
-                    let markerElement = interpolation_marker._element;
-                    markerElement.appendChild(viewPopup);
-                }
-            })
-            break
-        case "6":
-            $("select.custom-select").val("6").change();
-            data = data6
-            street1 = xuanthuy_f1
-            street2 = xuanthuy_f2
-            break
-        case "7":
-            $("select.custom-select").val("7").change();
-            data = data7
-            street1 = xuanthuy_f1
-            street2 = xuanthuy_f2
             break
         default:
             $("select.custom-select").val("1").change();
-            data = data_44_22
-            street1 = xuanthuy_s1
-            street2 = xuanthuy_s2
+            data = tqh2
             break
     }
 
@@ -77,36 +23,12 @@ $(document).ready(function () {
         var selectedCountry = $(this).children("option:selected").val();
         let url
         switch (selectedCountry) {
-            case "1":
-                url = window.location.href.replace(`type=${type}`, `type=1`)
-                window.location.href = url
-                break
             case "0":
                 url = window.location.href.replace(`type=${type}`, `type=0`)
                 window.location.href = url
                 break
-            case "2":
-                url = window.location.href.replace(`type=${type}`, `type=2`)
-                window.location.href = url
-                break
-            case "3":
-                url = window.location.href.replace(`type=${type}`, `type=3`)
-                window.location.href = url
-                break
-            case "5":
-                url = window.location.href.replace(`type=${type}`, `type=5`)
-                window.location.href = url
-                break
-            case "6":
-                url = window.location.href.replace(`type=${type}`, `type=6`)
-                window.location.href = url
-                break
-            case "7":
-                url = window.location.href.replace(`type=${type}`, `type=7`)
-                window.location.href = url
-                break
-            default:
-                url = window.location.href.replace(`type=${type}`, `type=4`)
+            case "1":
+                url = window.location.href.replace(`type=${type}`, `type=1`)
                 window.location.href = url
                 break
         }
@@ -129,44 +51,6 @@ $(document).ready(function () {
             'paint': {
                 'line-color': '#035afc',
                 'line-width': 8
-            },
-            'filter': ['==', '$type', 'LineString']
-        });
-        map.addSource('national-park2', {
-            'type': 'geojson',
-            'data': street1
-        });
-
-        map.addLayer({
-            'id': 'park-boundary2',
-            'type': 'line',
-            'source': 'national-park2',
-            'layout': {
-                'line-join': 'round',
-                'line-cap': 'round'
-            },
-            'paint': {
-                'line-color': '#ff00ff',
-                'line-width': 10
-            },
-            'filter': ['==', '$type', 'LineString']
-        });
-        map.addSource('national-park3', {
-            'type': 'geojson',
-            'data': street2
-        });
-
-        map.addLayer({
-            'id': 'park-boundary3',
-            'type': 'line',
-            'source': 'national-park3',
-            'layout': {
-                'line-join': 'round',
-                'line-cap': 'round'
-            },
-            'paint': {
-                'line-color': '#00ffff',
-                'line-width': 10
             },
             'filter': ['==', '$type', 'LineString']
         });
