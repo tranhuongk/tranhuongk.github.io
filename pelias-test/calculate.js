@@ -35,10 +35,22 @@ $(document).ready(function () {
             $("select.custom-select").val("2").change();
             break
         case "3":
+            data = data_polygon;
+            street1 = xuanthuy_street
+            street2 = null
             $("select.custom-select").val("3").change();
-            data = data3
-            street1 = xuanthuy_f1
-            street2 = xuanthuy_f2
+            interpolation_data2.features.forEach(element => {
+                if (element.properties.type == "interpolated") {
+                    let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
+                        .setLngLat([element.properties.lon, element.properties.lat])
+                        .addTo(map)
+                    let viewPopup = document.createElement("div");
+                    viewPopup.classList.add("viewPopup2");
+                    viewPopup.innerHTML = element.properties.number
+                    let markerElement = interpolation_marker._element;
+                    markerElement.appendChild(viewPopup);
+                }
+            })
             break
         case "4":
             $("select.custom-select").val("4").change();
@@ -200,14 +212,6 @@ $(document).ready(function () {
     data.features.forEach(element => {
         if (element.properties.source == "OSM") {
             // make a marker for each feature and add to the map
-            // let marker = new wemapgl.Marker(marker_real.cloneNode(true))
-            //     .setLngLat([element.properties.lon, element.properties.lat])
-            //     .addTo(map);
-            // let viewPopup1 = document.createElement("div");
-            // viewPopup1.classList.add("viewPopup2");
-            // viewPopup1.innerHTML = element.properties.housenumber
-            // let markerElement1 = marker._element;
-            // markerElement1.appendChild(viewPopup1);
 
             let marker2 = new wemapgl.Marker(marker_proj.cloneNode(true))
                 .setLngLat([element.properties.proj_lon, element.properties.proj_lat])
@@ -227,6 +231,16 @@ $(document).ready(function () {
             viewPopup.innerHTML = element.properties.housenumber
             let markerElement = vertex._element;
             markerElement.appendChild(viewPopup);
+        }
+        if (element.properties.source == "POLYGON") {
+            let marker = new wemapgl.Marker(marker_real.cloneNode(true))
+                .setLngLat([element.properties.proj_lon, element.properties.proj_lat])
+                .addTo(map);
+            let viewPopup1 = document.createElement("div");
+            viewPopup1.classList.add("viewPopup2");
+            viewPopup1.innerHTML = element.properties.housenumber
+            let markerElement1 = marker._element;
+            markerElement1.appendChild(viewPopup1);
         }
         // if (element.properties.type == "interpolated") {
         //     let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
