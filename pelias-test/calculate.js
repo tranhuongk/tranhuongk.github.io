@@ -13,7 +13,7 @@ $(document).ready(function () {
         case "0":
             data = data0;
             street1 = xuanthuy_street
-            street2 = null
+            street2 = xuanthuy_street2
             $("select.custom-select").val("0").change();
             interpolation_data2.features.forEach(element => {
                 if (element.properties.type == "interpolated") {
@@ -37,7 +37,7 @@ $(document).ready(function () {
         case "3":
             data = data_polygon;
             street1 = xuanthuy_street
-            street2 = null
+            street2 = xuanthuy_street2
             $("select.custom-select").val("3").change();
             interpolation_data2.features.forEach(element => {
                 if (element.properties.type == "interpolated") {
