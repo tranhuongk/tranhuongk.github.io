@@ -5,7 +5,7 @@ $(document).ready(function () {
     var street1
     var street2
     if (type == null) {
-        type = 1;
+        type = 0;
         window.location.href += `?type=${type}`
     }
 
@@ -35,7 +35,7 @@ $(document).ready(function () {
             $("select.custom-select").val("2").change();
             break
         case "3":
-            data = data_polygon;
+            data = null;
             street1 = xuanthuy_street
             street2 = xuanthuy_street2
             $("select.custom-select").val("3").change();
@@ -62,7 +62,7 @@ $(document).ready(function () {
             $("select.custom-select").val("5").change();
             data = data1
             street1 = xuanthuy_street
-            street2 = null
+            street2 = xuanthuy_street2
             interpolation_data.features.forEach(element => {
                 if (element.properties.type == "interpolated") {
                     let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
@@ -91,8 +91,8 @@ $(document).ready(function () {
         default:
             $("select.custom-select").val("1").change();
             data = data_44_22
-            street1 = xuanthuy_s1
-            street2 = xuanthuy_s2
+            street1 = xuanthuy_street
+            street2 = xuanthuy_street2
             break
     }
 
