@@ -35,22 +35,22 @@ $(document).ready(function () {
             $("select.custom-select").val("2").change();
             break
         case "3":
-            data = null;
+            data = xuanthuy_with_polygon;
             street1 = xuanthuy_street
             street2 = xuanthuy_street2
             $("select.custom-select").val("3").change();
-            interpolation_data2.features.forEach(element => {
-                if (element.properties.type == "interpolated") {
-                    let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
-                        .setLngLat([element.properties.lon, element.properties.lat])
-                        .addTo(map)
-                    let viewPopup = document.createElement("div");
-                    viewPopup.classList.add("viewPopup2");
-                    viewPopup.innerHTML = element.properties.number
-                    let markerElement = interpolation_marker._element;
-                    markerElement.appendChild(viewPopup);
-                }
-            })
+            // interpolation_data2.features.forEach(element => {
+            //     if (element.properties.type == "interpolated") {
+            //         let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
+            //             .setLngLat([element.properties.lon, element.properties.lat])
+            //             .addTo(map)
+            //         let viewPopup = document.createElement("div");
+            //         viewPopup.classList.add("viewPopup2");
+            //         viewPopup.innerHTML = element.properties.number
+            //         let markerElement = interpolation_marker._element;
+            //         markerElement.appendChild(viewPopup);
+            //     }
+            // })
             break
         case "4":
             $("select.custom-select").val("4").change();
@@ -90,7 +90,7 @@ $(document).ready(function () {
             break
         default:
             $("select.custom-select").val("1").change();
-            data = data_44_22
+            data = xuanthuy_with_polygon
             street1 = xuanthuy_street
             street2 = xuanthuy_street2
             break
@@ -196,52 +196,76 @@ $(document).ready(function () {
 
     });
 
-    data_test.forEach(element => {
-        // make a marker for each feature and add to the map
-        let marker = new wemapgl.Marker(marker_real.cloneNode(true))
-            .setLngLat([element.real_lon, element.real_lat])
-            .addTo(map);
-        let viewPopup1 = document.createElement("div");
-        viewPopup1.classList.add("viewPopup2");
-        viewPopup1.innerHTML = element.housenumber
-        let markerElement1 = marker._element;
-        markerElement1.appendChild(viewPopup1);
+    if (type == 1 || type == 5 || type == 0) {
+        data_test.forEach(element => {
+            // make a marker for each feature and add to the map
+            let marker = new wemapgl.Marker(marker_real.cloneNode(true))
+                .setLngLat([element.real_lon, element.real_lat])
+                .addTo(map);
+            let viewPopup1 = document.createElement("div");
+            viewPopup1.classList.add("viewPopup2");
+            viewPopup1.innerHTML = element.housenumber
+            let markerElement1 = marker._element;
+            markerElement1.appendChild(viewPopup1);
 
-    })
+        })
+    }
 
     data.features.forEach(element => {
         if (element.properties.source == "OSM") {
             // make a marker for each feature and add to the map
 
             let marker2 = new wemapgl.Marker(marker_proj.cloneNode(true))
-                .setLngLat([element.properties.proj_lon, element.properties.proj_lat])
+                .setLngLat([element.properties.lon, element.properties.lat])
                 .addTo(map);
             let viewPopup = document.createElement("div");
             viewPopup.classList.add("viewPopup2");
             viewPopup.innerHTML = element.properties.housenumber
             let markerElement = marker2._element;
             markerElement.appendChild(viewPopup);
+
+            // let marker = new wemapgl.Marker(marker_real.cloneNode(true))
+            //     .setLngLat([element.properties.proj_lon_left, element.properties.proj_lat_left])
+            //     .addTo(map);
+            // let viewPopup1 = document.createElement("div");
+            // viewPopup1.classList.add("viewPopup2");
+            // viewPopup1.innerHTML = element.properties.housenumber
+            // let markerElement1 = marker._element;
+            // markerElement1.appendChild(viewPopup1);
+
+            // let marker3 = new wemapgl.Marker(marker_real.cloneNode(true))
+            //     .setLngLat([element.properties.proj_lon_right, element.properties.proj_lat_right])
+            //     .addTo(map);
+            // let viewPopup2 = document.createElement("div");
+            // viewPopup2.classList.add("viewPopup2");
+            // viewPopup2.innerHTML = element.properties.housenumber
+            // let markerElement2 = marker3._element;
+            // markerElement2.appendChild(viewPopup2);
         }
-        if (element.properties.source == "VERTEX") {
-            let vertex = new wemapgl.Marker()
-                .setLngLat([element.properties.proj_lon, element.properties.proj_lat])
-                .addTo(map);
-            let viewPopup = document.createElement("div");
-            viewPopup.classList.add("viewPopup2");
-            viewPopup.innerHTML = element.properties.housenumber
-            let markerElement = vertex._element;
-            markerElement.appendChild(viewPopup);
-        }
-        if (element.properties.source == "POLYGON") {
-            let marker = new wemapgl.Marker(marker_real.cloneNode(true))
-                .setLngLat([element.properties.proj_lon, element.properties.proj_lat])
-                .addTo(map);
-            let viewPopup1 = document.createElement("div");
-            viewPopup1.classList.add("viewPopup2");
-            viewPopup1.innerHTML = element.properties.housenumber
-            let markerElement1 = marker._element;
-            markerElement1.appendChild(viewPopup1);
-        }
+
+
+        // if (element.properties.source == "VERTEX") {
+        //     let vertex = new wemapgl.Marker()
+        //         .setLngLat([element.properties.proj_lon, element.properties.proj_lat])
+        //         .addTo(map);
+        //     let viewPopup = document.createElement("div");
+        //     viewPopup.classList.add("viewPopup2");
+        //     viewPopup.innerHTML = element.properties.housenumber
+        //     let markerElement = vertex._element;
+        //     markerElement.appendChild(viewPopup);
+        // }
+
+        // if (element.properties.source == "POLYGON") {
+        //     let marker = new wemapgl.Marker(marker_real.cloneNode(true))
+        //         .setLngLat([element.properties.proj_lon, element.properties.proj_lat])
+        //         .addTo(map);
+        //     let viewPopup1 = document.createElement("div");
+        //     viewPopup1.classList.add("viewPopup2");
+        //     viewPopup1.innerHTML = element.properties.housenumber
+        //     let markerElement1 = marker._element;
+        //     markerElement1.appendChild(viewPopup1);
+        // }
+
         // if (element.properties.type == "interpolated") {
         //     let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
         //         .setLngLat([element.properties.lon, element.properties.lat])
