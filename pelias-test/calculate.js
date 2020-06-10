@@ -29,10 +29,11 @@ $(document).ready(function () {
             })
             break
         case "2":
-            data = data1;
-            street1 = xuanthuy_f1
-            street2 = xuanthuy_f2
+            data = xuanthuy_without_polygon;
+            street1 = xuanthuy_street_2_line_1
+            street2 = xuanthuy_street_2_line_2
             $("select.custom-select").val("2").change();
+
             break
         case "3":
             data = xuanthuy_with_polygon;
@@ -53,10 +54,10 @@ $(document).ready(function () {
             // })
             break
         case "4":
+            data = xuanthuy_with_polygon;
+            street1 = xuanthuy_street_2_line_1
+            street2 = xuanthuy_street_2_line_2
             $("select.custom-select").val("4").change();
-            data = data4
-            street1 = xuanthuy_f1
-            street2 = xuanthuy_f2
             break
         case "5":
             $("select.custom-select").val("5").change();
@@ -211,8 +212,37 @@ $(document).ready(function () {
         })
     }
 
+    if (type == 2) {
+        interpolation_without_polygon.features.forEach(element => {
+            if (element.properties.type == "interpolated") {
+                let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
+                    .setLngLat([element.properties.lon, element.properties.lat])
+                    .addTo(map)
+                let viewPopup = document.createElement("div");
+                viewPopup.classList.add("viewPopup2");
+                viewPopup.innerHTML = element.properties.number
+                let markerElement = interpolation_marker._element;
+                markerElement.appendChild(viewPopup);
+            }
+        })
+    }
+    if (type == 4) {
+        interpolation_with_polygon.features.forEach(element => {
+            if (element.properties.type == "interpolated") {
+                let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
+                    .setLngLat([element.properties.lon, element.properties.lat])
+                    .addTo(map)
+                let viewPopup = document.createElement("div");
+                viewPopup.classList.add("viewPopup2");
+                viewPopup.innerHTML = element.properties.number
+                let markerElement = interpolation_marker._element;
+                markerElement.appendChild(viewPopup);
+            }
+        })
+    }
+
     data.features.forEach(element => {
-        if (element.properties.source == "OSM") {
+        if (element.properties.source == "OSM" && type != 2 && type != 4) {
             // make a marker for each feature and add to the map
 
             let marker2 = new wemapgl.Marker(marker_proj.cloneNode(true))
