@@ -33,25 +33,13 @@ $(document).ready(function () {
             street1 = xuanthuy_street_2_line_1
             street2 = xuanthuy_street_2_line_2
             $("select.custom-select").val("2").change();
-
             break
         case "3":
             data = xuanthuy_with_polygon;
             street1 = xuanthuy_street
             street2 = xuanthuy_street2
             $("select.custom-select").val("3").change();
-            // interpolation_data2.features.forEach(element => {
-            //     if (element.properties.type == "interpolated") {
-            //         let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
-            //             .setLngLat([element.properties.lon, element.properties.lat])
-            //             .addTo(map)
-            //         let viewPopup = document.createElement("div");
-            //         viewPopup.classList.add("viewPopup2");
-            //         viewPopup.innerHTML = element.properties.number
-            //         let markerElement = interpolation_marker._element;
-            //         markerElement.appendChild(viewPopup);
-            //     }
-            // })
+
             break
         case "4":
             data = xuanthuy_with_polygon;
@@ -79,15 +67,15 @@ $(document).ready(function () {
             break
         case "6":
             $("select.custom-select").val("6").change();
-            data = data6
-            street1 = xuanthuy_f1
-            street2 = xuanthuy_f2
+            data = null
+            street1 = tqh_street
+            street2 = null
             break
         case "7":
             $("select.custom-select").val("7").change();
-            data = data7
-            street1 = xuanthuy_f1
-            street2 = xuanthuy_f2
+            data = null
+            street1 = xuanthuy_street
+            street2 = xuanthuy_street2
             break
         default:
             $("select.custom-select").val("1").change();
@@ -197,7 +185,7 @@ $(document).ready(function () {
 
     });
 
-    if (type == 1 || type == 5 || type == 0) {
+    if (type == 1 || type == 5 || type == 0 || type == 3 || type == 2 || type == 4) {
         data_test.forEach(element => {
             // make a marker for each feature and add to the map
             let marker = new wemapgl.Marker(marker_real.cloneNode(true))
@@ -242,7 +230,7 @@ $(document).ready(function () {
     }
 
     data.features.forEach(element => {
-        if (element.properties.source == "OSM" && type != 2 && type != 4) {
+        if (element.properties.source == "OSM" && type != 2 && type != 4 && type != 3) {
             // make a marker for each feature and add to the map
 
             let marker2 = new wemapgl.Marker(marker_proj.cloneNode(true))
