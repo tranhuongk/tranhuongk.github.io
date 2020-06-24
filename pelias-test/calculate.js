@@ -201,6 +201,7 @@ $(document).ready(function () {
     }
 
     if (type == 2) {
+        var rows = []
         interpolation_without_polygon.features.forEach(element => {
             if (element.properties.type == "interpolated") {
                 if (element.properties.deviation <= 20) {
@@ -222,10 +223,25 @@ $(document).ready(function () {
                     let markerElement2 = interpolation_marker2._element;
                     markerElement2.appendChild(viewPopup2);
                 }
+                rows.push([element.properties.number, element.properties.deviation])
             }
+        })
+        let csvContent = "data:text/csv;charset=utf-8,";
+
+        rows.forEach(function (rowArray) {
+            let row = rowArray.join(",");
+            csvContent += row + "\r\n";
+        });
+
+        $("#download").show()
+        $("#download").click(function () {
+            var encodedUri = encodeURI(csvContent);
+            window.open(encodedUri);
         })
     }
     if (type == 4) {
+        var rows = []
+
         interpolation_with_polygon.features.forEach(element => {
             if (element.properties.type == "interpolated") {
                 if (element.properties.deviation <= 20) {
@@ -247,8 +263,22 @@ $(document).ready(function () {
                     let markerElement2 = interpolation_marker2._element;
                     markerElement2.appendChild(viewPopup2);
                 }
+                rows.push([element.properties.number, element.properties.deviation])
             }
         })
+        let csvContent = "data:text/csv;charset=utf-8,";
+
+        rows.forEach(function (rowArray) {
+            let row = rowArray.join(",");
+            csvContent += row + "\r\n";
+        });
+
+        $("#download").show()
+        $("#download").click(function () {
+            var encodedUri = encodeURI(csvContent);
+            window.open(encodedUri);
+        })
+
     }
 
     data.features.forEach(element => {

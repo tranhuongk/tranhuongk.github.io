@@ -33,6 +33,7 @@
     <script src="xuanthuy-street.js" type="text/javascript"></script>
     <script src="full-vietnam-xuanthuy1.js" type="text/javascript"></script>
     <script src="full-vietnam-xuanthuy2.js" type="text/javascript"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
@@ -101,6 +102,19 @@
             min-width: 400px;
             background-color: #fff;
         }
+
+        #download {
+            position: absolute;
+            top: 0;
+            left: 420px;
+            margin: 20px;
+            width: 35px;
+            height: 35px;
+            background-color: #fff;
+            border: 1px;
+            border-radius: 5px;
+            display: none;
+        }
     </style>
 </head>
 
@@ -120,6 +134,7 @@
             <option value="7">Xuan Thuy</option>
         </select>
     </form>
+    <button id="download" class="fa fa-download"></button>
 </body>
 
 <script>
