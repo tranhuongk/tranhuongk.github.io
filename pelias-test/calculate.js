@@ -203,28 +203,50 @@ $(document).ready(function () {
     if (type == 2) {
         interpolation_without_polygon.features.forEach(element => {
             if (element.properties.type == "interpolated") {
-                let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
-                    .setLngLat([element.properties.lon, element.properties.lat])
-                    .addTo(map)
-                let viewPopup = document.createElement("div");
-                viewPopup.classList.add("viewPopup2");
-                viewPopup.innerHTML = element.properties.number
-                let markerElement = interpolation_marker._element;
-                markerElement.appendChild(viewPopup);
+                if (element.properties.deviation <= 20) {
+                    let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
+                        .setLngLat([element.properties.lon, element.properties.lat])
+                        .addTo(map)
+                    let viewPopup = document.createElement("div");
+                    viewPopup.classList.add("viewPopup2");
+                    viewPopup.innerHTML = element.properties.number
+                    let markerElement = interpolation_marker._element;
+                    markerElement.appendChild(viewPopup);
+                } else {
+                    let interpolation_marker2 = new wemapgl.Marker(marker_proj.cloneNode(true))
+                        .setLngLat([element.properties.lon, element.properties.lat])
+                        .addTo(map)
+                    let viewPopup2 = document.createElement("div");
+                    viewPopup2.classList.add("viewPopup2");
+                    viewPopup2.innerHTML = element.properties.number
+                    let markerElement2 = interpolation_marker2._element;
+                    markerElement2.appendChild(viewPopup2);
+                }
             }
         })
     }
     if (type == 4) {
         interpolation_with_polygon.features.forEach(element => {
             if (element.properties.type == "interpolated") {
-                let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
-                    .setLngLat([element.properties.lon, element.properties.lat])
-                    .addTo(map)
-                let viewPopup = document.createElement("div");
-                viewPopup.classList.add("viewPopup2");
-                viewPopup.innerHTML = element.properties.number
-                let markerElement = interpolation_marker._element;
-                markerElement.appendChild(viewPopup);
+                if (element.properties.deviation <= 20) {
+                    let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
+                        .setLngLat([element.properties.lon, element.properties.lat])
+                        .addTo(map)
+                    let viewPopup = document.createElement("div");
+                    viewPopup.classList.add("viewPopup2");
+                    viewPopup.innerHTML = element.properties.number
+                    let markerElement = interpolation_marker._element;
+                    markerElement.appendChild(viewPopup);
+                } else {
+                    let interpolation_marker2 = new wemapgl.Marker(marker_proj.cloneNode(true))
+                        .setLngLat([element.properties.lon, element.properties.lat])
+                        .addTo(map)
+                    let viewPopup2 = document.createElement("div");
+                    viewPopup2.classList.add("viewPopup2");
+                    viewPopup2.innerHTML = element.properties.number
+                    let markerElement2 = interpolation_marker2._element;
+                    markerElement2.appendChild(viewPopup2);
+                }
             }
         })
     }
