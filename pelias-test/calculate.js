@@ -236,7 +236,12 @@ $(document).ready(function () {
         $("#download").show()
         $("#download").click(function () {
             var encodedUri = encodeURI(csvContent);
-            window.open(encodedUri);
+            var link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "test_without_polygon.csv");
+            document.body.appendChild(link); // Required for FF
+
+            link.click(); // This will download the data file named "my_data.csv".
         })
     }
     if (type == 4) {
@@ -276,7 +281,12 @@ $(document).ready(function () {
         $("#download").show()
         $("#download").click(function () {
             var encodedUri = encodeURI(csvContent);
-            window.open(encodedUri);
+            var link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "test_with_polygon.csv");
+            document.body.appendChild(link); // Required for FF
+
+            link.click(); // This will download the data file named "my_data.csv".
         })
 
     }
