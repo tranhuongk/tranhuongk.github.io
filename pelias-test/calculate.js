@@ -185,7 +185,7 @@ $(document).ready(function () {
 
     });
 
-    if (type == 1 || type == 5 || type == 0 || type == 3 || type == 2 || type == 4) {
+    if (type == 1 || type == 3 || type == 2 || type == 4) {
         data_test.forEach(element => {
             // make a marker for each feature and add to the map
             let marker = new wemapgl.Marker(marker_real.cloneNode(true))
@@ -198,6 +198,113 @@ $(document).ready(function () {
             markerElement1.appendChild(viewPopup1);
 
         })
+    }
+
+    if (type == 5 || type == 0) {
+        data_test_tqh.forEach(element => {
+            // make a marker for each feature and add to the map
+            let marker = new wemapgl.Marker(marker_real.cloneNode(true))
+                .setLngLat([element.real_lon, element.real_lat])
+                .addTo(map);
+            let viewPopup1 = document.createElement("div");
+            viewPopup1.classList.add("viewPopup2");
+            viewPopup1.innerHTML = element.housenumber
+            let markerElement1 = marker._element;
+            markerElement1.appendChild(viewPopup1);
+
+        })
+    }
+
+
+    if (type == 5) {
+        var rows = []
+        interpolation_tqh_without_polygon.features.forEach(element => {
+            if (element.properties.type == "interpolated") {
+                if (element.properties.deviation <= 20) {
+                    let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
+                        .setLngLat([element.properties.lon, element.properties.lat])
+                        .addTo(map)
+                    let viewPopup = document.createElement("div");
+                    viewPopup.classList.add("viewPopup2");
+                    viewPopup.innerHTML = element.properties.number
+                    let markerElement = interpolation_marker._element;
+                    markerElement.appendChild(viewPopup);
+                } else {
+                    let interpolation_marker2 = new wemapgl.Marker(marker_proj.cloneNode(true))
+                        .setLngLat([element.properties.lon, element.properties.lat])
+                        .addTo(map)
+                    let viewPopup2 = document.createElement("div");
+                    viewPopup2.classList.add("viewPopup2");
+                    viewPopup2.innerHTML = element.properties.number
+                    let markerElement2 = interpolation_marker2._element;
+                    markerElement2.appendChild(viewPopup2);
+                }
+                rows.push([element.properties.number, element.properties.deviation])
+            }
+        })
+        let csvContent = "data:text/csv;charset=utf-8,";
+
+        rows.forEach(function (rowArray) {
+            let row = rowArray.join(",");
+            csvContent += row + "\r\n";
+        });
+
+        $("#download").show()
+        $("#download").click(function () {
+            var encodedUri = encodeURI(csvContent);
+            var link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "test_tqh_without_polygon.csv");
+            document.body.appendChild(link); // Required for FF
+
+            link.click(); // This will download the data file named "my_data.csv".
+        })
+    }
+    if (type == 0) {
+        var rows = []
+
+        interpolation_tqh_with_polygon.features.forEach(element => {
+            if (element.properties.type == "interpolated") {
+                if (element.properties.deviation <= 20) {
+                    let interpolation_marker = new wemapgl.Marker(marker_interpolation.cloneNode(true))
+                        .setLngLat([element.properties.lon, element.properties.lat])
+                        .addTo(map)
+                    let viewPopup = document.createElement("div");
+                    viewPopup.classList.add("viewPopup2");
+                    viewPopup.innerHTML = element.properties.number
+                    let markerElement = interpolation_marker._element;
+                    markerElement.appendChild(viewPopup);
+                } else {
+                    let interpolation_marker2 = new wemapgl.Marker(marker_proj.cloneNode(true))
+                        .setLngLat([element.properties.lon, element.properties.lat])
+                        .addTo(map)
+                    let viewPopup2 = document.createElement("div");
+                    viewPopup2.classList.add("viewPopup2");
+                    viewPopup2.innerHTML = element.properties.number
+                    let markerElement2 = interpolation_marker2._element;
+                    markerElement2.appendChild(viewPopup2);
+                }
+                rows.push([element.properties.number, element.properties.deviation])
+            }
+        })
+        let csvContent = "data:text/csv;charset=utf-8,";
+
+        rows.forEach(function (rowArray) {
+            let row = rowArray.join(",");
+            csvContent += row + "\r\n";
+        });
+
+        $("#download").show()
+        $("#download").click(function () {
+            var encodedUri = encodeURI(csvContent);
+            var link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "test_tqh_with_polygon.csv");
+            document.body.appendChild(link); // Required for FF
+
+            link.click(); // This will download the data file named "my_data.csv".
+        })
+
     }
 
     if (type == 2) {
