@@ -2,60 +2,6 @@
 data_test = [
     {
         "stt": "1",
-        "housenumber": "281",
-        "real_lat": "21.04182",
-        "real_lon": "105.781396"
-    },
-    {
-        "stt": "2",
-        "housenumber": "279",
-        "real_lat": "21.04182",
-        "real_lon": "105.781429"
-    },
-    {
-        "stt": "3",
-        "housenumber": "277",
-        "real_lat": "21.041817",
-        "real_lon": "105.781481"
-    },
-    {
-        "stt": "4",
-        "housenumber": "275",
-        "real_lat": "21.041818",
-        "real_lon": "105.781518"
-    },
-    {
-        "stt": "5",
-        "housenumber": "273",
-        "real_lat": "21.041815",
-        "real_lon": "105.781557"
-    },
-    {
-        "stt": "6",
-        "housenumber": "271",
-        "real_lat": "21.041798",
-        "real_lon": "105.781597"
-    },
-    {
-        "stt": "7",
-        "housenumber": "269",
-        "real_lat": "21.041791",
-        "real_lon": "105.781639"
-    },
-    {
-        "stt": "8",
-        "housenumber": "267",
-        "real_lat": "21.041785",
-        "real_lon": "105.781664"
-    },
-    {
-        "stt": "9",
-        "housenumber": "265",
-        "real_lat": "21.041803",
-        "real_lon": "105.781706"
-    },
-    {
-        "stt": "1",
         "housenumber": "7",
         "real_lat": "21.036323",
         "real_lon": "105.789173"
