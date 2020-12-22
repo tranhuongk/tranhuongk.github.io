@@ -1,0 +1,11 @@
+- Responsive ??
+- JAVA Core ??
+- async/await ??
+- stateless/stateful ??
+- life circle of stateful ??
+- Rotation will be rebuilt ??
+- .yaml for what and knowledge for it ??
+- design pattern ??
+- GSON parsing data from API ??
+- Navigator.push/pushName/pop/popUntil... what are this ??
+- Services in Android ??
