@@ -3,8 +3,10 @@
     <channel>
         <title>Debt Now App - Appcast</title>
         <item>
-            <title>Version 1.15.0</title>
-            <enclosure url="https://play.google.com/store/apps/details?id=com.moonwink.treasury" sparkle:version="1.0.0" sparkle:os="android" />
+            <description>Minor updates and improvements.</description>
+            <pubDate>Wed, 11 Aug 2021 12:00:00 +0000</pubDate>
+            <enclosure url="https://play.google.com/store/apps/details?id=com.hebela.store" sparkle:version="1.0.7" sparkle:os="android" />
+            <enclosure url="https://apps.apple.com/gh/app/hebela-s%E1%BB%A9c-kh%E1%BB%8Fe-v%C3%A0-s%E1%BA%AFc-%C4%91%E1%BA%B9p/id1571872288" sparkle:version="1.0.7" sparkle:os="iOS" />
         </item>
     </channel>
 </rss>
