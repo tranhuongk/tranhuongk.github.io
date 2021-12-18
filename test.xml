@@ -5,14 +5,14 @@
             <title>This is content of dialog android</title>
             <sparkle:version>4.0.7</sparkle:version>
             <description>This is release note</description>
-            </sparkle:criticalUpdate>
+            <sparkle:criticalUpdate></sparkle:criticalUpdate>
             <sparkle:tags> <vi/> <important/></sparkle:tags>
         </item>
         <item>
             <title>This is content of dialog iOS</title>
             <sparkle:version>4.0.8</sparkle:version>
             <description>This is release note</description>
-            </sparkle:criticalUpdate>
+            <sparkle:criticalUpdate></sparkle:criticalUpdate>
             <sparkle:tags> <vi/> </sparkle:tags>
         </item>
     </channel>
