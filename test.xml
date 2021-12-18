@@ -3,16 +3,16 @@
     <channel>
         <item>
             <title>This is content of dialog android</title>
-            <sparkle:version>1.0.7</sparkle:version>
+            <sparkle:version>4.0.7</sparkle:version>
             <description>This is release note</description>
-            <enclosure url="https://play.google.com/store/apps/details?id=com.hebela.store" sparkle:os="android" />
+            </sparkle:criticalUpdate>
             <sparkle:tags> <vi/> <important/></sparkle:tags>
         </item>
         <item>
             <title>This is content of dialog iOS</title>
-            <sparkle:version>1.0.8</sparkle:version>
+            <sparkle:version>4.0.8</sparkle:version>
             <description>This is release note</description>
-            <enclosure url="https://apps.apple.com/gh/app/id1571872288" sparkle:os="iOS" />
+            </sparkle:criticalUpdate>
             <sparkle:tags> <vi/> </sparkle:tags>
         </item>
     </channel>
