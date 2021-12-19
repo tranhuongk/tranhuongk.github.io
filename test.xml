@@ -3,20 +3,27 @@
     <channel>
         <item>
             <title>This is content of dialog android</title>
-            <sparkle:version>3.2.8</sparkle:version>
+            <sparkle:version>3.2.7</sparkle:version>
             <description>This is release note</description>
             <enclosure sparkle:os="android" />
             <sparkle:tags> 
-                <sparkle:criticalUpdate></sparkle:criticalUpdate> 
+                <!-- 
+                <sparkle:criticalUpdate/> 
+                -->
             </sparkle:tags>
         </item>
         <item>
             <title>This is content of dialog iOS</title>
-            <sparkle:version>3.2.8</sparkle:version>
-            <description>This is release note</description>
+            <sparkle:version>3.2.7</sparkle:version>
+            <description>
+            %%vi%% Cập nhật quan trọng /%%vi%%
+            %%en%% Critical Update /%%en%%
+            </description>
             <enclosure sparkle:os="ios" />
             <sparkle:tags> 
-                 <sparkle:criticalUpdate></sparkle:criticalUpdate> 
+                <!-- 
+                <sparkle:criticalUpdate/>
+                -->
             </sparkle:tags>
         </item>
     </channel>
