@@ -14,8 +14,8 @@
             <title>This is content of dialog iOS</title>
             <sparkle:version>3.2.11</sparkle:version>
             <description>
-            %%vi%% Cập nhật tính năng mới /%%vi%%
-            %%en%% Update new feature /%%en%%
+            %%vi%% Vui lòng lên portal web > Quét mã QR Code để tải phiên bản 3.2.11 /%%vi%%
+            %%en%% Please go to the portal web > Scan QR Code for download version 3.2.11 /%%en%%
             </description>
             <enclosure sparkle:os="ios" />
             <sparkle:tags> 
