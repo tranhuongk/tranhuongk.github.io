@@ -14,8 +14,8 @@
             <title>This is content of dialog iOS</title>
             <sparkle:version>3.2.15</sparkle:version>
             <description>
-            %%vi%%- Cập nhật thời gian ăn trưa\n- Thêm tuỳ chỉnh hiển thị application\n- Chỉnh sửa phần chi tiết tin tức\n- Chỉnh sửa phần quản lý công việc/%%vi%%
-            %%en%%- Update lunch time\n- Add custom display application\n- Edit news details\n- Edit the task management section\n/%%en%%
+            %%vi%%- Cập nhật thời gian ăn trưa</br>- Thêm tuỳ chỉnh hiển thị application</br>- Chỉnh sửa phần chi tiết tin tức</br>- Chỉnh sửa phần quản lý công việc/%%vi%%
+            %%en%%- Update lunch time</br>- Add custom display application</br>- Edit news details</br>- Edit the task management section\n/%%en%%
             </description>
             <enclosure sparkle:os="ios" />
             <sparkle:tags> 
