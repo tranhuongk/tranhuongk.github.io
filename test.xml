@@ -15,16 +15,16 @@
             <sparkle:version>3.2.15</sparkle:version>
             <description>
             %%vi%%
-                - Cập nhật thời gian ăn trưa
-                - Thêm tuỳ chỉnh hiển thị application
-                - Chỉnh sửa phần chi tiết tin tức
-                - Chỉnh sửa phần quản lý công việc
+            - Cập nhật thời gian ăn trưa
+            - Thêm tuỳ chỉnh hiển thị application
+            - Chỉnh sửa phần chi tiết tin tức
+            - Chỉnh sửa phần quản lý công việc
             /%%vi%%
             %%en%%
-                - Update lunch time
-                - Add custom display application
-                - Edit news details
-                - Edit the task management section
+            - Update lunch time
+            - Add custom display application
+            - Edit news details
+            - Edit the task management section
             /%%en%%
             </description>
             <enclosure sparkle:os="ios" />
