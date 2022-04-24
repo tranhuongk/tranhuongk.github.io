@@ -3,7 +3,7 @@
     <channel>
         <item>
             <title>This is content of dialog android</title>
-            <sparkle:version>3.2.11</sparkle:version>
+            <sparkle:version>3.2.15</sparkle:version>
             <description>This is release note</description>
             <enclosure sparkle:os="android" />
             <sparkle:tags> 
@@ -12,10 +12,20 @@
         </item>
         <item>
             <title>This is content of dialog iOS</title>
-            <sparkle:version>3.2.11</sparkle:version>
+            <sparkle:version>3.2.15</sparkle:version>
             <description>
-            %%vi%% Vui lòng lên portal web > Quét mã QR Code để tải phiên bản 3.2.11 /%%vi%%
-            %%en%% Please go to the portal web > Scan QR Code for download version 3.2.11 /%%en%%
+            %%vi%%
+                - Cập nhật thời gian ăn trưa
+                - Thêm tuỳ chỉnh hiển thị application
+                - Chỉnh sửa phần chi tiết tin tức
+                - Chỉnh sửa phần quản lý công việc
+            /%%vi%%
+            %%en%%
+                - Update lunch time
+                - Add custom display application
+                - Edit news details
+                - Edit the task management section
+            /%%en%%
             </description>
             <enclosure sparkle:os="ios" />
             <sparkle:tags> 
