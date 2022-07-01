@@ -16,11 +16,11 @@
             <description>
             %%vi%%
 - Chức năng mới: Mô tả, chi tiết khảo sát nội bộ
-- Sửa lỗi: Người dùng
+- Sửa lỗi: Thông tin người dùng
             /%%vi%%
             %%en%%
 - New features: Internal Servey description, details
-- Bugs fix: User
+- Bugs fix: User info
             /%%en%%
             </description>
             <enclosure sparkle:os="ios" />
