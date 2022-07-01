@@ -3,7 +3,7 @@
     <channel>
         <item>
             <title>This is content of dialog android</title>
-            <sparkle:version>3.2.22</sparkle:version>
+            <sparkle:version>3.2.23</sparkle:version>
             <description>This is release note</description>
             <enclosure sparkle:os="android" />
             <sparkle:tags> 
@@ -12,15 +12,15 @@
         </item>
         <item>
             <title>This is content of dialog iOS</title>
-            <sparkle:version>3.2.22</sparkle:version>
+            <sparkle:version>3.2.23</sparkle:version>
             <description>
             %%vi%%
-- Cập nhật chức năng mới: Khảo sát nội bộ
-- Sửa lỗi: Đăng xuất
+- Chức năng mới: Mô tả, chi tiết khảo sát nội bộ
+- Sửa lỗi: Người dùng
             /%%vi%%
             %%en%%
-- Update new feature: Internal Servey
-- Bug fix: Logout
+- New features: Internal Servey description, details
+- Bugs fix: User
             /%%en%%
             </description>
             <enclosure sparkle:os="ios" />
