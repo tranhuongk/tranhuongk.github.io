@@ -3,7 +3,7 @@
     <channel>
         <item>
             <title>This is content of dialog android</title>
-            <sparkle:version>3.2.23</sparkle:version>
+            <sparkle:version>3.2.24</sparkle:version>
             <description>This is release note</description>
             <enclosure sparkle:os="android" />
             <sparkle:tags> 
@@ -12,15 +12,19 @@
         </item>
         <item>
             <title>This is content of dialog iOS</title>
-            <sparkle:version>3.2.23</sparkle:version>
+            <sparkle:version>3.2.24</sparkle:version>
             <description>
             %%vi%%
-- Chức năng mới: Mô tả, chi tiết khảo sát nội bộ
-- Sửa lỗi: Thông tin người dùng
+- Thêm xác nhận đánh giá chuyến đi
+- Sửa lỗi ấn clear thông báo
+- Cập nhật api mới
+- Tìm kiếm danh bạ thông minh hơn
             /%%vi%%
             %%en%%
-- New features: Internal Servey description, details
-- Bugs fix: User info
+- Added trip review confirmation
+- Fixed a bug where pressing clear notifications
+- Update new api
+- Smarter contact search
             /%%en%%
             </description>
             <enclosure sparkle:os="ios" />
