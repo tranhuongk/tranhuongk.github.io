@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+    <channel>
+        <item>
+            <title>This is content of dialog android</title>
+            <sparkle:version>1.0.4</sparkle:version>
+            <description>This is release note</description>
+            <enclosure sparkle:os="android" />
+            <sparkle:tags> 
+<!--                 <sparkle:criticalUpdate/>  -->
+            </sparkle:tags>
+        </item>
+        <item>
+            <title>This is content of dialog iOS</title>
+            <sparkle:version>1.0.4</sparkle:version>
+            <description>
+            %%vi%%
+- Cập nhật chức năng: Cơm trưa
+            /%%vi%%
+            %%en%%
+- Update feature: Lunch
+            /%%en%%
+            </description>
+            <enclosure sparkle:os="ios" />
+            <sparkle:tags> 
+<!--                 <sparkle:criticalUpdate/> -->
+            </sparkle:tags>
+        </item>
+    </channel>
+</rss>
+
+<!--Language Code:
+    English ('en')
+    Arabic ('ar')
+    Bengali ('bn')
+    Filipino ('fil')
+    French ('fr')
+    German ('de')
+    Hungarian ('hu')
+    Indonesian ('id')
+    Italian ('it')
+    Kazakh ('kk')
+    Korean ('ko')
+    Persian ('fa')
+    Polish ('pl')
+    Portuguese ('pt')
+    Russian ('ru')
+    Spanish ('es')
+    Tamil ('ta')
+    Turkish ('tr')
+    Ukrainian ('uk')
+    Vietnamese ('vi')
+-->
