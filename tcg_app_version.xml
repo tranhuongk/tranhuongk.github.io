@@ -7,7 +7,7 @@
             <description>This is release note</description>
             <enclosure sparkle:os="android" />
             <sparkle:tags> 
-                <sparkle:criticalUpdate/> 
+<!--                 <sparkle:criticalUpdate/>  -->
             </sparkle:tags>
         </item>
         <item>
@@ -25,7 +25,7 @@
             </description>
             <enclosure sparkle:os="ios" />
             <sparkle:tags> 
-                <sparkle:criticalUpdate/>
+<!--                 <sparkle:criticalUpdate/> -->
             </sparkle:tags>
         </item>
     </channel>
