@@ -3,7 +3,7 @@
     <channel>
         <item>
             <title>This is content of dialog android</title>
-            <sparkle:version>1.0.4</sparkle:version>
+            <sparkle:version>1.0.10</sparkle:version>
             <description>This is release note</description>
             <enclosure sparkle:os="android" />
             <sparkle:tags> 
@@ -12,13 +12,15 @@
         </item>
         <item>
             <title>This is content of dialog iOS</title>
-            <sparkle:version>1.0.4</sparkle:version>
+            <sparkle:version>1.0.10</sparkle:version>
             <description>
             %%vi%%
-- Cập nhật chức năng: Cơm trưa
+- Cập nhật chức năng: Bản đồ số
+- Sửa lỗi: HRM
             /%%vi%%
             %%en%%
-- Update feature: Lunch
+- Update feature: Digital Maps
+- Bug fix: HRM
             /%%en%%
             </description>
             <enclosure sparkle:os="ios" />
