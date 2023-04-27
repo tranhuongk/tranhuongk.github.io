@@ -1,0 +1,27 @@
+{
+    "enableForAll": false,
+    "enableForUsers": [
+        "huongtv"
+    ],
+    "giftForUsers": {},
+    "questions": [],
+    "aspectRatio": 0.722,
+    "paddingPercentLTRB": [
+        0.11,
+        0.285,
+        0.11,
+        0.16
+    ],
+    "backgrounds": {
+        "công nghệ thông tin": "https://raw.githubusercontent.com/tranhuongk/tranhuongk.github.io/master/htv-config/background.jpg"
+    },
+    "giftBackground": "https://raw.githubusercontent.com/tranhuongk/tranhuongk.github.io/master/htv-config/drink_background.jpeg",
+    "giftOpenOnTime": "2023-04-28 20:00:00",
+    "date": "HÀ NỘI, 28/04/2023",
+    "footers": {
+        "công nghệ thông tin": "LOVE ALL, LOVE IT"
+    },
+    "contents": {
+        "công nghệ thông tin": "Thân gửi Anh/Chị\n\nHôm nay là ngày làm việc cuối cùng của 2 em Nhung & Hưởng tại HTV,\nMỗi đứa em đã thật khó khăn khi quyết định dừng lại hành trình ở đây.\nCó quá nhiều cảm xúc lẫn lộn\nChặng đường 2 năm không ngắn cũng không dài nhưng mọi người đã đồng hành cùng nhau vượt quá khá nhiều khó khăn, vui có, buồn có,\n\nNhớ những đêm thức khuya làm dự án, nhớ những lần cãi vã, nhớ cả những buổi đi ăn uống, họp bang trà đá nữa,... có quá nhiều kỷ niệm và chắc chắn những trải nghiệm này sẽ không thể có ở 1 đâu khác và trở thành 1 phần trên hành trình của bọn em sau này\n\nCảm ơn Anh/Chị bộ phận đã luôn hỗ trợ và yêu quý 2 đứa em, đặc biệt chúng em cảm ơn anh Phong đã tạo điều kiện hết mức để chúng em được thoải mái làm việc và học hỏi trong suốt thời gian qua\n\nMong rằng anh chị sẽ mãi nhớ về 2 đứa em út ít vui vẻ đáng yêu này …. Sau này mọi cuộc nhậu sẽ thiếu đi 2 bóng cười, mong là sẽ sớm có thêm những bóng khác khỏa lấp chỗ trống tinh thần to lớn này, anh chị đừng buồn nhóo\n\nChúng em sẵn sàng nhận booking từ Anh/Chị cho mọi cuộc vui. Cả nhà đừng quên bọn em nhé ạ <3"
+    }
+}

@@ -1,14 +1,13 @@
 {
     "enableForAll": false,
-    "enableForUsers": [
-        "huongtv", "nhunglh"
-    ],
+    "enableForUsers": [],
     "giftForUsers": {
         "huongtv": [
             0,
             1,
             2
-        ], "nhunglh": [
+        ],
+        "nhunglh": [
             0,
             1,
             2
