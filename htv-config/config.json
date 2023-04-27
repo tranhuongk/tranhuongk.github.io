@@ -1,22 +1,96 @@
 {
     "enableForAll": false,
-    "enableForUsers": [],
+    "enableForUsers": [
+        "huongtv",
+        "nhunglh"
+    ],
     "giftForUsers": {
-        "huongtv": [
+        "anlt": [
             0,
-            1,
-            2
+            1
+        ],
+        "anhvt1": [
+            2,
+            3
+        ],
+        "cuonglv": [
+            4,
+            5
+        ],
+        "hiepnt": [
+            6,
+            7
+        ],
+        "hantk": [
+            8,
+            9
+        ],
+        "hapn": [
+            10,
+            11
+        ],
+        "hungpt": [
+            12,
+            13
+        ],
+        "khanhnd": [
+            14,
+            15
         ],
         "nhunglh": [
-            0,
-            1,
-            2
+            16,
+            17
+        ],
+        "phongph": [
+            18,
+            19
+        ],
+        "quangdv": [
+            20,
+            21
+        ],
+        "thinhnc": [
+            22,
+            23
+        ],
+        "toannl": [
+            24,
+            25
+        ],
+        "huongtv": [
+            26,
+            27
         ]
     },
     "questions": [
+        "Kể đủ 5 tật xấu của Mr. Thịnh trong vòng 40s hoặc uồng 3 cốc đầy",
+        "Đặt điện thoại lên bàn và show 1 ảnh có đầy đủ thành viên bộ phận,những ai không có ảnh hoặc ảnh không đủ thành viên thì phải uống 1 cốc đầy",
+        "Đặt điện thoại lên bàn và show 1 ảnh chế của bất cứ thành viên nào trong bộ phận.",
+        "Cả bàn tiệc sẽ bầu chọn, ai ít lượt bình chọn nhất sẽ phải uống",
+        "Kể về 3 ưu điểm của Phong trong vòng 10s, nếu không đủ thì uống 1 cốc đầy",
+        "Kể về kỉ niệm lần đầu gặp anh Phong, nếu không thì uống 1 cốc đầy",
+        "Show các tìm kiếm gần nhất trên safari hoặc chrome ở điện thoại của bạn hoặc uống 2 cốc",
+        "Kể ra 1 việc mà bạn đã làm khiến bạn xấu hổ hoặc uống 1 cốc",
+        "Làm thơ có tên Hà hoặc uống 1 cốc",
+        "Kể về ấn tượng đầu tiên gặp mặt của bạn với người ngồi bên trái bạn hoặc uống",
+        "Nhảy 1 trend titkok đang hot gần đây hoặc uống",
+        "Trong vòng 10s, kể ra 3 tính từ để miêu tả người ngồi bên tay phải bạn hoặc uống",
+        "Kiếm đủ 3 thẻ nhân viên trong vòng 10s hoặc uống",
+        "Miêu tả 3 tật xấu cần thay đổi của người ngồi bên trái bạn hoặc uống",
+        "Hát 1 câu có chữ Toàn hoặc uống",
+        "Lấy đủ 3 vật dụng màu vàn hoặc chống đẩy 10 cái",
+        "Anh Phong với anh Quang ai đẹp trai hơn? Không trả lời được thì bịt mũi đứng lên ngồi xuống 10 lần",
+        "Chọn 1 người cùng giới vỗ mông 10 cái hoặc uống",
+        "Uống 1 hơi hết 500ml nước hoặc gập bụng 10 cái",
         "Chứng minh anh quang đẹp trai trong vòng 5 câu hoặc uống 1 cốc",
-        "Chứng minh anh quang đẹp trai trong vòng 5 câu hoặc uống 1 cốc",
-        "Chứng minh anh quang đẹp trai trong vòng 5 câu hoặc uống 1 cốc"
+        "Ai không lưu số đủ 3 thành viên trong bộ phận uống 1 ly",
+        "Vật tay với người đối diện ai thua uống",
+        "Đọc số năm làm việc tại HTV của mọi người trong bàn, sai >2 người phải uống 1 ly",
+        "Đọc tuổi của người bên phải, sai uống 1 ly",
+        "Mở app HTV, show số ngày đi muộn, ai ít nhất phải uống",
+        "Kể về ấn tượng đầu tiên gặp mặt của bạn với người ngồi bên trái bạn hoặc uống",
+        "Trong vòng 10s, kể ra 3 tính từ để miêu tả người ngồi bên tay phải bạn hoặc uống",
+        "Uống 1 hơi hết 500ml nước hoặc gập bụng 10 cái"
     ],
     "aspectRatio": 0.722,
     "paddingPercentLTRB": [
@@ -27,16 +101,16 @@
     ],
     "backgrounds": {
         "default": "https://raw.githubusercontent.com/tranhuongk/tranhuongk.github.io/master/htv-config/background.jpg",
-        "huongtv_nhunglh": "https://raw.githubusercontent.com/tranhuongk/tranhuongk.github.io/master/htv-config/background.jpg",
-        "huongtv_huongtv": "https://raw.githubusercontent.com/tranhuongk/tranhuongk.github.io/master/htv-config/drink_background.jpeg"
+        "trangtth_nhunglh": "https://raw.githubusercontent.com/tranhuongk/tranhuongk.github.io/master/htv-config/background.jpg",
+        "trangtth_huongtv": "https://raw.githubusercontent.com/tranhuongk/tranhuongk.github.io/master/htv-config/background.jpg"
     },
     "giftBackground": "https://raw.githubusercontent.com/tranhuongk/tranhuongk.github.io/master/htv-config/drink_background.jpeg",
-    "giftOpenOnTime": "2023-04-27 17:49:20",
+    "giftOpenOnTime": "2023-04-28 20:00:00",
     "date": "HÀ NỘI, 28/04/2023",
     "footer": "LOVE ALL, LOVE IT",
     "content": {
-        "default": "Thân gửi Anh/Chị\n\nHôm nay là ngày làm việc cuối cùng của 2 em Nhung & Hưởng tại HTV,\nMỗi đứa em đã thật khó khăn khi quyết định dừng lại hành trình ở đây.\nCó quá nhiều cảm xúc lẫn lộn\nChặng đường 2 năm không ngắn cũng không dài nhưng mọi người đã đồng hành cùng nhau vượt quá khá nhiều khó khăn, vui có, buồn có,\n\nNhớ những đêm thức khuya làm dự án, nhớ những lần cãi vã, nhớ cả những buổi đi ăn uống, họp bang trà đá nữa,... có quá nhiều kỷ niệm và chắc chắn những trải nghiệm này sẽ không thể có ở 1 đâu khác và trở thành 1 phần trên hành trình của bọn em sau này\n\nCảm ơn Anh/Chị bộ phận đã luôn hỗ trợ và yêu quý 2 đứa em, đặc biệt chúng em cảm ơn anh Phong đã tạo điều kiện hết mức để chúng em được thoải mái làm việc và học hỏi trong suốt thời gian qua\n\nMong rằng anh chị sẽ mãi nhớ về 2 đứa em út ít vui vẻ đáng yêu này …. Sau này mọi cuộc nhậu sẽ thiếu đi 2 bóng cười, mong là sẽ sớm có thêm những bóng khác khỏa lấp chỗ trống tinh thần to lớn này, anh chị đừng buồn nhóo\n\nChúng em sẵn sàng nhận booking từ Anh/Chị cho mọi cuộc vui. Cả nhà đừng quên bọn em nhé ạ <3",
-        "huongtv_huongtv": "xin chao",
-        "huongtv_nhunglh": "hello"
+        "default": "Thân gửi Anh/Chị\n\nHôm nay là ngày làm việc cuối cùng của 2 em Nhung & Hưởng tại HTV,\nMỗi đứa em đã thật khó khăn khi quyết định dừng lại hành trình ở đây. \nCó quá nhiều cảm xúc lẫn lộn \nChặng đường 2 năm không ngắn cũng không dài nhưng mọi người đã đồng hành cùng nhau vượt quá khá nhiều khó khăn, vui có, buồn có, thời gian làm việc tại HTV đã cho bọn em cơ hội được làm việc, gặp gỡ, có thêm những mối quan hệ mới, nhìn lại bản thân mỗi đứa chắc hẳn đều có ít nhiều thay đổi tích cực.\n\nNhớ những đêm thức khuya làm dự án, nhớ những lần cãi vã, nhớ cả những buổi đi ăn uống, họp bang trà đá nữa,... có quá nhiều kỷ niệm và chắc chắn những trải nghiệm này sẽ không thể có ở 1 đâu khác và trở thành 1 phần ký ức đẹp trên hành trình của bọn em sau này\n\nCảm ơn Anh/Chị bộ phận đã luôn hỗ trợ và yêu quý 2 đứa em, đặc biệt chúng em cảm ơn anh Phong đã tạo điều kiện hết mức để chúng em được thoải mái làm việc và học hỏi trong suốt thời gian qua \n\nMong rằng anh chị sẽ mãi nhớ về 2 đứa em út ít vui vẻ đáng yêu này …. Sau này mọi cuộc nhậu sẽ thiếu đi 2 bóng cười, mong là sẽ sớm có thêm những bóng khác khỏa lấp chỗ trống tinh thần to lớn này, anh chị đừng buồn nhóoo\n\nChúng em sẵn sàng nhận booking từ Anh/Chị cho mọi cuộc vui. Cả nhà đừng quên bọn em nhé ạ !\nChào tạm biệt mọi người <3",
+        "trangtth_nhunglh": "",
+        "trangtth_huongtv": ""
     }
 }
