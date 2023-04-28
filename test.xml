@@ -12,13 +12,17 @@
         </item>
         <item>
             <title>This is content of dialog iOS</title>
-            <sparkle:version>3.2.31</sparkle:version>
+            <sparkle:version>3.2.36</sparkle:version>
             <description>
             %%vi%%
-- Cập nhật khảo sát nội bộ
+Cập nhật chức năng:
+- Điều động công tác
+- Kế hoạch công tác
             /%%vi%%
             %%en%%
-- Update internal testing
+Cập nhật chức năng:
+- Điều động công tác
+- Kế hoạch công tác
             /%%en%%
             </description>
             <enclosure sparkle:os="ios" />
