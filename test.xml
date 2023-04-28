@@ -15,6 +15,7 @@
             <sparkle:version>3.2.36</sparkle:version>
             <description>
             %%vi%%
+Yêu cầu cập nhật quan trọng!
 Cập nhật chức năng:
 - Điều động công tác
 - Kế hoạch công tác
@@ -27,7 +28,7 @@ Cập nhật chức năng:
             </description>
             <enclosure sparkle:os="ios" />
             <sparkle:tags> 
-<!--                 <sparkle:criticalUpdate/> -->
+                <sparkle:criticalUpdate/>
             </sparkle:tags>
         </item>
     </channel>
