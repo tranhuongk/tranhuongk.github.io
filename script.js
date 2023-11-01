@@ -28,22 +28,13 @@ $(document).ready(function () {
     }
   });
 
-  $('#form').submit(function (e) {
-    // event.preventDefault()
-    console.log("submited")
-
-    url = 'https://docs.google.com/forms/u/0/d/e/1FAIpQLSeZkLxKjMa0zQzNfnJXeIU4R6Y_R6nSvLyajOekSwIBjDS28A/formResponse'
-    data = {
-      'entry.2140219019': $('#input').val()
+  document.getElementById('form').target = 'my-response-iframe';
+  var iframe = document.getElementById('my-response-iframe');
+  if (iframe) {
+    iframe.onload = function () {
+      document.getElementById("input").value = ''
     }
-
-    $.ajax({
-      type: "POST",
-      url: url,
-      data: data,
-      dataType: 'json'
-    });
-  })
+  }
 
   console.log(navigator.userAgent)
 
