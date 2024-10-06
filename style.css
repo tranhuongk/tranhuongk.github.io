@@ -13,23 +13,23 @@ body{
     margin:auto;
     margin-top: 20px;
     margin-bottom: 20px;
-    border-radius:8px;
+    border-radius:16px;
     box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.2);;
 
 }
 #head{
     opacity: 1;
-    height:200px;
+    height: 280px;
     background-image: url('cover.jpg');
-    background-size: 100% 150%;
-    border-top-right-radius:8px;
-    border-top-left-radius:8px;
+    background-size: cover;
+    border-top-right-radius: 16px;
+    border-top-left-radius: 16px;
 }
 #head .avatar{
     z-index: 3;
     opacity: 1;
     position:relative;
-    top:70px;
+    top: 180px;
     left: 30px;
     border-radius:100%;
     box-sizing:border-box;
@@ -45,7 +45,7 @@ body{
     font-size: 24px;
     color: rgb(255, 255, 255);
     display: inline-block;
-    top:20px;
+    top: 100px;
     left: 45px;
 }
 #subname{
@@ -57,7 +57,7 @@ body{
 #bg{
     z-index: 1;
     position: relative;
-    bottom: 45px;
+    top: 35px;
     height: 82px;
     width: 100%;
     background-image: linear-gradient(transparent, rgb(160, 134, 160));
@@ -135,8 +135,8 @@ body{
     opacity: 0.75;
     height: 50px;
     background-color: rgb(255, 255, 255);
-    border-bottom-right-radius:8px;
-    border-bottom-left-radius:8px;
+    border-bottom-right-radius: 16px;
+    border-bottom-left-radius: 16px;
 }
 .lazycat{
     position: relative;
@@ -238,7 +238,7 @@ td{
         width: 100vw;
     }
     #head{
-        height: 200px;
+        height: 280px;
         border-radius: 0;
         background-size: 100% 100%;
     }
@@ -246,7 +246,7 @@ td{
         display: block;
         margin: auto;
         left: 0;
-        top: 100px;
+        top: 180px;
     }
     #name{
         color: #000000;
@@ -254,7 +254,7 @@ td{
         margin: auto;
         text-align: center;
         left: 0;
-        top: 100px;
+        top: 190px;
     }
     #subname{
         color: black;
