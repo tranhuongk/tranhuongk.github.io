@@ -79,8 +79,8 @@
             position: relative;
             z-index: 1;
             overflow-x: clip;
-            padding: clamp(1rem, 4vw, 1.5rem);
-            padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0));
+            --edge: clamp(1rem, 4vw, 1.5rem);
+            padding: var(--edge) var(--edge) calc(var(--edge) + env(safe-area-inset-bottom, 0)) var(--edge);
         }
 
         .blob {
