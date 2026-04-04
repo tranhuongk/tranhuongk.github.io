@@ -37,7 +37,6 @@
         html {
             scroll-behavior: smooth;
             background-color: var(--color-surface);
-            height: -webkit-fill-available;
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -59,15 +58,12 @@
             background-color: var(--color-surface);
         }
 
-        /* Shell: diagonal mesh + blobs (design §3.1) */
-        .backdrop {
-            position: relative;
-            min-height: 100vh;
-            min-height: 100dvh;
-            min-height: -webkit-fill-available;
-            overflow-x: clip;
-            padding: clamp(1rem, 4vw, 1.5rem);
-            padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0));
+        .page-bg {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            overflow: hidden;
             background-color: var(--color-surface);
             background-image: linear-gradient(
                 135deg,
@@ -76,6 +72,15 @@
                 color-mix(in srgb, var(--color-secondary) 12%, var(--color-surface)) 72%,
                 var(--color-surface) 100%
             );
+        }
+
+        /* Content shell — height follows copy only */
+        .backdrop {
+            position: relative;
+            z-index: 1;
+            overflow-x: clip;
+            padding: clamp(1rem, 4vw, 1.5rem);
+            padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0));
         }
 
         .blob {
@@ -174,6 +179,10 @@
             box-shadow: var(--shadow-floating);
         }
 
+        .glass-panel > :last-child {
+            margin-bottom: 0;
+        }
+
         h1 {
             margin: 0 0 0.35rem;
             font-size: clamp(1.55rem, 4vw, 2rem);
@@ -256,11 +265,13 @@
     </style>
 </head>
 <body>
-    <div class="backdrop">
+    <div class="page-bg" aria-hidden="true">
         <div class="blob blob--1" aria-hidden="true"></div>
         <div class="blob blob--2" aria-hidden="true"></div>
         <div class="blob blob--3" aria-hidden="true"></div>
+    </div>
 
+    <div class="backdrop">
         <header class="top-bar">
             <div class="top-bar-inner">
                 <div class="brand">Treasure Quest <span>· Legal</span></div>
