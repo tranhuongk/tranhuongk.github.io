@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>About – Star Path</title>
+  <style>
+    :root {
+      --bg: #050514;
+      --card: rgba(255,255,255,0.07);
+      --border: rgba(255,255,255,0.15);
+      --primary: #6C63FF;
+      --accent: #FFD700;
+      --text: #FFFFFF;
+      --muted: rgba(255,255,255,0.6);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      padding: 24px 20px 40px;
+    }
+    .hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 0 32px;
+    }
+    .star-icon {
+      width: 90px; height: 90px;
+      background: radial-gradient(circle, rgba(108,99,255,0.8) 20%, rgba(108,99,255,0) 100%);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 52px;
+      box-shadow: 0 0 40px rgba(108,99,255,0.6);
+      margin-bottom: 20px;
+    }
+    h1 { font-size: 2rem; font-weight: 900; letter-spacing: 4px; }
+    .tagline { color: var(--muted); margin-top: 6px; letter-spacing: 1.5px; font-size: 0.9rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 20px;
+      margin-bottom: 16px;
+      backdrop-filter: blur(16px);
+    }
+    .card h2 { font-size: 1rem; color: var(--accent); margin-bottom: 10px; font-weight: 700; letter-spacing: 1px; }
+    .card p { font-size: 0.92rem; color: var(--muted); line-height: 1.6; }
+    .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .feature {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      text-align: center;
+    }
+    .feature .icon { font-size: 28px; margin-bottom: 8px; }
+    .feature p { font-size: 0.8rem; color: var(--muted); }
+    .footer { text-align: center; color: var(--muted); font-size: 0.78rem; margin-top: 32px; }
+    .version { color: var(--accent); font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <div class="star-icon">⭐</div>
+    <h1>STAR PATH</h1>
+    <div class="tagline">Connect the Constellations</div>
+  </div>
+
+  <div class="card">
+    <h2>✦ ABOUT THE GAME</h2>
+    <p>Star Path is an original puzzle game where you gaze into the night sky and connect stars to form beautiful constellations. Each level challenges you to discover the correct star sequence, revealing ancient patterns written across the cosmos.</p>
+  </div>
+
+  <div class="feature-grid">
+    <div class="feature">
+      <div class="icon">🌌</div>
+      <p>8 Unique Constellations</p>
+    </div>
+    <div class="feature">
+      <div class="icon">⭐</div>
+      <p>Star Coin Rewards</p>
+    </div>
+    <div class="feature">
+      <div class="icon">💡</div>
+      <p>Hint System</p>
+    </div>
+    <div class="feature">
+      <div class="icon">🌏</div>
+      <p>EN &amp; VI Support</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>✦ HOW TO PLAY</h2>
+    <p>Look at the stars scattered across the night sky. Each constellation has a correct order — tap the stars in the right sequence to connect them with glowing lines. Complete the pattern to unlock the constellation's name and earn coins!</p>
+  </div>
+
+  <div class="card">
+    <h2>✦ DEVELOPER</h2>
+    <p>Star Path is developed by <strong>GalaxTeam</strong>, a passionate indie game studio dedicated to creating original and beautiful mobile experiences. All artwork, gameplay mechanics, and content are 100% original.</p>
+    <p style="margin-top:8px;">Contact: <a href="mailto:huongtv.uet@gmail.com" style="color:var(--accent)">huongtv.uet@gmail.com</a></p>
+  </div>
+
+  <div class="footer">
+    <div class="version">Star Path v1.0.0</div>
+    <div>© 2025 GalaxTeam. All rights reserved.</div>
+  </div>
+</body>
+</html>
