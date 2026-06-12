@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vocab Quest - Contact Us</title>
+    <style>
+        :root {
+            --primary-color: #4ECDC4;
+            --bg-dark: #1E3A5F;
+            --bg-darker: #0D1B2A;
+            --text-light: #ffffff;
+            --text-muted: rgba(255, 255, 255, 0.7);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, var(--bg-dark), var(--bg-darker));
+            color: var(--text-light);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        h1 {
+            color: var(--primary-color);
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        h2 {
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            font-weight: normal;
+        }
+        
+        .contact-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 32px;
+            margin-bottom: 24px;
+        }
+        
+        .contact-item {
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            background: rgba(78, 205, 196, 0.1);
+            border-radius: 12px;
+            margin-bottom: 16px;
+            transition: transform 0.3s ease, background 0.3s ease;
+        }
+        
+        .contact-item:hover {
+            transform: translateX(10px);
+            background: rgba(78, 205, 196, 0.2);
+        }
+        
+        .contact-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .icon {
+            width: 50px;
+            height: 50px;
+            background: var(--primary-color);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 16px;
+            font-size: 24px;
+        }
+        
+        .contact-info h3 {
+            color: var(--text-light);
+            font-size: 1rem;
+            margin-bottom: 4px;
+        }
+        
+        .contact-info a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-size: 0.95rem;
+        }
+        
+        .contact-info a:hover {
+            text-decoration: underline;
+        }
+        
+        .description {
+            text-align: center;
+            color: var(--text-muted);
+            margin-bottom: 32px;
+        }
+        
+        .social-links {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 32px;
+        }
+        
+        .social-link {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            transition: background 0.3s ease, transform 0.3s ease;
+        }
+        
+        .social-link:hover {
+            background: var(--primary-color);
+            transform: scale(1.1);
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-muted);
+        }
+        
+        .response-time {
+            background: rgba(0, 184, 148, 0.2);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            margin-top: 24px;
+        }
+        
+        .response-time span {
+            color: #00B894;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 Vocab Quest</h1>
+            <h2>Contact Us</h2>
+        </header>
+        
+        <p class="description">
+            Have questions, feedback, or suggestions? We'd love to hear from you! 
+            Reach out to us through any of the channels below.
+        </p>
+        
+        <div class="contact-card">
+            <div class="contact-item">
+                <div class="icon">📧</div>
+                <div class="contact-info">
+                    <h3>Primary Email</h3>
+                    <a href="mailto:huongtv.uet@gmail.com">huongtv.uet@gmail.com</a>
+                </div>
+            </div>
+            
+            <div class="contact-item">
+                <div class="icon">📬</div>
+                <div class="contact-info">
+                    <h3>Alternative Email</h3>
+                    <a href="mailto:huongtv.svmc@gmail.com">huongtv.svmc@gmail.com</a>
+                </div>
+            </div>
+            
+            <div class="contact-item">
+                <div class="icon">🏢</div>
+                <div class="contact-info">
+                    <h3>Developer</h3>
+                    <span style="color: var(--text-muted);">GalaxTeam</span>
+                </div>
+            </div>
+            
+            <div class="response-time">
+                <p>⏱️ We typically respond within <span>24-48 hours</span></p>
+            </div>
+        </div>
+        
+        <footer>
+            <p>© 2024 Vocab Quest. All rights reserved.</p>
+            <p>Thank you for using Vocab Quest!</p>
+        </footer>
+    </div>
+</body>
+</html>
+
