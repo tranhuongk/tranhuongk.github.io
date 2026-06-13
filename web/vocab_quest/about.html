@@ -3,206 +3,193 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vocab Quest - Contact Us</title>
+    <title>Vocab Quest – English Vocabulary Quiz</title>
     <style>
-        :root {
-            --primary-color: #4ECDC4;
-            --bg-dark: #1E3A5F;
-            --bg-darker: #0D1B2A;
-            --text-light: #ffffff;
-            --text-muted: rgba(255, 255, 255, 0.7);
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: linear-gradient(135deg, var(--bg-dark), var(--bg-darker));
-            color: var(--text-light);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(160deg, #1e3a5f 0%, #0d2a48 55%, #061828 100%);
+            color: #fff;
             min-height: 100vh;
+        }
+
+        .hero {
+            text-align: center;
+            padding: 60px 24px 40px;
+        }
+        .hero h1 {
+            font-size: 2.4rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: #4ecdc4;
+        }
+        .hero p {
+            margin-top: 12px;
+            font-size: 1.1rem;
+            color: rgba(255,255,255,0.72);
+            max-width: 480px;
+            margin-left: auto;
+            margin-right: auto;
             line-height: 1.6;
         }
-        
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 40px 20px;
+        .badge {
+            display: inline-block;
+            margin-top: 28px;
         }
-        
-        header {
+        .badge img { height: 52px; }
+
+        .feature-graphic {
+            max-width: 860px;
+            margin: 40px auto 0;
+            padding: 0 24px;
+        }
+        .feature-graphic img {
+            width: 100%;
+            border-radius: 16px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+        }
+
+        .screenshots-section {
+            padding: 48px 0 32px;
+        }
+        .screenshots-section h2 {
             text-align: center;
-            margin-bottom: 40px;
-        }
-        
-        h1 {
-            color: var(--primary-color);
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-        }
-        
-        h2 {
-            color: var(--text-muted);
-            font-size: 1.2rem;
-            font-weight: normal;
-        }
-        
-        .contact-card {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            padding: 32px;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: rgba(255,255,255,0.85);
             margin-bottom: 24px;
         }
-        
-        .contact-item {
+        .screenshots-scroll {
             display: flex;
-            align-items: center;
-            padding: 20px;
-            background: rgba(78, 205, 196, 0.1);
-            border-radius: 12px;
-            margin-bottom: 16px;
-            transition: transform 0.3s ease, background 0.3s ease;
+            gap: 16px;
+            overflow-x: auto;
+            padding: 8px 24px 20px;
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
         }
-        
-        .contact-item:hover {
-            transform: translateX(10px);
-            background: rgba(78, 205, 196, 0.2);
+        .screenshots-scroll::-webkit-scrollbar { height: 4px; }
+        .screenshots-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.1); border-radius: 2px; }
+        .screenshots-scroll::-webkit-scrollbar-thumb { background: rgba(78,205,196,0.6); border-radius: 2px; }
+
+        .screenshot-item {
+            flex: 0 0 auto;
+            width: 220px;
+            scroll-snap-align: start;
         }
-        
-        .contact-item:last-child {
-            margin-bottom: 0;
+        .screenshot-item img {
+            width: 100%;
+            border-radius: 16px;
+            box-shadow: 0 8px 28px rgba(0,0,0,0.45);
         }
-        
-        .icon {
-            width: 50px;
-            height: 50px;
-            background: var(--primary-color);
-            border-radius: 12px;
+
+        .features {
+            max-width: 680px;
+            margin: 0 auto;
+            padding: 48px 24px;
+        }
+        .features h2 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: rgba(255,255,255,0.85);
+        }
+        .feature-list { list-style: none; }
+        .feature-list li {
             display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 16px;
-            font-size: 24px;
+            align-items: flex-start;
+            gap: 14px;
+            padding: 14px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
         }
-        
-        .contact-info h3 {
-            color: var(--text-light);
-            font-size: 1rem;
-            margin-bottom: 4px;
-        }
-        
-        .contact-info a {
-            color: var(--primary-color);
-            text-decoration: none;
-            font-size: 0.95rem;
-        }
-        
-        .contact-info a:hover {
-            text-decoration: underline;
-        }
-        
-        .description {
-            text-align: center;
-            color: var(--text-muted);
-            margin-bottom: 32px;
-        }
-        
-        .social-links {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            margin-top: 32px;
-        }
-        
-        .social-link {
-            width: 50px;
-            height: 50px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            transition: background 0.3s ease, transform 0.3s ease;
-        }
-        
-        .social-link:hover {
-            background: var(--primary-color);
-            transform: scale(1.1);
-        }
-        
+        .feature-list li:last-child { border-bottom: none; }
+        .feat-icon { font-size: 1.5rem; flex-shrink: 0; margin-top: 1px; }
+        .feat-body strong { display: block; font-size: 1rem; color: #fff; margin-bottom: 3px; }
+        .feat-body span { font-size: 0.9rem; color: rgba(255,255,255,0.62); line-height: 1.5; }
+
         footer {
             text-align: center;
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            color: var(--text-muted);
+            padding: 32px 24px 48px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.45);
+            font-size: 0.85rem;
         }
-        
-        .response-time {
-            background: rgba(0, 184, 148, 0.2);
-            border-radius: 12px;
-            padding: 16px;
-            text-align: center;
-            margin-top: 24px;
-        }
-        
-        .response-time span {
-            color: #00B894;
-            font-weight: bold;
-        }
+        footer a { color: #4ecdc4; text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🎯 Vocab Quest</h1>
-            <h2>Contact Us</h2>
-        </header>
-        
-        <p class="description">
-            Have questions, feedback, or suggestions? We'd love to hear from you! 
-            Reach out to us through any of the channels below.
-        </p>
-        
-        <div class="contact-card">
-            <div class="contact-item">
-                <div class="icon">📧</div>
-                <div class="contact-info">
-                    <h3>Primary Email</h3>
-                    <a href="mailto:huongtv.uet@gmail.com">huongtv.uet@gmail.com</a>
-                </div>
-            </div>
-            
-            <div class="contact-item">
-                <div class="icon">📬</div>
-                <div class="contact-info">
-                    <h3>Alternative Email</h3>
-                    <a href="mailto:huongtv.svmc@gmail.com">huongtv.svmc@gmail.com</a>
-                </div>
-            </div>
-            
-            <div class="contact-item">
-                <div class="icon">🏢</div>
-                <div class="contact-info">
-                    <h3>Developer</h3>
-                    <span style="color: var(--text-muted);">GalaxTeam</span>
-                </div>
-            </div>
-            
-            <div class="response-time">
-                <p>⏱️ We typically respond within <span>24-48 hours</span></p>
-            </div>
+
+    <div class="hero">
+        <h1>Vocab Quest</h1>
+        <p>Master English vocabulary through fun, fast-paced quiz challenges designed to sharpen your word skills every day.</p>
+        <div class="badge">
+            <a href="https://play.google.com/store/apps/details?id=com.galaxteam.vocabquest" target="_blank">
+                <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play">
+            </a>
         </div>
-        
-        <footer>
-            <p>© 2024 Vocab Quest. All rights reserved.</p>
-            <p>Thank you for using Vocab Quest!</p>
-        </footer>
     </div>
+
+    <div class="feature-graphic">
+        <img src="feature_graphic.png" alt="Vocab Quest – feature graphic">
+    </div>
+
+    <div class="screenshots-section">
+        <h2>Screenshots</h2>
+        <div class="screenshots-scroll">
+            <div class="screenshot-item"><img src="screenshot_01.png" alt="Home screen"></div>
+            <div class="screenshot-item"><img src="screenshot_03.png" alt="Quiz screen"></div>
+            <div class="screenshot-item"><img src="screenshot_04.png" alt="Progress"></div>
+            <div class="screenshot-item"><img src="screenshot_05.png" alt="Leaderboard"></div>
+            <div class="screenshot-item"><img src="screenshot_06.png" alt="Profile"></div>
+        </div>
+    </div>
+
+    <div class="features">
+        <h2>Features</h2>
+        <ul class="feature-list">
+            <li>
+                <span class="feat-icon">📚</span>
+                <div class="feat-body">
+                    <strong>Curated Word Bank</strong>
+                    <span>Thousands of English words organized by level — from everyday vocabulary to advanced terms.</span>
+                </div>
+            </li>
+            <li>
+                <span class="feat-icon">⚡</span>
+                <div class="feat-body">
+                    <strong>Fast-Paced Quizzes</strong>
+                    <span>Timed rounds keep you focused and make every session feel like a challenge.</span>
+                </div>
+            </li>
+            <li>
+                <span class="feat-icon">🏆</span>
+                <div class="feat-body">
+                    <strong>Leaderboards</strong>
+                    <span>Compete with players worldwide and climb the global ranking.</span>
+                </div>
+            </li>
+            <li>
+                <span class="feat-icon">📈</span>
+                <div class="feat-body">
+                    <strong>Progress Tracking</strong>
+                    <span>Visual stats show your improvement over time so you stay motivated.</span>
+                </div>
+            </li>
+            <li>
+                <span class="feat-icon">🌙</span>
+                <div class="feat-body">
+                    <strong>Clean Modern UI</strong>
+                    <span>Sleek glass-design interface with smooth animations — easy on the eyes.</span>
+                </div>
+            </li>
+        </ul>
+    </div>
+
+    <footer>
+        <p>© 2025 GalaxTeam · <a href="privacy_policy.html">Privacy Policy</a> · <a href="terms.html">Terms</a></p>
+        <p style="margin-top:8px"><a href="mailto:huongtv.uet@gmail.com">huongtv.uet@gmail.com</a></p>
+    </footer>
+
 </body>
 </html>
-
