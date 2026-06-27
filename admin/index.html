@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Quản lý thu nhập</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Supabase JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/umd/supabase.js"></script>
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Liquid Glass Background Blobs -->
+  <div class="bg-blob blob-1"></div>
+  <div class="bg-blob blob-2"></div>
+  <div class="bg-blob blob-3"></div>
+
+  <!-- AUTH SCREEN (LOGIN) -->
+  <div id="auth-screen" class="auth-container">
+    <div class="glass-panel auth-card">
+      <div class="auth-header">
+        <div class="logo-glow">
+          <i class="fa-solid fa-wallet"></i>
+        </div>
+        <h2>Đăng nhập Admin</h2>
+        <p>Quản lý thu nhập các ứng dụng & dịch vụ</p>
+      </div>
+      
+      <form id="login-form">
+        <div class="form-group">
+          <label for="login-email"><i class="fa-regular fa-envelope"></i> Email</label>
+          <input type="email" id="login-email" required placeholder="admin@example.com">
+        </div>
+        
+        <div class="form-group">
+          <label for="login-password"><i class="fa-solid fa-lock"></i> Mật khẩu</label>
+          <input type="password" id="login-password" required placeholder="••••••••">
+        </div>
+
+        <div class="accordion-toggle" id="config-toggle">
+          <span><i class="fa-solid fa-gear"></i> Cấu hình kết nối Supabase</span>
+          <i class="fa-solid fa-chevron-down"></i>
+        </div>
+        
+        <div class="config-fields hidden" id="config-fields">
+          <div class="form-group">
+            <label for="supabase-url">Supabase URL</label>
+            <input type="url" id="supabase-url" value="https://lnazpyhoojqotnanrvqf.supabase.co">
+          </div>
+          <div class="form-group">
+            <label for="supabase-anon-key">Supabase Anon Key</label>
+            <input type="password" id="supabase-anon-key" placeholder="Dán Anon Key của dự án vào đây">
+          </div>
+        </div>
+
+        <div id="auth-error" class="error-message hidden"></div>
+        
+        <button type="submit" class="glow-button btn-primary">
+          <span>Đăng nhập</span>
+          <i class="fa-solid fa-arrow-right-to-bracket"></i>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MAIN DASHBOARD -->
+  <div id="dashboard-screen" class="dashboard-container hidden">
+    <!-- Navbar -->
+    <header class="glass-panel navbar">
+      <div class="nav-left">
+        <div class="logo">
+          <i class="fa-solid fa-chart-line"></i>
+          <span>Finance Admin</span>
+        </div>
+      </div>
+      <div class="nav-right">
+        <button id="btn-sync" class="glass-button secondary">
+          <i class="fa-solid fa-rotate"></i>
+          <span>Đồng bộ Google Play</span>
+        </button>
+        <button id="btn-add-income" class="glow-button small">
+          <i class="fa-solid fa-plus"></i>
+          <span>Thêm thu nhập</span>
+        </button>
+        <button id="btn-logout" class="glass-button danger" title="Đăng xuất">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- KPI Cards Grid -->
+    <section class="kpi-grid">
+      <div class="glass-panel kpi-card">
+        <div class="kpi-icon color-blue">
+          <i class="fa-solid fa-dollar-sign"></i>
+        </div>
+        <div class="kpi-info">
+          <span class="kpi-label">Tổng thực nhận</span>
+          <h3 class="kpi-val" id="kpi-total-revenue">$0.00</h3>
+        </div>
+      </div>
+
+      <div class="glass-panel kpi-card">
+        <div class="kpi-icon color-green">
+          <i class="fa-solid fa-mobile-screen-button"></i>
+        </div>
+        <div class="kpi-info">
+          <span class="kpi-label">Ứng dụng</span>
+          <h3 class="kpi-val" id="kpi-apps-count">0</h3>
+        </div>
+      </div>
+
+      <div class="glass-panel kpi-card">
+        <div class="kpi-icon color-purple">
+          <i class="fa-solid fa-calendar-days"></i>
+        </div>
+        <div class="kpi-info">
+          <span class="kpi-label">Số tháng đã chốt</span>
+          <h3 class="kpi-val" id="kpi-months-count">0</h3>
+        </div>
+      </div>
+
+      <div class="glass-panel kpi-card">
+        <div class="kpi-icon color-orange">
+          <i class="fa-solid fa-chart-simple"></i>
+        </div>
+        <div class="kpi-info">
+          <span class="kpi-label">Trung bình / tháng</span>
+          <h3 class="kpi-val" id="kpi-avg-revenue">$0.00</h3>
+        </div>
+      </div>
+    </section>
+
+    <!-- Chart & Top Apps Section -->
+    <section class="analytics-row">
+      <div class="glass-panel chart-box">
+        <div class="panel-header">
+          <h4><i class="fa-solid fa-chart-column"></i> Biểu đồ thu nhập qua các tháng</h4>
+          <div class="chart-filters">
+            <button class="active">Thực nhận</button>
+          </div>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="revenue-chart"></canvas>
+        </div>
+      </div>
+
+      <div class="glass-panel top-apps-box">
+        <div class="panel-header">
+          <h4><i class="fa-solid fa-crown"></i> Top ứng dụng doanh thu</h4>
+        </div>
+        <div id="top-apps-list" class="top-apps-list">
+          <!-- Dynamically populated -->
+          <div class="loading-placeholder">Đang tải dữ liệu...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Detailed Data Table Section -->
+    <section class="data-section">
+      <div class="glass-panel table-card">
+        <div class="panel-header table-actions">
+          <div class="table-title">
+            <h4><i class="fa-solid fa-table"></i> Bảng kê doanh thu chi tiết</h4>
+            <span class="subtitle">Hiển thị thu nhập ròng sau thuế và phí</span>
+          </div>
+          <div class="table-filters">
+            <div class="search-input-wrapper">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="table-search" placeholder="Tìm app...">
+            </div>
+            <select id="filter-source" class="glass-select">
+              <option value="all">Tất cả nguồn</option>
+              <option value="google_play">Google Play (Chính thức)</option>
+              <option value="google_play_estimate">Google Play (Ước tính)</option>
+              <option value="admob">AdMob</option>
+              <option value="manual">Thủ công / Khác</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="table-wrapper">
+          <table id="earnings-table">
+            <thead>
+              <tr id="table-header-row">
+                <!-- Dynamically populated -->
+                <th>Ứng dụng</th>
+                <th>Tổng</th>
+              </tr>
+            </thead>
+            <tbody id="table-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ADD/EDIT INCOME MODAL -->
+  <div id="income-modal" class="modal-overlay hidden">
+    <div class="glass-panel modal-card">
+      <div class="modal-header">
+        <h4 id="modal-title">Thêm khoản thu nhập</h4>
+        <button class="btn-close-modal"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="income-form">
+        <input type="hidden" id="edit-earning-id">
+        
+        <div class="form-group">
+          <label for="income-app">Ứng dụng</label>
+          <div class="app-select-wrapper">
+            <select id="income-app" required class="glass-select">
+              <!-- Dynamically populated -->
+            </select>
+            <button type="button" id="btn-new-app" class="glass-button icon-only" title="Tạo App mới">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Add App Sub-Form (Hidden by default) -->
+        <div id="new-app-form" class="new-app-subform hidden">
+          <div class="form-group">
+            <label for="new-app-id">Package Name / ID App mới</label>
+            <input type="text" id="new-app-id" placeholder="com.example.game or admob_ios">
+          </div>
+          <div class="form-group">
+            <label for="new-app-title">Tên ứng dụng</label>
+            <input type="text" id="new-app-title" placeholder="Tên Game hoặc Kênh">
+          </div>
+          <div class="subform-actions">
+            <button type="button" id="btn-cancel-new-app" class="glass-button small">Hủy</button>
+            <button type="button" id="btn-save-new-app" class="glow-button small">Lưu App</button>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="income-month">Tháng (YYYYMM)</label>
+            <input type="text" id="income-month" required placeholder="e.g., 202506" pattern="\d{6}" title="Định dạng YYYYMM (ví dụ 202506)">
+          </div>
+
+          <div class="form-group">
+            <label for="income-source">Nguồn doanh thu</label>
+            <select id="income-source" required class="glass-select">
+              <option value="admob">AdMob</option>
+              <option value="manual">Thủ công (Khác)</option>
+              <option value="google_play">Google Play (Thủ công)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="income-amount">Số tiền</label>
+            <input type="number" id="income-amount" required step="0.01" min="0" placeholder="0.00">
+          </div>
+
+          <div class="form-group">
+            <label for="income-currency">Tiền tệ</label>
+            <select id="income-currency" required class="glass-select">
+              <option value="USD">USD ($)</option>
+              <option value="VND">VND (đ)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="income-note">Ghi chú</label>
+          <textarea id="income-note" rows="2" placeholder="Nhập ghi chú chi tiết nếu có..."></textarea>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="glass-button btn-close-modal">Hủy</button>
+          <button type="submit" class="glow-button">Lưu thu nhập</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- SYNC LOADER / LOG OVERLAY -->
+  <div id="sync-overlay" class="modal-overlay hidden">
+    <div class="glass-panel sync-card">
+      <div class="sync-loader">
+        <div class="spinner"></div>
+        <div class="spinner-glow"></div>
+      </div>
+      <h4>Đang đồng bộ Google Play...</h4>
+      <p>Đang tải tệp báo cáo từ Google Cloud Storage và tổng hợp dữ liệu doanh thu...</p>
+      <div id="sync-logs" class="sync-logs">
+        <!-- Live logs will be appended here -->
+        <div class="log-line text-blue">> Bắt đầu phiên làm việc...</div>
+      </div>
+      <button id="btn-close-sync-overlay" class="glass-button hidden">Đóng</button>
+    </div>
+  </div>
+
+  <!-- Script logic -->
+  <script src="app.js"></script>
+</body>
+</html>
