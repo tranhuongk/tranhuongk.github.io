@@ -438,6 +438,9 @@ function renderDashboard() {
   const totalUSD = received.reduce((sum, e) => sum + toUSD(e), 0);
 
   const uniqueApps = Array.from(new Set(filtered.map(e => e.app_id)));
+  // All months (incl. estimate) drive the chart + pivot table below;
+  // closedMonths (received only) drive the "đã chốt" / average KPIs.
+  const uniqueMonths = Array.from(new Set(filtered.map(e => e.month))).sort();
   const closedMonths = Array.from(new Set(received.map(e => e.month))).sort();
   const avgMonthlyUSD = closedMonths.length ? totalUSD / closedMonths.length : 0;
 
