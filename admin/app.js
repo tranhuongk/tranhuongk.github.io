@@ -427,26 +427,23 @@ function renderDashboard() {
   }
 
   // 2. Compute KPI Metrics
-  // Summing everything up. Conversion rate: 1 USD = 25000 VND (simple fallback)
+  // The headline KPIs reflect money ACTUALLY received: estimate rows
+  // (source "google_play_estimate", shown with an "Est" marker) are excluded.
+  // "Tổng thực nhận" và "Số tháng đã chốt" chỉ tính khoản đã nhận.
+  // Conversion rate: 1 USD = 25000 VND (simple fallback)
   const rate = 25000;
-  let totalUSD = 0;
-  
-  filtered.forEach(e => {
-    const amt = parseFloat(e.amount);
-    if (e.currency === "USD") {
-      totalUSD += amt;
-    } else if (e.currency === "VND") {
-      totalUSD += amt / rate;
-    }
-  });
+  const toUSD = e => (e.currency === "VND" ? parseFloat(e.amount) / rate : parseFloat(e.amount));
+  const received = filtered.filter(e => e.source !== "google_play_estimate");
+
+  const totalUSD = received.reduce((sum, e) => sum + toUSD(e), 0);
 
   const uniqueApps = Array.from(new Set(filtered.map(e => e.app_id)));
-  const uniqueMonths = Array.from(new Set(filtered.map(e => e.month))).sort();
-  const avgMonthlyUSD = uniqueMonths.length ? totalUSD / uniqueMonths.length : 0;
+  const closedMonths = Array.from(new Set(received.map(e => e.month))).sort();
+  const avgMonthlyUSD = closedMonths.length ? totalUSD / closedMonths.length : 0;
 
   kpiTotalRevenue.textContent = fmtUSD(totalUSD);
   kpiAppsCount.textContent = uniqueApps.length;
-  kpiMonthsCount.textContent = uniqueMonths.length;
+  kpiMonthsCount.textContent = closedMonths.length;
   kpiAvgRevenue.textContent = fmtUSD(avgMonthlyUSD);
 
   // 3. Render Top Apps List
