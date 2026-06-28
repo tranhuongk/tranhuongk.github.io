@@ -42,6 +42,11 @@ function cleanAppTitle(pkg, fallback) {
 let appsList = [];
 let earningsData = [];
 let currentUsdToVndRate = 25000;
+// KPI summary computed by the `dashboard-summary` edge function — the single
+// source of truth shared with the Telegram bot. When present (and no filter is
+// applied) the headline KPI cards render these values verbatim so the web and
+// the bot can never disagree.
+let serverSummary = null;
 
 // Fetch exchange rate dynamically
 async function fetchExchangeRate() {
@@ -250,9 +255,37 @@ function showError(msg) {
 // --- Data Fetching ---
 async function loadDataAndRender() {
   if (!supabaseClient) return;
-  
+
+  // Preferred path: pull everything from the shared `dashboard-summary` edge
+  // function so the KPI numbers, exchange rate, and app titles match the
+  // Telegram bot exactly (same computation, same rate snapshot).
   try {
-    // 1. Fetch Apps
+    const res = await fetch(`${supabaseUrl}/functions/v1/dashboard-summary`, {
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${session ? session.access_token : supabaseAnonKey}`,
+      },
+    });
+    if (res.ok) {
+      const s = await res.json();
+      if (!s.error) {
+        serverSummary = s;
+        currentUsdToVndRate = s.rate || currentUsdToVndRate;
+        appsList = (s.apps || []).map(a => ({ ...a, title: cleanAppTitle(a.id, a.title) }));
+        earningsData = s.earnings || [];
+        populateAppDropdown();
+        renderDashboard();
+        return;
+      }
+    }
+    console.warn("dashboard-summary unavailable, falling back to direct table reads.");
+  } catch (err) {
+    console.warn("dashboard-summary fetch failed, falling back:", err);
+  }
+
+  // Fallback: read the tables directly (KPIs then computed client-side).
+  serverSummary = null;
+  try {
     const { data: apps, error: appsErr } = await supabaseClient
       .from("apps")
       .select("*")
@@ -263,7 +296,6 @@ async function loadDataAndRender() {
       title: cleanAppTitle(a.id, a.title)
     }));
 
-    // 2. Fetch Earnings
     const { data: earnings, error: earnErr } = await supabaseClient
       .from("earnings")
       .select("*")
@@ -271,10 +303,7 @@ async function loadDataAndRender() {
     if (earnErr) throw earnErr;
     earningsData = earnings || [];
 
-    // Populate app dropdown in Modal
     populateAppDropdown();
-    
-    // Render
     renderDashboard();
   } catch (err) {
     console.error("Lỗi khi tải dữ liệu:", err);
@@ -526,22 +555,35 @@ function renderDashboard() {
     ? officialRows.filter(e => e.month === prevMonth).reduce((sum, e) => sum + toUSD(e), 0)
     : 0;
 
+  // For the full, unfiltered view, render the edge function's precomputed KPIs
+  // verbatim so these cards match the Telegram bot exactly. Client-side
+  // recomputation still drives the cards whenever a filter/search is active.
+  const unfiltered = sourceFilter === "all" && !searchQuery;
+  let dTotal = totalUSD, dEstimate = currentEstimateUSD;
+  let dPrevMonth = prevMonth, dPrevMonthUSD = prevMonthUSD;
+  if (unfiltered && serverSummary && serverSummary.kpis) {
+    dTotal = serverSummary.kpis.totalUSD;
+    dEstimate = serverSummary.kpis.estimateUSD;
+    dPrevMonth = serverSummary.kpis.prevMonth;
+    dPrevMonthUSD = serverSummary.kpis.prevMonthUSD;
+  }
+
   // Guard against null: a browser may have an older cached index.html whose
   // KPI elements differ from this script during a deploy transition.
-  if (kpiTotalRevenue) kpiTotalRevenue.textContent = fmtUSD(totalUSD);
+  if (kpiTotalRevenue) kpiTotalRevenue.textContent = fmtUSD(dTotal);
   if (kpiTotalVnd) {
-    kpiTotalVnd.textContent = `≈ ${fmtVND(totalUSD * rate)}`;
+    kpiTotalVnd.textContent = `≈ ${fmtVND(dTotal * rate)}`;
   }
-  if (kpiPrevMonth) kpiPrevMonth.textContent = fmtUSD(prevMonthUSD);
+  if (kpiPrevMonth) kpiPrevMonth.textContent = fmtUSD(dPrevMonthUSD);
   if (kpiPrevMonthVnd) {
-    kpiPrevMonthVnd.textContent = `≈ ${fmtVND(prevMonthUSD * rate)}`;
+    kpiPrevMonthVnd.textContent = `≈ ${fmtVND(dPrevMonthUSD * rate)}`;
   }
-  if (kpiPrevMonthLabel) kpiPrevMonthLabel.textContent = prevMonth
-    ? `Doanh thu tháng trước (${monthLabel(prevMonth)})`
+  if (kpiPrevMonthLabel) kpiPrevMonthLabel.textContent = dPrevMonth
+    ? `Doanh thu tháng trước (${monthLabel(dPrevMonth)})`
     : "Doanh thu tháng trước";
-  if (kpiCurrentEstimate) kpiCurrentEstimate.textContent = fmtUSD(currentEstimateUSD);
+  if (kpiCurrentEstimate) kpiCurrentEstimate.textContent = fmtUSD(dEstimate);
   if (kpiCurrentEstimateVnd) {
-    kpiCurrentEstimateVnd.textContent = `≈ ${fmtVND(currentEstimateUSD * rate)}`;
+    kpiCurrentEstimateVnd.textContent = `≈ ${fmtVND(dEstimate * rate)}`;
   }
   
   if (navExchangeRate) {
