@@ -16,6 +16,22 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/umd/supabase.js"></script>
   <!-- Custom CSS -->
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* RTDN order table (clones Play Console "Order management") */
+    .rtdn-app-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; display: block; }
+    .rtdn-app-fallback { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: var(--panel2, #232a4d); font-weight: 700; font-size: 13px; }
+    .rtdn-date-main { font-weight: 500; }
+    .rtdn-sub { font-size: 11px; color: var(--text-muted); }
+    .rtdn-product-title { font-weight: 600; }
+    .rtdn-status { display: inline-flex; align-items: center; gap: 6px; color: var(--success, #10b981); white-space: nowrap; }
+    .rtdn-arrow { background: none; border: none; color: var(--primary-glow, #6c8cff); cursor: pointer; font-size: 15px; padding: 6px 10px; border-radius: 8px; }
+    .rtdn-arrow:hover { background: rgba(108,140,255,0.12); }
+    #rtdn-table td { vertical-align: middle; }
+    .rtdn-detail-row { display: flex; justify-content: space-between; gap: 24px; padding: 11px 0; border-bottom: 1px solid var(--border-light, rgba(255,255,255,0.06)); }
+    .rtdn-detail-row .label { color: var(--text-muted); }
+    .rtdn-detail-row .value { font-weight: 500; text-align: right; }
+    .rtdn-detail-title { font-size: 13px; color: var(--text-muted); margin: 18px 0 6px; }
+  </style>
 </head>
 <body>
   <!-- Liquid Glass Background Blobs -->
@@ -216,11 +232,13 @@
           <table id="rtdn-table">
             <thead>
               <tr>
-                <th>Thời gian</th>
-                <th>Ứng dụng</th>
-                <th>SKU</th>
-                <th>Số tiền</th>
+                <th>Date</th>
+                <th>App</th>
+                <th>Product</th>
                 <th>Order ID</th>
+                <th>Status</th>
+                <th>Estimated revenue</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="rtdn-body">
@@ -230,6 +248,17 @@
         </div>
       </div>
     </section>
+  </div>
+
+  <!-- RTDN ORDER DETAIL MODAL -->
+  <div id="rtdn-detail-modal" class="modal-overlay hidden">
+    <div class="glass-panel modal-card">
+      <div class="modal-header">
+        <h4 id="rtdn-detail-heading">Order</h4>
+        <button class="btn-close-rtdn-detail btn-close-modal"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="rtdn-detail-content"><!-- populated by JS --></div>
+    </div>
   </div>
 
   <!-- ADD/EDIT INCOME MODAL -->
@@ -332,6 +361,6 @@
   </div>
 
   <!-- Script logic -->
-  <script src="app.js?v=20260628h"></script>
+  <script src="app.js?v=20260628k"></script>
 </body>
 </html>

@@ -161,7 +161,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.querySelectorAll(".btn-close-modal").forEach(btn => {
     btn.addEventListener("click", closeIncomeModal);
   });
-  
+
+  // RTDN order detail modal: close button + click-outside.
+  document.querySelectorAll(".btn-close-rtdn-detail").forEach(btn => {
+    btn.addEventListener("click", () => window.closeRtdnDetail && window.closeRtdnDetail());
+  });
+  const rtdnModalEl = document.getElementById("rtdn-detail-modal");
+  if (rtdnModalEl) {
+    rtdnModalEl.addEventListener("click", (e) => {
+      if (e.target === rtdnModalEl) window.closeRtdnDetail();
+    });
+  }
+
   incomeForm.addEventListener("submit", handleIncomeSubmit);
   
   // App Creation Subform
@@ -617,41 +628,102 @@ function renderDashboard() {
 
 // Render the individual RTDN-reported transactions. Source: the durable
 // rtdn_transactions records returned by the dashboard-summary edge function.
+// order_id -> transaction, for the detail modal.
+let rtdnByOrder = {};
+
+// "USD 0.30" — currency code prefix, like the Play Console order table.
+function fmtMoneyCode(val, cur) {
+  return `${cur || "USD"} ${(Number(val) || 0).toFixed(2)}`;
+}
+
+// Split an ISO timestamp into VN-timezone date + time strings.
+function vnDateParts(iso) {
+  if (!iso) return { date: "—", time: "" };
+  try {
+    const d = new Date(iso);
+    return {
+      date: d.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }),
+      time: d.toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" }) + " (GMT+7)",
+    };
+  } catch (e) { return { date: String(iso), time: "" }; }
+}
+
+function statusLabel(raw) {
+  const s = (raw || "").toString();
+  if (!s) return "—";
+  return s.toUpperCase() === "PROCESSED" ? "Processed" : s.charAt(0) + s.slice(1).toLowerCase();
+}
+
+// Clone of the Play Console "Order management" table.
 function renderRtdnTransactions() {
   const body = document.getElementById("rtdn-body");
   const subtitle = document.getElementById("rtdn-subtitle");
   if (!body) return;
 
   const txns = (serverSummary && serverSummary.rtdnTransactions) || [];
+  rtdnByOrder = {};
+  txns.forEach(t => { rtdnByOrder[t.order_id] = t; });
+
   if (subtitle) {
     subtitle.textContent = txns.length
       ? `${txns.length} giao dịch ghi nhận tức thời từ Google Play`
       : "Chưa có giao dịch nào được ghi nhận";
   }
-
   if (!txns.length) {
-    body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-muted)">Chưa có giao dịch RTDN nào. Mỗi giao dịch IAP sẽ xuất hiện ngay khi Google gửi thông báo realtime.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted)">Chưa có giao dịch RTDN nào. Mỗi giao dịch IAP sẽ xuất hiện ngay khi Google gửi thông báo realtime.</td></tr>`;
     return;
   }
 
   body.innerHTML = txns.map(t => {
-    let when = "—";
-    if (t.event_time) {
-      try { when = new Date(t.event_time).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }); }
-      catch (e) { when = t.event_time; }
-    }
+    const d = t.details || {};
+    const { date, time } = vnDateParts(t.event_time);
+    const pkg = t.package_name || "";
+    const initial = (t.title || pkg || "?").charAt(0).toUpperCase();
+    const logo = `<img class="rtdn-app-logo" src="app-icons/${pkg}.png" alt="${t.title || pkg}" onerror="this.outerHTML='<div class=&quot;rtdn-app-fallback&quot;>${initial}</div>'">`;
+    const estRev = (d.estimatedRevenue != null ? d.estimatedRevenue : t.amount);
     return `<tr>
-      <td>${when}</td>
+      <td><div class="rtdn-date-main">${date}</div><div class="rtdn-sub">${time}</div></td>
+      <td>${logo}</td>
       <td>
-        <strong>${t.title || t.package_name}</strong>
-        <div style="font-size:10px;color:var(--text-muted)">${t.package_name}</div>
+        <div class="rtdn-product-title">${d.productTitle || t.title || pkg}</div>
+        <div class="rtdn-sub">${t.sku || ""}</div>
+        <div class="rtdn-sub">${d.purchaseType || "Buy"}</div>
       </td>
-      <td>${t.sku || "-"}</td>
-      <td class="val-pos">${t.amount} ${t.currency}</td>
-      <td style="font-size:11px;color:var(--text-muted)">${t.order_id || "-"}</td>
+      <td>${t.order_id}</td>
+      <td><span class="rtdn-status"><i class="fa-solid fa-circle-check"></i> ${statusLabel(d.status)}</span></td>
+      <td>${fmtMoneyCode(estRev, t.currency)}</td>
+      <td><button class="rtdn-arrow" onclick="openRtdnDetail('${t.order_id}')" title="Xem chi tiết"><i class="fa-solid fa-arrow-right"></i></button></td>
     </tr>`;
   }).join("");
 }
+
+// Detail view (clones the Play Console order detail page).
+window.openRtdnDetail = (orderId) => {
+  const t = rtdnByOrder[orderId];
+  if (!t) return;
+  const d = t.details || {};
+  const { date, time } = vnDateParts(t.event_time);
+  const heading = document.getElementById("rtdn-detail-heading");
+  const content = document.getElementById("rtdn-detail-content");
+  if (heading) heading.textContent = `Order ${t.order_id}`;
+  const row = (label, value) => `<div class="rtdn-detail-row"><span class="label">${label}</span><span class="value">${value}</span></div>`;
+  content.innerHTML =
+    row("Order status", `<span class="rtdn-status"><i class="fa-solid fa-circle-check"></i> ${statusLabel(d.status)}</span>`) +
+    row("Order ID", t.order_id) +
+    row("Date", `${date} ${time}`) +
+    row("Billing address", d.buyerCountry || "—") +
+    row("List price", fmtMoneyCode(d.listPrice != null ? d.listPrice : t.amount, t.currency)) +
+    row("Tax", fmtMoneyCode(d.tax || 0, t.currency)) +
+    row("Total", fmtMoneyCode(d.total != null ? d.total : t.amount, t.currency)) +
+    row("Estimated revenue", fmtMoneyCode(d.estimatedRevenue != null ? d.estimatedRevenue : t.amount, t.currency)) +
+    `<div class="rtdn-detail-title">Products in this order</div>` +
+    `<div class="rtdn-product-title">${d.productTitle || t.title}</div>` +
+    `<div class="rtdn-sub">${t.sku || ""} · ${d.purchaseType || "Buy"}</div>`;
+  document.getElementById("rtdn-detail-modal").classList.remove("hidden");
+};
+window.closeRtdnDetail = () => {
+  document.getElementById("rtdn-detail-modal").classList.add("hidden");
+};
 
 function fmtUSD(val) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(val);
