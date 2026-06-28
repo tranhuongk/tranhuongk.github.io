@@ -5,6 +5,39 @@ let supabaseClient = null;
 let session = null;
 let chart = null;
 
+// --- App package mappings ---
+const PACKAGE_MAP = {
+  "com.galaxteam.treasurequest": "Treasure Quest",
+  "com.galaxteam.braingems": "Brain Gems",
+  "com.luckyspin.game": "Lucky Spin",
+  "com.galaxteam.wordchain": "Word Chain",
+  "com.galaxteam.vocabquest": "Vocab Quest",
+  "com.galaxteam.viet_riddles": "Viet Riddles",
+  "com.galaxteam.pixel_realms": "Pixel Realms",
+  "com.galaxteam.galaxarcade": "Galax Arcade",
+  "com.galaxteam.bloombounce": "Orbiloop",
+};
+
+function cleanAppTitle(pkg, fallback) {
+  const cleanPkg = String(pkg).trim().toLowerCase();
+  for (const [k, v] of Object.entries(PACKAGE_MAP)) {
+    if (k.toLowerCase() === cleanPkg) return v;
+  }
+  if (fallback) {
+    const cleanFallback = String(fallback).trim().toLowerCase();
+    for (const [k, v] of Object.entries(PACKAGE_MAP)) {
+      if (k.toLowerCase() === cleanFallback) return v;
+    }
+    return fallback;
+  }
+  if (pkg && pkg.includes(".")) {
+    const parts = pkg.split(".");
+    const name = parts[parts.length - 1];
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  }
+  return pkg || "Unknown";
+}
+
 // Local caching of data
 let appsList = [];
 let earningsData = [];
@@ -190,7 +223,10 @@ async function loadDataAndRender() {
       .select("*")
       .order("title");
     if (appsErr) throw appsErr;
-    appsList = apps || [];
+    appsList = (apps || []).map(a => ({
+      ...a,
+      title: cleanAppTitle(a.id, a.title)
+    }));
 
     // 2. Fetch Earnings
     const { data: earnings, error: earnErr } = await supabaseClient
