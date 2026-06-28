@@ -628,8 +628,10 @@ function renderDashboard() {
 
 // Render the individual RTDN-reported transactions. Source: the durable
 // rtdn_transactions records returned by the dashboard-summary edge function.
-// order_id -> transaction, for the detail modal.
+// order_id -> transaction, for the detail modal. Plus paging state.
 let rtdnByOrder = {};
+let rtdnOffset = 0;   // how many transactions are currently loaded
+let rtdnTotal = 0;    // total rows in rtdn_transactions (from the summary)
 
 // "USD 0.30" — currency code prefix, like the Play Console order table.
 function fmtMoneyCode(val, cur) {
@@ -654,34 +656,15 @@ function statusLabel(raw) {
   return s.toUpperCase() === "PROCESSED" ? "Processed" : s.charAt(0) + s.slice(1).toLowerCase();
 }
 
-// Clone of the Play Console "Order management" table.
-function renderRtdnTransactions() {
-  const body = document.getElementById("rtdn-body");
-  const subtitle = document.getElementById("rtdn-subtitle");
-  if (!body) return;
-
-  const txns = (serverSummary && serverSummary.rtdnTransactions) || [];
-  rtdnByOrder = {};
-  txns.forEach(t => { rtdnByOrder[t.order_id] = t; });
-
-  if (subtitle) {
-    subtitle.textContent = txns.length
-      ? `${txns.length} giao dịch ghi nhận tức thời từ Google Play`
-      : "Chưa có giao dịch nào được ghi nhận";
-  }
-  if (!txns.length) {
-    body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted)">Chưa có giao dịch RTDN nào. Mỗi giao dịch IAP sẽ xuất hiện ngay khi Google gửi thông báo realtime.</td></tr>`;
-    return;
-  }
-
-  body.innerHTML = txns.map(t => {
-    const d = t.details || {};
-    const { date, time } = vnDateParts(t.event_time);
-    const pkg = t.package_name || "";
-    const initial = (t.title || pkg || "?").charAt(0).toUpperCase();
-    const logo = `<img class="rtdn-app-logo" src="app-icons/${pkg}.png" alt="${t.title || pkg}" onerror="this.outerHTML='<div class=&quot;rtdn-app-fallback&quot;>${initial}</div>'">`;
-    const estRev = (d.estimatedRevenue != null ? d.estimatedRevenue : t.amount);
-    return `<tr>
+// One table row (Play Console "Order management" style).
+function rtdnRowHtml(t) {
+  const d = t.details || {};
+  const { date, time } = vnDateParts(t.event_time);
+  const pkg = t.package_name || "";
+  const initial = (t.title || pkg || "?").charAt(0).toUpperCase();
+  const logo = `<img class="rtdn-app-logo" src="app-icons/${pkg}.png" alt="${t.title || pkg}" onerror="this.outerHTML='<div class=&quot;rtdn-app-fallback&quot;>${initial}</div>'">`;
+  const estRev = (d.estimatedRevenue != null ? d.estimatedRevenue : t.amount);
+  return `<tr>
       <td><div class="rtdn-date-main">${date}</div><div class="rtdn-sub">${time}</div></td>
       <td>${logo}</td>
       <td>
@@ -694,8 +677,73 @@ function renderRtdnTransactions() {
       <td>${fmtMoneyCode(estRev, t.currency)}</td>
       <td><button class="rtdn-arrow" onclick="openRtdnDetail('${t.order_id}')" title="Xem chi tiết"><i class="fa-solid fa-arrow-right"></i></button></td>
     </tr>`;
-  }).join("");
 }
+
+function updateRtdnLoadMore() {
+  const wrap = document.getElementById("rtdn-load-more-wrap");
+  const btn = document.getElementById("rtdn-load-more");
+  if (!wrap) return;
+  if (rtdnOffset < rtdnTotal) {
+    wrap.style.display = "";
+    if (btn) { btn.disabled = false; btn.textContent = `Tải thêm (${rtdnOffset}/${rtdnTotal})`; }
+  } else {
+    wrap.style.display = "none";
+  }
+}
+
+// Clone of the Play Console "Order management" table (first page from the
+// summary; the rest is paged in via loadMoreRtdn).
+function renderRtdnTransactions() {
+  const body = document.getElementById("rtdn-body");
+  const subtitle = document.getElementById("rtdn-subtitle");
+  if (!body) return;
+
+  const txns = (serverSummary && serverSummary.rtdnTransactions) || [];
+  rtdnTotal = (serverSummary && serverSummary.rtdnTotalCount != null)
+    ? serverSummary.rtdnTotalCount : txns.length;
+  rtdnByOrder = {};
+  txns.forEach(t => { rtdnByOrder[t.order_id] = t; });
+  rtdnOffset = txns.length;
+
+  if (subtitle) {
+    subtitle.textContent = rtdnTotal
+      ? `${rtdnTotal} giao dịch ghi nhận tức thời từ Google Play`
+      : "Chưa có giao dịch nào được ghi nhận";
+  }
+  if (!txns.length) {
+    body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted)">Chưa có giao dịch RTDN nào. Mỗi giao dịch IAP sẽ xuất hiện ngay khi Google gửi thông báo realtime.</td></tr>`;
+    updateRtdnLoadMore();
+    return;
+  }
+
+  body.innerHTML = txns.map(rtdnRowHtml).join("");
+  updateRtdnLoadMore();
+}
+
+// "Load more" — fetch the next page straight from the table (authenticated
+// client + range), so it scales without re-running the whole summary.
+window.loadMoreRtdn = async () => {
+  if (!supabaseClient) return;
+  const btn = document.getElementById("rtdn-load-more");
+  if (btn) { btn.disabled = true; btn.textContent = "Đang tải..."; }
+  try {
+    const { data, error } = await supabaseClient
+      .from("rtdn_transactions")
+      .select("*")
+      .order("event_time", { ascending: false })
+      .range(rtdnOffset, rtdnOffset + 29);
+    if (error) throw error;
+    const rows = (data || []).map(t => ({ ...t, title: cleanAppTitle(t.package_name) }));
+    rows.forEach(t => { rtdnByOrder[t.order_id] = t; });
+    const body = document.getElementById("rtdn-body");
+    if (body) body.insertAdjacentHTML("beforeend", rows.map(rtdnRowHtml).join(""));
+    rtdnOffset += rows.length;
+  } catch (e) {
+    console.error("loadMoreRtdn failed:", e);
+  } finally {
+    updateRtdnLoadMore();
+  }
+};
 
 // Detail view (clones the Play Console order detail page).
 window.openRtdnDetail = (orderId) => {
@@ -740,21 +788,29 @@ function monthLabel(p) {
   return p;
 }
 
-// Render Top Apps — ranked on official revenue only (estimate rows excluded).
+// Render Top Apps — ranked by RTDN estimated revenue (from the shared summary).
+// Falls back to official earnings only if the summary function is unavailable.
 function renderTopApps(filtered, appMap, rate) {
-  const totals = {};
-  filtered
-    .filter(e => e.source !== "google_play_estimate")
-    .forEach(e => {
-      const amt = parseFloat(e.amount);
-      const usd = e.currency === "USD" ? amt : amt / rate;
-      totals[e.app_id] = (totals[e.app_id] || 0) + usd;
-    });
-
-  const sortedApps = Object.entries(totals)
-    .map(([id, total]) => ({ id, title: appMap[id] || id, total }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 5); // top 5
+  let sortedApps;
+  if (serverSummary && serverSummary.topAppsRtdn) {
+    sortedApps = serverSummary.topAppsRtdn
+      .filter(a => a.totalUSD)
+      .map(a => ({ id: a.id, title: a.title, total: a.totalUSD }))
+      .slice(0, 5);
+  } else {
+    const totals = {};
+    filtered
+      .filter(e => e.source !== "google_play_estimate")
+      .forEach(e => {
+        const amt = parseFloat(e.amount);
+        const usd = e.currency === "USD" ? amt : amt / rate;
+        totals[e.app_id] = (totals[e.app_id] || 0) + usd;
+      });
+    sortedApps = Object.entries(totals)
+      .map(([id, total]) => ({ id, title: appMap[id] || id, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+  }
 
   if (sortedApps.length === 0) {
     topAppsList.innerHTML = `<div class="loading-placeholder">Không có dữ liệu</div>`;
