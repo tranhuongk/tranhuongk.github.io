@@ -585,6 +585,14 @@ function renderDashboard() {
   if (kpiCurrentEstimateVnd) {
     kpiCurrentEstimateVnd.textContent = `≈ ${fmtVND(dEstimate * rate)}`;
   }
+
+  // Current-month income actually confirmed via RTDN (server-computed, from the
+  // rtdn_transactions table) — independent of the table filters.
+  const rtdnUSD = (serverSummary && serverSummary.kpis && serverSummary.kpis.currentMonthRtdnUSD) || 0;
+  const kpiCurrentRtdn = document.getElementById("kpi-current-rtdn");
+  const kpiCurrentRtdnVnd = document.getElementById("kpi-current-rtdn-vnd");
+  if (kpiCurrentRtdn) kpiCurrentRtdn.textContent = fmtUSD(rtdnUSD);
+  if (kpiCurrentRtdnVnd) kpiCurrentRtdnVnd.textContent = `≈ ${fmtVND(rtdnUSD * rate)}`;
   
   if (navExchangeRate) {
     navExchangeRate.textContent = `Tỷ giá: ${fmtVND(rate)} / USD`;
@@ -602,6 +610,47 @@ function renderDashboard() {
 
   // 5. Render Pivot Table
   renderPivotTable(filtered, uniqueApps, uniqueMonths, appMap);
+
+  // 6. Render RTDN realtime transactions (from the shared summary)
+  renderRtdnTransactions();
+}
+
+// Render the individual RTDN-reported transactions. Source: the durable
+// rtdn_transactions records returned by the dashboard-summary edge function.
+function renderRtdnTransactions() {
+  const body = document.getElementById("rtdn-body");
+  const subtitle = document.getElementById("rtdn-subtitle");
+  if (!body) return;
+
+  const txns = (serverSummary && serverSummary.rtdnTransactions) || [];
+  if (subtitle) {
+    subtitle.textContent = txns.length
+      ? `${txns.length} giao dịch ghi nhận tức thời từ Google Play`
+      : "Chưa có giao dịch nào được ghi nhận";
+  }
+
+  if (!txns.length) {
+    body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-muted)">Chưa có giao dịch RTDN nào. Mỗi giao dịch IAP sẽ xuất hiện ngay khi Google gửi thông báo realtime.</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = txns.map(t => {
+    let when = "—";
+    if (t.event_time) {
+      try { when = new Date(t.event_time).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }); }
+      catch (e) { when = t.event_time; }
+    }
+    return `<tr>
+      <td>${when}</td>
+      <td>
+        <strong>${t.title || t.package_name}</strong>
+        <div style="font-size:10px;color:var(--text-muted)">${t.package_name}</div>
+      </td>
+      <td>${t.sku || "-"}</td>
+      <td class="val-pos">${t.amount} ${t.currency}</td>
+      <td style="font-size:11px;color:var(--text-muted)">${t.order_id || "-"}</td>
+    </tr>`;
+  }).join("");
 }
 
 function fmtUSD(val) {

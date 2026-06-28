@@ -127,6 +127,17 @@
           <div id="kpi-current-estimate-vnd" style="font-size: 14px; color: var(--text-muted); margin-top: 4px;">≈ 0 đ</div>
         </div>
       </div>
+
+      <div class="glass-panel kpi-card">
+        <div class="kpi-icon color-green">
+          <i class="fa-solid fa-bolt"></i>
+        </div>
+        <div class="kpi-info">
+          <span class="kpi-label">Thu nhập tháng hiện tại (RTDN)</span>
+          <h3 class="kpi-val" id="kpi-current-rtdn">$0.00</h3>
+          <div id="kpi-current-rtdn-vnd" style="font-size: 14px; color: var(--text-muted); margin-top: 4px;">≈ 0 đ</div>
+        </div>
+      </div>
     </section>
 
     <!-- Chart & Top Apps Section -->
@@ -187,6 +198,32 @@
               </tr>
             </thead>
             <tbody id="table-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- RTDN REALTIME TRANSACTIONS -->
+      <div class="glass-panel table-card" id="rtdn-card">
+        <div class="panel-header table-actions">
+          <div class="table-title">
+            <h4><i class="fa-solid fa-bolt"></i> Giao dịch realtime (RTDN)</h4>
+            <span class="subtitle" id="rtdn-subtitle">Ghi nhận tức thời từ Google Play</span>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table id="rtdn-table">
+            <thead>
+              <tr>
+                <th>Thời gian</th>
+                <th>Ứng dụng</th>
+                <th>SKU</th>
+                <th>Số tiền</th>
+                <th>Order ID</th>
+              </tr>
+            </thead>
+            <tbody id="rtdn-body">
               <!-- Dynamically populated -->
             </tbody>
           </table>
@@ -295,6 +332,6 @@
   </div>
 
   <!-- Script logic -->
-  <script src="app.js?v=20260628g"></script>
+  <script src="app.js?v=20260628h"></script>
 </body>
 </html>
