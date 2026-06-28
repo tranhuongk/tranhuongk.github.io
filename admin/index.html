@@ -36,8 +36,8 @@
       
       <form id="login-form">
         <div class="form-group">
-          <label for="login-email"><i class="fa-regular fa-envelope"></i> Email</label>
-          <input type="email" id="login-email" required placeholder="admin@example.com">
+          <label for="login-email"><i class="fa-regular fa-envelope"></i> Email / Username</label>
+          <input type="text" id="login-email" required placeholder="admin@example.com">
         </div>
         
         <div class="form-group">
@@ -45,12 +45,12 @@
           <input type="password" id="login-password" required placeholder="••••••••">
         </div>
 
-        <div class="accordion-toggle" id="config-toggle">
+        <div class="accordion-toggle" id="config-toggle" style="display: none;">
           <span><i class="fa-solid fa-gear"></i> Cấu hình kết nối Supabase</span>
           <i class="fa-solid fa-chevron-down"></i>
         </div>
         
-        <div class="config-fields hidden" id="config-fields">
+        <div class="config-fields hidden" id="config-fields" style="display: none;">
           <div class="form-group">
             <label for="supabase-url">Supabase URL</label>
             <input type="url" id="supabase-url" value="https://lnazpyhoojqotnanrvqf.supabase.co">
@@ -109,32 +109,22 @@
       </div>
 
       <div class="glass-panel kpi-card">
-        <div class="kpi-icon color-green">
-          <i class="fa-solid fa-mobile-screen-button"></i>
-        </div>
-        <div class="kpi-info">
-          <span class="kpi-label">Ứng dụng</span>
-          <h3 class="kpi-val" id="kpi-apps-count">0</h3>
-        </div>
-      </div>
-
-      <div class="glass-panel kpi-card">
         <div class="kpi-icon color-purple">
-          <i class="fa-solid fa-calendar-days"></i>
+          <i class="fa-solid fa-calendar-check"></i>
         </div>
         <div class="kpi-info">
-          <span class="kpi-label">Số tháng đã chốt</span>
-          <h3 class="kpi-val" id="kpi-months-count">0</h3>
+          <span class="kpi-label" id="kpi-prev-month-label">Doanh thu tháng trước</span>
+          <h3 class="kpi-val" id="kpi-prev-month">$0.00</h3>
         </div>
       </div>
 
       <div class="glass-panel kpi-card">
         <div class="kpi-icon color-orange">
-          <i class="fa-solid fa-chart-simple"></i>
+          <i class="fa-solid fa-chart-line"></i>
         </div>
         <div class="kpi-info">
-          <span class="kpi-label">Trung bình / tháng</span>
-          <h3 class="kpi-val" id="kpi-avg-revenue">$0.00</h3>
+          <span class="kpi-label">Ước lượng tháng hiện tại</span>
+          <h3 class="kpi-val" id="kpi-current-estimate">$0.00</h3>
         </div>
       </div>
     </section>
@@ -290,12 +280,12 @@
   <!-- SYNC LOADER / LOG OVERLAY -->
   <div id="sync-overlay" class="modal-overlay hidden">
     <div class="glass-panel sync-card">
-      <div class="sync-loader">
+      <div class="sync-loader" id="sync-loader">
         <div class="spinner"></div>
         <div class="spinner-glow"></div>
       </div>
-      <h4>Đang đồng bộ Google Play...</h4>
-      <p>Đang tải tệp báo cáo từ Google Cloud Storage và tổng hợp dữ liệu doanh thu...</p>
+      <h4 id="sync-title">Đang đồng bộ Google Play...</h4>
+      <p id="sync-subtitle">Đang tải tệp báo cáo từ Google Cloud Storage và tổng hợp dữ liệu doanh thu...</p>
       <div id="sync-logs" class="sync-logs">
         <!-- Live logs will be appended here -->
         <div class="log-line text-blue">> Bắt đầu phiên làm việc...</div>
@@ -305,6 +295,6 @@
   </div>
 
   <!-- Script logic -->
-  <script src="app.js"></script>
+  <script src="app.js?v=20260628d"></script>
 </body>
 </html>

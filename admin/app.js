@@ -1,6 +1,6 @@
 // Supabase Client variables
-let supabaseUrl = "";
-let supabaseAnonKey = "";
+const supabaseUrl = "https://lnazpyhoojqotnanrvqf.supabase.co";
+const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxuYXpweWhvb2pxb3RuYW5ydnFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1NzAyNjcsImV4cCI6MjA5ODE0NjI2N30.uc4WAXKm_UDKoLEm260mu0RHyHaL4HGtPI3sG-TbJSg";
 let supabaseClient = null;
 let session = null;
 let chart = null;
@@ -27,9 +27,9 @@ const btnAddIncome = document.getElementById("btn-add-income");
 const btnCloseSyncOverlay = document.getElementById("btn-close-sync-overlay");
 
 const kpiTotalRevenue = document.getElementById("kpi-total-revenue");
-const kpiAppsCount = document.getElementById("kpi-apps-count");
-const kpiMonthsCount = document.getElementById("kpi-months-count");
-const kpiAvgRevenue = document.getElementById("kpi-avg-revenue");
+const kpiPrevMonth = document.getElementById("kpi-prev-month");
+const kpiPrevMonthLabel = document.getElementById("kpi-prev-month-label");
+const kpiCurrentEstimate = document.getElementById("kpi-current-estimate");
 
 const topAppsList = document.getElementById("top-apps-list");
 const filterSource = document.getElementById("filter-source");
@@ -58,22 +58,27 @@ const newAppTitle = document.getElementById("new-app-title");
 
 const syncOverlay = document.getElementById("sync-overlay");
 const syncLogs = document.getElementById("sync-logs");
+const syncLoader = document.getElementById("sync-loader");
+const syncTitle = document.getElementById("sync-title");
+const syncSubtitle = document.getElementById("sync-subtitle");
 
 // --- Initialization ---
 document.addEventListener("DOMContentLoaded", async () => {
   // Load connection settings
-  sbUrlInput.value = localStorage.getItem("supabase_url") || "https://lnazpyhoojqotnanrvqf.supabase.co";
-  sbAnonKeyInput.value = localStorage.getItem("supabase_anon_key") || "";
+  if (sbUrlInput) sbUrlInput.value = supabaseUrl;
+  if (sbAnonKeyInput) sbAnonKeyInput.value = supabaseAnonKey;
 
   // Event Listeners
-  configToggle.addEventListener("click", () => {
-    configFields.classList.toggle("hidden");
-    const icon = configToggle.querySelector(".fa-chevron-down");
-    if (icon) {
-      icon.classList.toggle("fa-chevron-up");
-      icon.classList.toggle("fa-chevron-down");
-    }
-  });
+  if (configToggle) {
+    configToggle.addEventListener("click", () => {
+      configFields.classList.toggle("hidden");
+      const icon = configToggle.querySelector(".fa-chevron-down");
+      if (icon) {
+        icon.classList.toggle("fa-chevron-up");
+        icon.classList.toggle("fa-chevron-down");
+      }
+    });
+  }
 
   loginForm.addEventListener("submit", handleLogin);
   btnLogout.addEventListener("click", handleLogout);
@@ -105,24 +110,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   // Try to initialize Supabase
-  if (sbUrlInput.value && sbAnonKeyInput.value) {
-    initSupabase();
-    const { data } = await supabaseClient.auth.getSession();
-    if (data && data.session) {
-      session = data.session;
-      showScreen("dashboard");
-      loadDataAndRender();
-    } else {
-      showScreen("auth");
-    }
+  initSupabase();
+  const { data } = await supabaseClient.auth.getSession();
+  if (data && data.session) {
+    session = data.session;
+    showScreen("dashboard");
+    loadDataAndRender();
   } else {
     showScreen("auth");
   }
 });
 
 function initSupabase() {
-  supabaseUrl = sbUrlInput.value.trim();
-  supabaseAnonKey = sbAnonKeyInput.value.trim();
   supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
 }
 
@@ -140,21 +139,13 @@ function showScreen(screen) {
 async function handleLogin(e) {
   e.preventDefault();
   authError.classList.add("hidden");
-  
-  if (!sbUrlInput.value || !sbAnonKeyInput.value) {
-    showError("Vui lòng cấu hình đầy đủ Supabase URL và Anon Key.");
-    return;
-  }
 
-  try {
-    initSupabase();
-  } catch (err) {
-    showError("Định dạng Supabase URL không đúng.");
-    return;
-  }
-
-  const email = loginEmail.value.trim();
+  let email = loginEmail.value.trim();
   const password = loginPassword.value;
+
+  if (email === "admin") {
+    email = "huongtv.uet@gmail.com";
+  }
 
   const btn = loginForm.querySelector("button[type='submit']");
   btn.disabled = true;
@@ -163,10 +154,6 @@ async function handleLogin(e) {
   try {
     const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    
-    // Save settings
-    localStorage.setItem("supabase_url", supabaseUrl);
-    localStorage.setItem("supabase_anon_key", supabaseAnonKey);
     
     session = data.session;
     showScreen("dashboard");
@@ -235,7 +222,16 @@ async function triggerSync() {
   syncOverlay.classList.remove("hidden");
   btnCloseSyncOverlay.classList.add("hidden");
   syncLogs.innerHTML = "";
-  
+
+  // Reset to the in-progress state (the overlay may have been left showing a
+  // finished/failed state from a previous run).
+  if (syncLoader) syncLoader.classList.remove("hidden");
+  if (syncTitle) {
+    syncTitle.textContent = "Đang đồng bộ Google Play...";
+    syncTitle.style.color = "";
+  }
+  if (syncSubtitle) syncSubtitle.textContent = "Đang tải tệp báo cáo từ Google Cloud Storage và tổng hợp dữ liệu doanh thu...";
+
   addLog("Bắt đầu gọi API đồng bộ...", "blue");
   
   try {
@@ -261,12 +257,25 @@ async function triggerSync() {
       addLog(`- Số bản ghi doanh thu: ${result.details.earningsSyncedCount}`, "blue");
       addLog(`- Các tháng được cập nhật: ${result.details.monthsSynced.join(", ")}`, "yellow");
     }
+    setSyncStatus(true, "Đã cập nhật xong. Bấm \"Đóng\" để xem dữ liệu mới.");
   } catch (err) {
     addLog(`Lỗi đồng bộ: ${err.message}`, "red");
     addLog("Vui lòng kiểm tra lại cấu hình GCS Bucket (PLAY_BUCKET) và Service Account (SA_JSON_B64) trong Supabase Secrets.", "red");
+    setSyncStatus(false, "Có lỗi xảy ra trong quá trình đồng bộ.");
   } finally {
     btnCloseSyncOverlay.classList.remove("hidden");
   }
+}
+
+// Switch the sync overlay out of its spinning "in-progress" look once the
+// request settles, so it no longer looks like it's loading forever.
+function setSyncStatus(ok, subtitle) {
+  if (syncLoader) syncLoader.classList.add("hidden");
+  if (syncTitle) {
+    syncTitle.textContent = ok ? "✓ Đồng bộ hoàn tất" : "✗ Đồng bộ thất bại";
+    syncTitle.style.color = ok ? "#34d399" : "#f87171";
+  }
+  if (syncSubtitle) syncSubtitle.textContent = subtitle;
 }
 
 function addLog(text, colorClass = "muted") {
@@ -427,27 +436,38 @@ function renderDashboard() {
   }
 
   // 2. Compute KPI Metrics
-  // The headline KPIs reflect money ACTUALLY received: estimate rows
-  // (source "google_play_estimate", shown with an "Est" marker) are excluded.
-  // "Tổng thực nhận" và "Số tháng đã chốt" chỉ tính khoản đã nhận.
+  //  - "Tổng thực nhận": money actually received (estimate rows excluded).
+  //  - "Ước lượng tháng hiện tại": the current-month projection, i.e. the
+  //    sum of estimate rows (source "google_play_estimate").
   // Conversion rate: 1 USD = 25000 VND (simple fallback)
   const rate = 25000;
   const toUSD = e => (e.currency === "VND" ? parseFloat(e.amount) / rate : parseFloat(e.amount));
-  const received = filtered.filter(e => e.source !== "google_play_estimate");
+  const isEstimate = e => e.source === "google_play_estimate";
 
-  const totalUSD = received.reduce((sum, e) => sum + toUSD(e), 0);
+  const officialRows = filtered.filter(e => !isEstimate(e));
+  const totalUSD = officialRows.reduce((sum, e) => sum + toUSD(e), 0);
+  const currentEstimateUSD = filtered.filter(isEstimate).reduce((sum, e) => sum + toUSD(e), 0);
 
+  // "Doanh thu tháng trước": official revenue of the most recent finalized
+  // (non-estimate) month.
+  const officialMonths = Array.from(new Set(officialRows.map(e => e.month))).sort();
+  const prevMonth = officialMonths.length ? officialMonths[officialMonths.length - 1] : null;
+  const prevMonthUSD = prevMonth
+    ? officialRows.filter(e => e.month === prevMonth).reduce((sum, e) => sum + toUSD(e), 0)
+    : 0;
+
+  // Guard against null: a browser may have an older cached index.html whose
+  // KPI elements differ from this script during a deploy transition.
+  if (kpiTotalRevenue) kpiTotalRevenue.textContent = fmtUSD(totalUSD);
+  if (kpiPrevMonth) kpiPrevMonth.textContent = fmtUSD(prevMonthUSD);
+  if (kpiPrevMonthLabel) kpiPrevMonthLabel.textContent = prevMonth
+    ? `Doanh thu tháng trước (${monthLabel(prevMonth)})`
+    : "Doanh thu tháng trước";
+  if (kpiCurrentEstimate) kpiCurrentEstimate.textContent = fmtUSD(currentEstimateUSD);
+
+  // uniqueApps + uniqueMonths drive the chart + pivot table below.
   const uniqueApps = Array.from(new Set(filtered.map(e => e.app_id)));
-  // All months (incl. estimate) drive the chart + pivot table below;
-  // closedMonths (received only) drive the "đã chốt" / average KPIs.
   const uniqueMonths = Array.from(new Set(filtered.map(e => e.month))).sort();
-  const closedMonths = Array.from(new Set(received.map(e => e.month))).sort();
-  const avgMonthlyUSD = closedMonths.length ? totalUSD / closedMonths.length : 0;
-
-  kpiTotalRevenue.textContent = fmtUSD(totalUSD);
-  kpiAppsCount.textContent = uniqueApps.length;
-  kpiMonthsCount.textContent = closedMonths.length;
-  kpiAvgRevenue.textContent = fmtUSD(avgMonthlyUSD);
 
   // 3. Render Top Apps List
   renderTopApps(filtered, appMap, rate);
@@ -474,14 +494,16 @@ function monthLabel(p) {
   return p;
 }
 
-// Render Top Apps
+// Render Top Apps — ranked on official revenue only (estimate rows excluded).
 function renderTopApps(filtered, appMap, rate) {
   const totals = {};
-  filtered.forEach(e => {
-    const amt = parseFloat(e.amount);
-    const usd = e.currency === "USD" ? amt : amt / rate;
-    totals[e.app_id] = (totals[e.app_id] || 0) + usd;
-  });
+  filtered
+    .filter(e => e.source !== "google_play_estimate")
+    .forEach(e => {
+      const amt = parseFloat(e.amount);
+      const usd = e.currency === "USD" ? amt : amt / rate;
+      totals[e.app_id] = (totals[e.app_id] || 0) + usd;
+    });
 
   const sortedApps = Object.entries(totals)
     .map(([id, total]) => ({ id, title: appMap[id] || id, total }))
