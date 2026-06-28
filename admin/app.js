@@ -41,6 +41,36 @@ function cleanAppTitle(pkg, fallback) {
 // Local caching of data
 let appsList = [];
 let earningsData = [];
+let currentUsdToVndRate = 25000;
+
+// Fetch exchange rate dynamically
+async function fetchExchangeRate() {
+  try {
+    const res = await fetch("https://portal.vietcombank.com.vn/Usercontrols/TVPortal.TyGia/pXML.aspx");
+    const text = await res.text();
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(text, "text/xml");
+    const exrates = xmlDoc.getElementsByTagName("Exrate");
+    for (let i = 0; i < exrates.length; i++) {
+      if (exrates[i].getAttribute("CurrencyCode") === "USD") {
+        currentUsdToVndRate = parseFloat(exrates[i].getAttribute("Transfer") || exrates[i].getAttribute("Sell"));
+        return;
+      }
+    }
+  } catch (err) {
+    console.log("Failed to fetch VCB exchange rate, using fallback", err);
+  }
+  
+  try {
+    const res = await fetch("https://open.er-api.com/v6/latest/USD");
+    const data = await res.json();
+    if (data && data.rates && data.rates.VND) {
+      currentUsdToVndRate = data.rates.VND;
+    }
+  } catch (err) {
+    console.log("Failed to fetch open exchange rate", err);
+  }
+}
 
 // DOM Elements
 const authScreen = document.getElementById("auth-screen");
@@ -56,13 +86,16 @@ const authError = document.getElementById("auth-error");
 
 const btnLogout = document.getElementById("btn-logout");
 const btnSync = document.getElementById("btn-sync");
-const btnAddIncome = document.getElementById("btn-add-income");
+const navExchangeRate = document.getElementById("nav-exchange-rate");
 const btnCloseSyncOverlay = document.getElementById("btn-close-sync-overlay");
 
 const kpiTotalRevenue = document.getElementById("kpi-total-revenue");
+const kpiTotalVnd = document.getElementById("kpi-total-vnd");
 const kpiPrevMonth = document.getElementById("kpi-prev-month");
+const kpiPrevMonthVnd = document.getElementById("kpi-prev-month-vnd");
 const kpiPrevMonthLabel = document.getElementById("kpi-prev-month-label");
 const kpiCurrentEstimate = document.getElementById("kpi-current-estimate");
+const kpiCurrentEstimateVnd = document.getElementById("kpi-current-estimate-vnd");
 
 const topAppsList = document.getElementById("top-apps-list");
 const filterSource = document.getElementById("filter-source");
@@ -97,6 +130,9 @@ const syncSubtitle = document.getElementById("sync-subtitle");
 
 // --- Initialization ---
 document.addEventListener("DOMContentLoaded", async () => {
+  // Fetch exchange rate
+  await fetchExchangeRate();
+
   // Load connection settings
   if (sbUrlInput) sbUrlInput.value = supabaseUrl;
   if (sbAnonKeyInput) sbAnonKeyInput.value = supabaseAnonKey;
@@ -116,7 +152,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   loginForm.addEventListener("submit", handleLogin);
   btnLogout.addEventListener("click", handleLogout);
   btnSync.addEventListener("click", triggerSync);
-  btnAddIncome.addEventListener("click", () => openIncomeModal());
   
   document.querySelectorAll(".btn-close-modal").forEach(btn => {
     btn.addEventListener("click", closeIncomeModal);
@@ -475,8 +510,7 @@ function renderDashboard() {
   //  - "Tổng thực nhận": money actually received (estimate rows excluded).
   //  - "Ước lượng tháng hiện tại": the current-month projection, i.e. the
   //    sum of estimate rows (source "google_play_estimate").
-  // Conversion rate: 1 USD = 25000 VND (simple fallback)
-  const rate = 25000;
+  const rate = currentUsdToVndRate;
   const toUSD = e => (e.currency === "VND" ? parseFloat(e.amount) / rate : parseFloat(e.amount));
   const isEstimate = e => e.source === "google_play_estimate";
 
@@ -495,11 +529,24 @@ function renderDashboard() {
   // Guard against null: a browser may have an older cached index.html whose
   // KPI elements differ from this script during a deploy transition.
   if (kpiTotalRevenue) kpiTotalRevenue.textContent = fmtUSD(totalUSD);
+  if (kpiTotalVnd) {
+    kpiTotalVnd.textContent = `≈ ${fmtVND(totalUSD * rate)}`;
+  }
   if (kpiPrevMonth) kpiPrevMonth.textContent = fmtUSD(prevMonthUSD);
+  if (kpiPrevMonthVnd) {
+    kpiPrevMonthVnd.textContent = `≈ ${fmtVND(prevMonthUSD * rate)}`;
+  }
   if (kpiPrevMonthLabel) kpiPrevMonthLabel.textContent = prevMonth
     ? `Doanh thu tháng trước (${monthLabel(prevMonth)})`
     : "Doanh thu tháng trước";
   if (kpiCurrentEstimate) kpiCurrentEstimate.textContent = fmtUSD(currentEstimateUSD);
+  if (kpiCurrentEstimateVnd) {
+    kpiCurrentEstimateVnd.textContent = `≈ ${fmtVND(currentEstimateUSD * rate)}`;
+  }
+  
+  if (navExchangeRate) {
+    navExchangeRate.textContent = `Tỷ giá: ${fmtVND(rate)} / USD`;
+  }
 
   // uniqueApps + uniqueMonths drive the chart + pivot table below.
   const uniqueApps = Array.from(new Set(filtered.map(e => e.app_id)));
@@ -692,7 +739,7 @@ function renderPivotTable(filtered, uniqueApps, uniqueMonths, appMap) {
 
         entries.forEach(e => {
           const amt = parseFloat(e.amount);
-          const usd = e.currency === "USD" ? amt : amt / 25000;
+          const usd = e.currency === "USD" ? amt : amt / currentUsdToVndRate;
           cellUSD += usd;
           appTotalUSD += usd;
           monthTotalsUSD[m] = (monthTotalsUSD[m] || 0) + usd;

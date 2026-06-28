@@ -78,17 +78,14 @@
       <div class="nav-left">
         <div class="logo">
           <i class="fa-solid fa-chart-line"></i>
-          <span>Finance Admin</span>
+          <span>Galax Admin</span>
+          <span id="nav-exchange-rate" style="font-size: 13px; color: var(--text-muted); margin-left: 12px; padding-left: 12px; border-left: 1px solid rgba(255, 255, 255, 0.1);">Tỷ giá: đang tải...</span>
         </div>
       </div>
       <div class="nav-right">
         <button id="btn-sync" class="glass-button secondary">
           <i class="fa-solid fa-rotate"></i>
           <span>Đồng bộ Google Play</span>
-        </button>
-        <button id="btn-add-income" class="glow-button small">
-          <i class="fa-solid fa-plus"></i>
-          <span>Thêm thu nhập</span>
         </button>
         <button id="btn-logout" class="glass-button danger" title="Đăng xuất">
           <i class="fa-solid fa-right-from-bracket"></i>
@@ -105,6 +102,7 @@
         <div class="kpi-info">
           <span class="kpi-label">Tổng thực nhận</span>
           <h3 class="kpi-val" id="kpi-total-revenue">$0.00</h3>
+          <div id="kpi-total-vnd" style="font-size: 14px; color: var(--text-muted); margin-top: 4px;">≈ 0 đ</div>
         </div>
       </div>
 
@@ -115,6 +113,7 @@
         <div class="kpi-info">
           <span class="kpi-label" id="kpi-prev-month-label">Doanh thu tháng trước</span>
           <h3 class="kpi-val" id="kpi-prev-month">$0.00</h3>
+          <div id="kpi-prev-month-vnd" style="font-size: 14px; color: var(--text-muted); margin-top: 4px;">≈ 0 đ</div>
         </div>
       </div>
 
@@ -125,6 +124,7 @@
         <div class="kpi-info">
           <span class="kpi-label">Ước lượng tháng hiện tại</span>
           <h3 class="kpi-val" id="kpi-current-estimate">$0.00</h3>
+          <div id="kpi-current-estimate-vnd" style="font-size: 14px; color: var(--text-muted); margin-top: 4px;">≈ 0 đ</div>
         </div>
       </div>
     </section>
@@ -295,6 +295,6 @@
   </div>
 
   <!-- Script logic -->
-  <script src="app.js?v=20260628d"></script>
+  <script src="app.js?v=20260628g"></script>
 </body>
 </html>
