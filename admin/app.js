@@ -286,6 +286,9 @@ async function loadDataAndRender() {
         currentUsdToVndRate = s.rate || currentUsdToVndRate;
         appsList = (s.apps || []).map(a => ({ ...a, title: cleanAppTitle(a.id, a.title) }));
         earningsData = s.earnings || [];
+        if (s.rtdnRecentEstimates && s.rtdnRecentEstimates.length > 0) {
+          earningsData = [...earningsData, ...s.rtdnRecentEstimates];
+        }
         populateAppDropdown();
         renderDashboard();
         return;
@@ -554,7 +557,7 @@ function renderDashboard() {
   //    sum of estimate rows (source "google_play_estimate").
   const rate = currentUsdToVndRate;
   const toUSD = e => (e.currency === "VND" ? parseFloat(e.amount) / rate : parseFloat(e.amount));
-  const isEstimate = e => e.source === "google_play_estimate";
+  const isEstimate = e => e.source === "google_play_estimate" || e.source === "rtdn_recent";
 
   const officialRows = filtered.filter(e => !isEstimate(e));
   const currentEstimateUSD = filtered.filter(isEstimate).reduce((sum, e) => sum + toUSD(e), 0);
@@ -994,8 +997,8 @@ function renderPivotTable(filtered, uniqueApps, uniqueMonths, appMap) {
           appTotalUSD += usd;
           monthTotalsUSD[m] = (monthTotalsUSD[m] || 0) + usd;
           
-          if (e.source === "google_play_estimate") isEstimate = true;
-          if (e.source !== "google_play" && e.source !== "google_play_estimate") {
+          if (e.source === "google_play_estimate" || e.source === "rtdn_recent") isEstimate = true;
+          if (e.source !== "google_play" && e.source !== "google_play_estimate" && e.source !== "rtdn_recent") {
             editableEntry = e; // Store for edit action
           }
         });
