@@ -557,10 +557,12 @@ function renderDashboard() {
   //    sum of estimate rows (source "google_play_estimate").
   const rate = currentUsdToVndRate;
   const toUSD = e => (e.currency === "VND" ? parseFloat(e.amount) / rate : parseFloat(e.amount));
-  const isEstimate = e => e.source === "google_play_estimate" || e.source === "rtdn_recent";
+  const isEstimate = e => e.source === "google_play_estimate";
+  const isRtdnRecent = e => e.source === "rtdn_recent";
 
-  const officialRows = filtered.filter(e => !isEstimate(e));
+  const officialRows = filtered.filter(e => !isEstimate(e) && !isRtdnRecent(e));
   const currentEstimateUSD = filtered.filter(isEstimate).reduce((sum, e) => sum + toUSD(e), 0);
+  const recentRtdnClientUSD = filtered.filter(isRtdnRecent).reduce((sum, e) => sum + toUSD(e), 0);
 
   // "Tháng N-1": official revenue of the most recent finalized month.
   const officialMonths = Array.from(new Set(officialRows.map(e => e.month))).sort();
@@ -633,8 +635,12 @@ function renderDashboard() {
     kpiCurrentEstimateVnd.textContent = `≈ ${fmtVND(csvEstimateUSD * rate)}`;
   }
 
-  // Card 4: Your earnings = Combined Estimate
-  const rtdnUSD = dEstimate;
+  // Current-month income actually confirmed via RTDN (server-computed, from the
+  // rtdn_transactions table) — independent of the table filters.
+  let rtdnUSD = (serverSummary && serverSummary.kpis && serverSummary.kpis.currentMonthRtdnUSD) || 0;
+  if (!unfiltered) {
+    rtdnUSD = dEstimate + recentRtdnClientUSD;
+  }
   const kpiCurrentRtdn = document.getElementById("kpi-current-rtdn");
   const kpiCurrentRtdnVnd = document.getElementById("kpi-current-rtdn-vnd");
   if (kpiCurrentRtdn) kpiCurrentRtdn.textContent = fmtUSD(rtdnUSD);
