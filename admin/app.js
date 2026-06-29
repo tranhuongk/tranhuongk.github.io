@@ -610,17 +610,12 @@ function renderDashboard() {
     ? `Tháng ${monthLabel(dPrevMonth)}`
     : "Tháng N-1";
 
-  if (kpiCurrentEstimate) kpiCurrentEstimate.textContent = fmtUSD(dEstimate);
-  if (kpiCurrentEstimateVnd) {
-    kpiCurrentEstimateVnd.textContent = `≈ ${fmtVND(dEstimate * rate)}`;
-  }
-  
-  // Calculate current month string (e.g. "06/2026") for the label
+  // Fix maxTime for Card 3 label to only use google_play_estimate rows
   if (kpiCurrentEstimateLabel) {
     let toDateStr = "";
-    const estRows = officialRows.length >= 0 ? filtered.filter(isEstimate) : []; // use filtered rows
-    if (estRows.length > 0) {
-      const maxTime = Math.max(...estRows.map(r => new Date(r.updated_at).getTime()));
+    const csvEstRows = filtered.filter(e => e.source === "google_play_estimate" && e.updated_at);
+    if (csvEstRows.length > 0) {
+      const maxTime = Math.max(...csvEstRows.map(r => new Date(r.updated_at).getTime()));
       if (!isNaN(maxTime)) {
         const d = new Date(maxTime);
         const dd = String(d.getDate()).padStart(2, '0');
@@ -631,8 +626,14 @@ function renderDashboard() {
     kpiCurrentEstimateLabel.textContent = `Ước tính tháng hiện tại${toDateStr}`;
   }
 
-  // The user requested: RTDN hiện tại + Ước tính tháng hiện tại - các giao dịch trùng lặp
-  // This is exactly the combined estimate (dEstimate).
+  // Card 3: ONLY the pure CSV estimate
+  const csvEstimateUSD = filtered.filter(e => e.source === "google_play_estimate").reduce((sum, e) => sum + toUSD(e), 0);
+  if (kpiCurrentEstimate) kpiCurrentEstimate.textContent = fmtUSD(csvEstimateUSD);
+  if (kpiCurrentEstimateVnd) {
+    kpiCurrentEstimateVnd.textContent = `≈ ${fmtVND(csvEstimateUSD * rate)}`;
+  }
+
+  // Card 4: Your earnings = Combined Estimate
   const rtdnUSD = dEstimate;
   const kpiCurrentRtdn = document.getElementById("kpi-current-rtdn");
   const kpiCurrentRtdnVnd = document.getElementById("kpi-current-rtdn-vnd");
