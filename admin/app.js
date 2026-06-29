@@ -631,9 +631,9 @@ function renderDashboard() {
     kpiCurrentEstimateLabel.textContent = `Ước tính tháng hiện tại${toDateStr}`;
   }
 
-  // Current-month income actually confirmed via RTDN (server-computed, from the
-  // rtdn_transactions table) — independent of the table filters.
-  const rtdnUSD = (serverSummary && serverSummary.kpis && serverSummary.kpis.currentMonthRtdnUSD) || 0;
+  // The user requested: RTDN hiện tại + Ước tính tháng hiện tại - các giao dịch trùng lặp
+  // This is exactly the combined estimate (dEstimate).
+  const rtdnUSD = dEstimate;
   const kpiCurrentRtdn = document.getElementById("kpi-current-rtdn");
   const kpiCurrentRtdnVnd = document.getElementById("kpi-current-rtdn-vnd");
   if (kpiCurrentRtdn) kpiCurrentRtdn.textContent = fmtUSD(rtdnUSD);
