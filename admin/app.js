@@ -614,9 +614,18 @@ function renderDashboard() {
   
   // Calculate current month string (e.g. "06/2026") for the label
   if (kpiCurrentEstimateLabel) {
-    const vn = new Date(Date.now() + 7 * 3600 * 1000);
-    const m = `${vn.getUTCFullYear()}${String(vn.getUTCMonth() + 1).padStart(2, "0")}`;
-    kpiCurrentEstimateLabel.textContent = `Tháng ${monthLabel(m)} (Google Play)`;
+    let toDateStr = "";
+    const estRows = officialRows.length >= 0 ? filtered.filter(isEstimate) : []; // use filtered rows
+    if (estRows.length > 0) {
+      const maxTime = Math.max(...estRows.map(r => new Date(r.updated_at).getTime()));
+      if (!isNaN(maxTime)) {
+        const d = new Date(maxTime);
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        toDateStr = ` (tới ngày ${dd}/${mm})`;
+      }
+    }
+    kpiCurrentEstimateLabel.textContent = `Ước tính tháng hiện tại${toDateStr}`;
   }
 
   // Current-month income actually confirmed via RTDN (server-computed, from the
