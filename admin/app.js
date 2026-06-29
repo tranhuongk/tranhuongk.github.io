@@ -94,13 +94,15 @@ const btnSync = document.getElementById("btn-sync");
 const navExchangeRate = document.getElementById("nav-exchange-rate");
 const btnCloseSyncOverlay = document.getElementById("btn-close-sync-overlay");
 
-const kpiTotalRevenue = document.getElementById("kpi-total-revenue");
-const kpiTotalVnd = document.getElementById("kpi-total-vnd");
+const kpiPrev2Month = document.getElementById("kpi-prev2-month");
+const kpiPrev2MonthVnd = document.getElementById("kpi-prev2-month-vnd");
+const kpiPrev2MonthLabel = document.getElementById("kpi-prev2-month-label");
 const kpiPrevMonth = document.getElementById("kpi-prev-month");
 const kpiPrevMonthVnd = document.getElementById("kpi-prev-month-vnd");
 const kpiPrevMonthLabel = document.getElementById("kpi-prev-month-label");
 const kpiCurrentEstimate = document.getElementById("kpi-current-estimate");
 const kpiCurrentEstimateVnd = document.getElementById("kpi-current-estimate-vnd");
+const kpiCurrentEstimateLabel = document.getElementById("kpi-current-estimate-label");
 
 const topAppsList = document.getElementById("top-apps-list");
 const filterSource = document.getElementById("filter-source");
@@ -555,46 +557,66 @@ function renderDashboard() {
   const isEstimate = e => e.source === "google_play_estimate";
 
   const officialRows = filtered.filter(e => !isEstimate(e));
-  const totalUSD = officialRows.reduce((sum, e) => sum + toUSD(e), 0);
   const currentEstimateUSD = filtered.filter(isEstimate).reduce((sum, e) => sum + toUSD(e), 0);
 
-  // "Doanh thu tháng trước": official revenue of the most recent finalized
-  // (non-estimate) month.
+  // "Tháng N-1": official revenue of the most recent finalized month.
   const officialMonths = Array.from(new Set(officialRows.map(e => e.month))).sort();
   const prevMonth = officialMonths.length ? officialMonths[officialMonths.length - 1] : null;
   const prevMonthUSD = prevMonth
     ? officialRows.filter(e => e.month === prevMonth).reduce((sum, e) => sum + toUSD(e), 0)
+    : 0;
+    
+  // "Tháng N-2": official revenue of the second most recent finalized month.
+  const prev2Month = officialMonths.length > 1 ? officialMonths[officialMonths.length - 2] : null;
+  const prev2MonthUSD = prev2Month
+    ? officialRows.filter(e => e.month === prev2Month).reduce((sum, e) => sum + toUSD(e), 0)
     : 0;
 
   // For the full, unfiltered view, render the edge function's precomputed KPIs
   // verbatim so these cards match the Telegram bot exactly. Client-side
   // recomputation still drives the cards whenever a filter/search is active.
   const unfiltered = sourceFilter === "all" && !searchQuery;
-  let dTotal = totalUSD, dEstimate = currentEstimateUSD;
+  let dEstimate = currentEstimateUSD;
   let dPrevMonth = prevMonth, dPrevMonthUSD = prevMonthUSD;
+  let dPrev2Month = prev2Month, dPrev2MonthUSD = prev2MonthUSD;
   if (unfiltered && serverSummary && serverSummary.kpis) {
-    dTotal = serverSummary.kpis.totalUSD;
     dEstimate = serverSummary.kpis.estimateUSD;
     dPrevMonth = serverSummary.kpis.prevMonth;
     dPrevMonthUSD = serverSummary.kpis.prevMonthUSD;
+    if (serverSummary.kpis.prev2Month) {
+      dPrev2Month = serverSummary.kpis.prev2Month;
+      dPrev2MonthUSD = serverSummary.kpis.prev2MonthUSD;
+    }
   }
 
   // Guard against null: a browser may have an older cached index.html whose
   // KPI elements differ from this script during a deploy transition.
-  if (kpiTotalRevenue) kpiTotalRevenue.textContent = fmtUSD(dTotal);
-  if (kpiTotalVnd) {
-    kpiTotalVnd.textContent = `≈ ${fmtVND(dTotal * rate)}`;
+  if (kpiPrev2Month) kpiPrev2Month.textContent = fmtUSD(dPrev2MonthUSD);
+  if (kpiPrev2MonthVnd) {
+    kpiPrev2MonthVnd.textContent = `≈ ${fmtVND(dPrev2MonthUSD * rate)}`;
   }
+  if (kpiPrev2MonthLabel) kpiPrev2MonthLabel.textContent = dPrev2Month
+    ? `Tháng ${monthLabel(dPrev2Month)}`
+    : "Tháng N-2";
+
   if (kpiPrevMonth) kpiPrevMonth.textContent = fmtUSD(dPrevMonthUSD);
   if (kpiPrevMonthVnd) {
     kpiPrevMonthVnd.textContent = `≈ ${fmtVND(dPrevMonthUSD * rate)}`;
   }
   if (kpiPrevMonthLabel) kpiPrevMonthLabel.textContent = dPrevMonth
-    ? `Doanh thu tháng trước (${monthLabel(dPrevMonth)})`
-    : "Doanh thu tháng trước";
+    ? `Tháng ${monthLabel(dPrevMonth)}`
+    : "Tháng N-1";
+
   if (kpiCurrentEstimate) kpiCurrentEstimate.textContent = fmtUSD(dEstimate);
   if (kpiCurrentEstimateVnd) {
     kpiCurrentEstimateVnd.textContent = `≈ ${fmtVND(dEstimate * rate)}`;
+  }
+  
+  // Calculate current month string (e.g. "06/2026") for the label
+  if (kpiCurrentEstimateLabel) {
+    const vn = new Date(Date.now() + 7 * 3600 * 1000);
+    const m = `${vn.getUTCFullYear()}${String(vn.getUTCMonth() + 1).padStart(2, "0")}`;
+    kpiCurrentEstimateLabel.textContent = `Tháng ${monthLabel(m)} (Google Play)`;
   }
 
   // Current-month income actually confirmed via RTDN (server-computed, from the
