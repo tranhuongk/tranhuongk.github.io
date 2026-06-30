@@ -431,6 +431,30 @@ async function triggerSync() {
       if (hasOwnValue(details, "estimatesSavedCount")) {
         addLog(`- Estimated sales rows đã lưu: ${details.estimatesSavedCount}`, "blue");
       }
+
+      const paymentLedgerImport = details.paymentLedgerImport || null;
+      if (paymentLedgerImport) {
+        const months = asArray(paymentLedgerImport.months);
+        addLog(
+          `- Play Payments ledger: ${paymentLedgerImport.rowsUpserted || 0} dòng, ${paymentLedgerImport.filesMatched || 0} file`,
+          paymentLedgerImport.rowsUpserted ? "blue" : "yellow",
+        );
+        if (months.length) {
+          addLog(`- Tháng ledger đã cập nhật: ${months.join(", ")}`, "blue");
+        }
+        if (paymentLedgerImport.skippedReason === "no_payment_ledger_files_found") {
+          addLog("- Không tìm thấy file Play Payments ledger trong GCS, nên Your earnings chưa đổi.", "yellow");
+        } else if (paymentLedgerImport.skippedReason === "no_payment_ledger_rows_found") {
+          addLog("- Có file ledger nhưng không đọc được dòng thanh toán hợp lệ.", "yellow");
+        } else if (paymentLedgerImport.skippedReason === "payment_ledger_parse_failed") {
+          addLog("- Không parse được Play Payments ledger. Kiểm tra format file trong GCS.", "red");
+        }
+      }
+
+      const paymentLedgerSync = details.paymentLedgerSync || null;
+      if (paymentLedgerSync && paymentLedgerSync.skippedReason === "no_play_payments_base_rows") {
+        addLog("- Bảng google_play_payment_ledger chưa có dòng play_payments để tính Your earnings.", "yellow");
+      }
     }
     setSyncStatus(true, "Đã cập nhật xong. Bấm \"Đóng\" để xem dữ liệu mới.");
   } catch (err) {
