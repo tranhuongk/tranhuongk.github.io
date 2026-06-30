@@ -581,11 +581,9 @@ function renderDashboard() {
   // verbatim so these cards match the Telegram bot exactly. Client-side
   // recomputation still drives the cards whenever a filter/search is active.
   const unfiltered = sourceFilter === "all" && !searchQuery;
-  let dEstimate = currentEstimateUSD;
   let dPrevMonth = prevMonth, dPrevMonthUSD = prevMonthUSD;
   let dPrev2Month = prev2Month, dPrev2MonthUSD = prev2MonthUSD;
   if (unfiltered && serverSummary && serverSummary.kpis) {
-    dEstimate = serverSummary.kpis.estimateUSD;
     dPrevMonth = serverSummary.kpis.prevMonth;
     dPrevMonthUSD = serverSummary.kpis.prevMonthUSD;
     if (serverSummary.kpis.prev2Month) {
@@ -635,16 +633,18 @@ function renderDashboard() {
     kpiCurrentEstimateVnd.textContent = `≈ ${fmtVND(csvEstimateUSD * rate)}`;
   }
 
-  // Current-month income actually confirmed via RTDN (server-computed, from the
-  // rtdn_transactions table) — independent of the table filters.
-  let rtdnUSD = (serverSummary && serverSummary.kpis && serverSummary.kpis.currentMonthRtdnUSD) || 0;
-  if (!unfiltered) {
-    rtdnUSD = dEstimate + recentRtdnClientUSD;
+  // Your earnings = Estimated Sales report + RTDN not already covered by that
+  // report (server-side uses the Estimated report cutoff to remove duplicates).
+  let yourEarningsUSD = currentEstimateUSD + recentRtdnClientUSD;
+  if (unfiltered && serverSummary && serverSummary.kpis) {
+    yourEarningsUSD = serverSummary.kpis.yourEarningsUSD != null
+      ? serverSummary.kpis.yourEarningsUSD
+      : (serverSummary.kpis.estimateUSD || 0) + (serverSummary.kpis.rtdnNonDuplicateUSD || 0);
   }
   const kpiCurrentRtdn = document.getElementById("kpi-current-rtdn");
   const kpiCurrentRtdnVnd = document.getElementById("kpi-current-rtdn-vnd");
-  if (kpiCurrentRtdn) kpiCurrentRtdn.textContent = fmtUSD(rtdnUSD);
-  if (kpiCurrentRtdnVnd) kpiCurrentRtdnVnd.textContent = `≈ ${fmtVND(rtdnUSD * rate)}`;
+  if (kpiCurrentRtdn) kpiCurrentRtdn.textContent = fmtUSD(yourEarningsUSD);
+  if (kpiCurrentRtdnVnd) kpiCurrentRtdnVnd.textContent = `≈ ${fmtVND(yourEarningsUSD * rate)}`;
   
   if (navExchangeRate) {
     navExchangeRate.textContent = `Tỷ giá: ${fmtVND(rate)} / USD`;
