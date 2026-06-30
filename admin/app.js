@@ -119,7 +119,6 @@ const kpiCurrentEstimateLabel = document.getElementById("kpi-current-estimate-la
 const topAppsList = document.getElementById("top-apps-list");
 const topAppsSyncInfo = document.getElementById("top-apps-sync-info");
 const topPlayersList = document.getElementById("top-players-list");
-const topPlayersSyncInfo = document.getElementById("top-players-sync-info");
 const topPlayersMonthSelect = document.getElementById("top-players-month");
 const filterSource = document.getElementById("filter-source");
 const tableSearch = document.getElementById("table-search");
@@ -1054,10 +1053,7 @@ async function populateTopPlayersMonthOptions() {
 async function renderTopPlayers() {
   if (!topPlayersList || !supabaseClient) return;
   const selectedMonth = topPlayersSelectedMonth || (serverSummary && serverSummary.currentMonth) || currentMonthKeyVN();
-  const { start, end, label } = currentMonthWindowVN(selectedMonth);
-  if (topPlayersSyncInfo) {
-    topPlayersSyncInfo.textContent = `Theo client_purchase_logs tháng ${label}`;
-  }
+  const { start, end } = currentMonthWindowVN(selectedMonth);
   topPlayersList.innerHTML = `<div class="loading-placeholder">Đang tải dữ liệu...</div>`;
 
   try {
@@ -1145,7 +1141,6 @@ async function renderTopPlayers() {
   } catch (err) {
     console.error("load top players failed:", err);
     topPlayersList.innerHTML = `<div class="loading-placeholder">Không tải được top người chơi</div>`;
-    if (topPlayersSyncInfo) topPlayersSyncInfo.textContent = err.message || "Lỗi đọc client_purchase_logs";
   }
 }
 

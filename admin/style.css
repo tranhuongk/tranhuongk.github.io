@@ -518,8 +518,7 @@ textarea:focus,
   align-items: flex-start;
 }
 
-#top-apps-sync-info,
-#top-players-sync-info {
+#top-apps-sync-info {
   line-height: 1.4;
 }
 
