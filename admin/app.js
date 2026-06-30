@@ -58,6 +58,7 @@ let currentUsdToVndRate = 25000;
 // applied) the headline KPI cards render these values verbatim so the web and
 // the bot can never disagree.
 let serverSummary = null;
+let topPlayersSelectedMonth = null;
 
 // Fetch exchange rate dynamically
 async function fetchExchangeRate() {
@@ -119,6 +120,7 @@ const topAppsList = document.getElementById("top-apps-list");
 const topAppsSyncInfo = document.getElementById("top-apps-sync-info");
 const topPlayersList = document.getElementById("top-players-list");
 const topPlayersSyncInfo = document.getElementById("top-players-sync-info");
+const topPlayersMonthSelect = document.getElementById("top-players-month");
 const filterSource = document.getElementById("filter-source");
 const tableSearch = document.getElementById("table-search");
 const earningsTable = document.getElementById("earnings-table");
@@ -203,6 +205,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Filters
   filterSource.addEventListener("change", renderDashboard);
   tableSearch.addEventListener("input", renderDashboard);
+  if (topPlayersMonthSelect) {
+    topPlayersMonthSelect.addEventListener("change", () => {
+      topPlayersSelectedMonth = topPlayersMonthSelect.value || null;
+      renderTopPlayers();
+    });
+  }
   
   btnCloseSyncOverlay.addEventListener("click", () => {
     syncOverlay.classList.add("hidden");
@@ -305,6 +313,7 @@ async function loadDataAndRender() {
         }
         populateAppDropdown();
         renderDashboard();
+        await populateTopPlayersMonthOptions();
         renderTopPlayers();
         return;
       }
@@ -336,6 +345,7 @@ async function loadDataAndRender() {
 
     populateAppDropdown();
     renderDashboard();
+    await populateTopPlayersMonthOptions();
     renderTopPlayers();
   } catch (err) {
     console.error("Lỗi khi tải dữ liệu:", err);
@@ -980,16 +990,78 @@ function purchaseAmountUSD(row) {
   return amount;
 }
 
+function currentMonthKeyVN() {
+  const vnNow = new Date(Date.now() + 7 * 3600 * 1000);
+  return `${vnNow.getUTCFullYear()}${String(vnNow.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthKeyFromIsoVN(iso) {
+  const ms = Date.parse(iso || "");
+  if (isNaN(ms)) return null;
+  const vnDate = new Date(ms + 7 * 3600 * 1000);
+  return `${vnDate.getUTCFullYear()}${String(vnDate.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+async function populateTopPlayersMonthOptions() {
+  if (!topPlayersMonthSelect || !supabaseClient) return;
+
+  const months = new Set();
+  if (serverSummary && serverSummary.currentMonth) months.add(serverSummary.currentMonth);
+  if (serverSummary && serverSummary.calendarMonth) months.add(serverSummary.calendarMonth);
+  months.add(currentMonthKeyVN());
+
+  try {
+    const pageSize = 1000;
+    const maxRows = 10000;
+    for (let from = 0; from < maxRows; from += pageSize) {
+      const { data, error } = await supabaseClient
+        .from("client_purchase_logs")
+        .select("created_at")
+        .order("created_at", { ascending: false, nullsFirst: false })
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      for (const row of data || []) {
+        const monthKey = monthKeyFromIsoVN(row.created_at);
+        if (monthKey) months.add(monthKey);
+      }
+      if (!data || data.length < pageSize) break;
+    }
+  } catch (err) {
+    console.warn("Không tải được danh sách tháng client_purchase_logs:", err);
+  }
+
+  const sortedMonths = Array.from(months)
+    .filter(m => /^\d{6}$/.test(String(m)))
+    .sort()
+    .reverse();
+
+  if (!topPlayersSelectedMonth) {
+    topPlayersSelectedMonth =
+      (serverSummary && serverSummary.currentMonth) ||
+      sortedMonths[0] ||
+      currentMonthKeyVN();
+  }
+  if (!sortedMonths.includes(topPlayersSelectedMonth)) {
+    sortedMonths.unshift(topPlayersSelectedMonth);
+  }
+
+  topPlayersMonthSelect.innerHTML = sortedMonths
+    .map(month => `<option value="${month}">${monthLabel(month)}</option>`)
+    .join("");
+  topPlayersMonthSelect.value = topPlayersSelectedMonth;
+}
+
 async function renderTopPlayers() {
   if (!topPlayersList || !supabaseClient) return;
-  const { start, end, label } = currentMonthWindowVN(serverSummary && serverSummary.currentMonth);
+  const selectedMonth = topPlayersSelectedMonth || (serverSummary && serverSummary.currentMonth) || currentMonthKeyVN();
+  const { start, end, label } = currentMonthWindowVN(selectedMonth);
   if (topPlayersSyncInfo) {
     topPlayersSyncInfo.textContent = `Theo client_purchase_logs tháng ${label}`;
   }
   topPlayersList.innerHTML = `<div class="loading-placeholder">Đang tải dữ liệu...</div>`;
 
   try {
-    if (serverSummary && Array.isArray(serverSummary.topPlayersCurrentMonth)) {
+    if (serverSummary && selectedMonth === serverSummary.currentMonth && Array.isArray(serverSummary.topPlayersCurrentMonth)) {
       const topPlayers = serverSummary.topPlayersCurrentMonth;
       if (!topPlayers.length) {
         topPlayersList.innerHTML = `<div class="loading-placeholder">Chưa có log nạp trong tháng này</div>`;

@@ -459,6 +459,18 @@ textarea:focus,
   }
 }
 
+@media (max-width: 560px) {
+  .top-players-box .panel-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .top-players-controls,
+  .top-players-controls .glass-select {
+    width: 100%;
+  }
+}
+
 .data-section {
   display: flex;
   flex-direction: column;
@@ -509,6 +521,19 @@ textarea:focus,
 #top-apps-sync-info,
 #top-players-sync-info {
   line-height: 1.4;
+}
+
+.top-players-controls {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 132px;
+}
+
+.top-players-controls .glass-select {
+  width: 132px;
+  min-height: 40px;
+  padding: 9px 12px;
+  border-radius: 12px;
 }
 
 .top-apps-list {
