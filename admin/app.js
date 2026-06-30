@@ -721,8 +721,8 @@ function renderDashboard() {
     kpiCurrentEstimateVnd.textContent = `≈ ${fmtVND(csvEstimateUSD * rate)}`;
   }
 
-  // Your earnings is computed server-side from the Play Payments top-card
-  // snapshot plus valid RTDN rows after that snapshot; local math is fallback.
+  // Your earnings is computed server-side from the Play Payments ledger range:
+  // first day after the latest finalized earnings month through current VN date.
   let yourEarningsUSD = currentEstimateUSD + recentRtdnClientUSD;
   if (unfiltered && serverSummary && serverSummary.kpis) {
     yourEarningsUSD = serverSummary.kpis.yourEarningsUSD != null
