@@ -434,14 +434,28 @@ textarea:focus,
 /* Analytics Row */
 .analytics-row {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: minmax(0, 1.55fr) minmax(260px, 0.85fr) minmax(260px, 0.85fr);
   gap: 24px;
   margin-bottom: 28px;
 }
 
-@media (max-width: 992px) {
+@media (max-width: 1180px) {
+  .analytics-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .chart-box {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
   .analytics-row {
     grid-template-columns: 1fr;
+  }
+
+  .chart-box {
+    grid-column: auto;
   }
 }
 
@@ -480,17 +494,20 @@ textarea:focus,
   width: 100%;
 }
 
-.top-apps-box {
+.top-apps-box,
+.top-players-box {
   padding: 24px;
   display: flex;
   flex-direction: column;
 }
 
-.top-apps-box .panel-header {
+.top-apps-box .panel-header,
+.top-players-box .panel-header {
   align-items: flex-start;
 }
 
-#top-apps-sync-info {
+#top-apps-sync-info,
+#top-players-sync-info {
   line-height: 1.4;
 }
 
@@ -537,7 +554,7 @@ textarea:focus,
 .app-name {
   font-size: 14px;
   font-weight: 500;
-  max-width: 150px;
+  max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

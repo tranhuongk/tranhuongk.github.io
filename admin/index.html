@@ -15,7 +15,7 @@
   <!-- Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/umd/supabase.js"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=20260630d">
+  <link rel="stylesheet" href="style.css?v=20260630i">
   <style>
     /* RTDN order table (clones Play Console "Order management") */
     .rtdn-app-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; display: block; }
@@ -182,6 +182,19 @@
           <div class="loading-placeholder">Đang tải dữ liệu...</div>
         </div>
       </div>
+
+      <div class="glass-panel top-players-box">
+        <div class="panel-header">
+          <div class="table-title">
+            <h4><i class="fa-solid fa-user-astronaut"></i> Top người chơi</h4>
+            <span class="subtitle" id="top-players-sync-info">Theo giao dịch client tháng này</span>
+          </div>
+        </div>
+        <div id="top-players-list" class="top-apps-list">
+          <!-- Dynamically populated -->
+          <div class="loading-placeholder">Đang tải dữ liệu...</div>
+        </div>
+      </div>
     </section>
 
     <!-- Detailed Data Table Section -->
@@ -240,7 +253,7 @@
                 <th>Product</th>
                 <th>Order ID</th>
                 <th>Status</th>
-                <th>Estimated revenue</th>
+                <th>Price</th>
                 <th></th>
               </tr>
             </thead>
@@ -367,6 +380,6 @@
   </div>
 
   <!-- Script logic -->
-  <script src="app.js?v=20260630e"></script>
+  <script src="app.js?v=20260630i"></script>
 </body>
 </html>

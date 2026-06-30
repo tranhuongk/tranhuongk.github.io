@@ -117,6 +117,8 @@ const kpiCurrentEstimateLabel = document.getElementById("kpi-current-estimate-la
 
 const topAppsList = document.getElementById("top-apps-list");
 const topAppsSyncInfo = document.getElementById("top-apps-sync-info");
+const topPlayersList = document.getElementById("top-players-list");
+const topPlayersSyncInfo = document.getElementById("top-players-sync-info");
 const filterSource = document.getElementById("filter-source");
 const tableSearch = document.getElementById("table-search");
 const earningsTable = document.getElementById("earnings-table");
@@ -303,6 +305,7 @@ async function loadDataAndRender() {
         }
         populateAppDropdown();
         renderDashboard();
+        renderTopPlayers();
         return;
       }
     }
@@ -333,6 +336,7 @@ async function loadDataAndRender() {
 
     populateAppDropdown();
     renderDashboard();
+    renderTopPlayers();
   } catch (err) {
     console.error("Lỗi khi tải dữ liệu:", err);
     alert("Không thể tải dữ liệu từ Supabase: " + err.message);
@@ -719,11 +723,34 @@ function escapeHtml(value) {
   }[ch]));
 }
 
-function tableAppIconHtml(pkg, title) {
+function appIconUrl(pkg) {
+  const app = appsList.find(a => a.id === pkg);
+  return app && app.icon_url ? app.icon_url : "";
+}
+
+function appIconHtml(pkg, title, imgClass, fallbackClass, iconUrl = appIconUrl(pkg)) {
   const safePkg = escapeHtml(pkg);
   const safeTitle = escapeHtml(title || pkg);
   const initial = escapeHtml((title || pkg || "?").charAt(0).toUpperCase());
-  return `<img class="table-app-logo" src="app-icons/${safePkg}.png" alt="${safeTitle}" onerror="this.outerHTML='<div class=&quot;table-app-fallback&quot;>${initial}</div>'">`;
+  const localSrc = `app-icons/${safePkg}.png`;
+  const src = escapeHtml(iconUrl || localSrc);
+  const fallback = `<div class=&quot;${fallbackClass}&quot;>${initial}</div>`;
+  const onerror = iconUrl
+    ? `this.onerror=function(){this.outerHTML='${fallback}'};this.src='${localSrc}';`
+    : `this.outerHTML='${fallback}'`;
+  return `<img class="${imgClass}" src="${src}" alt="${safeTitle}" onerror="${onerror}">`;
+}
+
+function tableAppIconHtml(pkg, title) {
+  return appIconHtml(pkg, title, "table-app-logo", "table-app-fallback");
+}
+
+function rtdnPriceValue(t) {
+  const d = t.details || {};
+  if (d.listPrice != null) return d.listPrice;
+  if (d.total != null) return d.total;
+  if (t.price != null) return t.price;
+  return t.amount;
 }
 
 // One table row (Play Console "Order management" style).
@@ -731,9 +758,8 @@ function rtdnRowHtml(t) {
   const d = t.details || {};
   const { date, time } = vnDateParts(t.event_time);
   const pkg = t.package_name || "";
-  const initial = (t.title || pkg || "?").charAt(0).toUpperCase();
-  const logo = `<img class="rtdn-app-logo" src="app-icons/${pkg}.png" alt="${t.title || pkg}" onerror="this.outerHTML='<div class=&quot;rtdn-app-fallback&quot;>${initial}</div>'">`;
-  const estRev = (d.estimatedRevenue != null ? d.estimatedRevenue : t.amount);
+  const logo = appIconHtml(pkg, t.title || pkg, "rtdn-app-logo", "rtdn-app-fallback");
+  const price = rtdnPriceValue(t);
   return `<tr>
       <td><div class="rtdn-date-main">${date}</div><div class="rtdn-sub">${time}</div></td>
       <td>${logo}</td>
@@ -744,7 +770,7 @@ function rtdnRowHtml(t) {
       </td>
       <td>${t.order_id}</td>
       <td><span class="rtdn-status"><i class="fa-solid fa-circle-check"></i> ${statusLabel(d.status)}</span></td>
-      <td>${fmtMoneyCode(estRev, t.currency)}</td>
+      <td>${fmtMoneyCode(price, t.currency)}</td>
       <td><button class="rtdn-arrow" onclick="openRtdnDetail('${t.order_id}')" title="Xem chi tiết"><i class="fa-solid fa-arrow-right"></i></button></td>
     </tr>`;
 }
@@ -886,6 +912,101 @@ function currentMonthSyncText(summary) {
   return details.length
     ? `Dữ liệu đồng bộ tới giao dịch ${details.join(" · ")}`
     : "";
+}
+
+function currentMonthWindowVN() {
+  const vnNow = new Date(Date.now() + 7 * 3600 * 1000);
+  const year = vnNow.getUTCFullYear();
+  const month = vnNow.getUTCMonth();
+  const start = new Date(Date.UTC(year, month, 1) - 7 * 3600 * 1000).toISOString();
+  const end = new Date(Date.UTC(year, month + 1, 1) - 7 * 3600 * 1000).toISOString();
+  return {
+    start,
+    end,
+    label: `${String(month + 1).padStart(2, "0")}/${year}`,
+  };
+}
+
+function purchaseAmountUSD(row) {
+  const amount = Number(row.amount || 0);
+  const currency = String(row.currency || "USD").toUpperCase();
+  if (currency === "VND") return amount / currentUsdToVndRate;
+  return amount;
+}
+
+async function renderTopPlayers() {
+  if (!topPlayersList || !supabaseClient) return;
+  const { start, end, label } = currentMonthWindowVN();
+  if (topPlayersSyncInfo) {
+    topPlayersSyncInfo.textContent = `Theo client_purchase_logs tháng ${label}`;
+  }
+  topPlayersList.innerHTML = `<div class="loading-placeholder">Đang tải dữ liệu...</div>`;
+
+  try {
+    const rows = [];
+    const pageSize = 1000;
+    const maxRows = 10000;
+    for (let from = 0; from < maxRows; from += pageSize) {
+      const { data, error } = await supabaseClient
+        .from("client_purchase_logs")
+        .select("player_name,amount,currency,app_name,package_name,event_time")
+        .gte("event_time", start)
+        .lt("event_time", end)
+        .order("event_time", { ascending: false })
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      rows.push(...(data || []));
+      if (!data || data.length < pageSize) break;
+    }
+
+    if (!rows.length) {
+      topPlayersList.innerHTML = `<div class="loading-placeholder">Chưa có log nạp trong tháng này</div>`;
+      return;
+    }
+
+    const grouped = new Map();
+    for (const row of rows) {
+      const player = String(row.player_name || "Ẩn danh").trim() || "Ẩn danh";
+      const packageName = row.package_name || "";
+      const appTitle = cleanAppTitle(packageName, row.app_name || packageName || "Unknown");
+      const key = `${player}|${packageName || appTitle}`;
+      const current = grouped.get(key) || {
+        player,
+        appTitle,
+        packageName,
+        totalUSD: 0,
+        count: 0,
+        lastEventTime: "",
+      };
+      current.totalUSD += purchaseAmountUSD(row);
+      current.count += 1;
+      if (!current.lastEventTime || String(row.event_time || "") > current.lastEventTime) {
+        current.lastEventTime = row.event_time || "";
+      }
+      grouped.set(key, current);
+    }
+
+    const topPlayers = Array.from(grouped.values())
+      .sort((a, b) => b.totalUSD - a.totalUSD || b.count - a.count)
+      .slice(0, 10);
+
+    topPlayersList.innerHTML = topPlayers.map((p, idx) => `
+      <div class="app-item">
+        <div class="app-item-left">
+          <div class="app-badge">${idx + 1}</div>
+          <div>
+            <span class="app-name">${escapeHtml(p.player)}</span>
+            <span class="app-pkg">${escapeHtml(p.appTitle)} · ${p.count} lượt</span>
+          </div>
+        </div>
+        <span class="app-revenue">${fmtUSD(p.totalUSD)}</span>
+      </div>
+    `).join("");
+  } catch (err) {
+    console.error("load top players failed:", err);
+    topPlayersList.innerHTML = `<div class="loading-placeholder">Không tải được top người chơi</div>`;
+    if (topPlayersSyncInfo) topPlayersSyncInfo.textContent = err.message || "Lỗi đọc client_purchase_logs";
+  }
 }
 
 // Render revenue by app. Server priority: payment ledger app rows first, then
