@@ -953,10 +953,17 @@ function currentMonthSyncText(summary) {
     : "";
 }
 
-function currentMonthWindowVN() {
-  const vnNow = new Date(Date.now() + 7 * 3600 * 1000);
-  const year = vnNow.getUTCFullYear();
-  const month = vnNow.getUTCMonth();
+function currentMonthWindowVN(monthKey) {
+  let year;
+  let month;
+  if (typeof monthKey === "string" && /^\d{6}$/.test(monthKey)) {
+    year = Number(monthKey.slice(0, 4));
+    month = Number(monthKey.slice(4, 6)) - 1;
+  } else {
+    const vnNow = new Date(Date.now() + 7 * 3600 * 1000);
+    year = vnNow.getUTCFullYear();
+    month = vnNow.getUTCMonth();
+  }
   const start = new Date(Date.UTC(year, month, 1) - 7 * 3600 * 1000).toISOString();
   const end = new Date(Date.UTC(year, month + 1, 1) - 7 * 3600 * 1000).toISOString();
   return {
@@ -975,23 +982,44 @@ function purchaseAmountUSD(row) {
 
 async function renderTopPlayers() {
   if (!topPlayersList || !supabaseClient) return;
-  const { start, end, label } = currentMonthWindowVN();
+  const { start, end, label } = currentMonthWindowVN(serverSummary && serverSummary.currentMonth);
   if (topPlayersSyncInfo) {
     topPlayersSyncInfo.textContent = `Theo client_purchase_logs tháng ${label}`;
   }
   topPlayersList.innerHTML = `<div class="loading-placeholder">Đang tải dữ liệu...</div>`;
 
   try {
+    if (serverSummary && Array.isArray(serverSummary.topPlayersCurrentMonth)) {
+      const topPlayers = serverSummary.topPlayersCurrentMonth;
+      if (!topPlayers.length) {
+        topPlayersList.innerHTML = `<div class="loading-placeholder">Chưa có log nạp trong tháng này</div>`;
+        return;
+      }
+      topPlayersList.innerHTML = topPlayers.map((p, idx) => `
+        <div class="app-item">
+          <div class="app-item-left">
+            <div class="app-badge">${idx + 1}</div>
+            <div>
+              <span class="app-name">${escapeHtml(p.player)}</span>
+              <span class="app-pkg">${escapeHtml(p.appTitle)} · ${p.count} lượt</span>
+            </div>
+          </div>
+          <span class="app-revenue">${fmtUSD(p.totalUSD)}</span>
+        </div>
+      `).join("");
+      return;
+    }
+
     const rows = [];
     const pageSize = 1000;
     const maxRows = 10000;
     for (let from = 0; from < maxRows; from += pageSize) {
       const { data, error } = await supabaseClient
         .from("client_purchase_logs")
-        .select("player_name,amount,currency,app_name,package_name,event_time")
-        .gte("event_time", start)
-        .lt("event_time", end)
-        .order("event_time", { ascending: false })
+        .select("player_name,amount,currency,app_name,package_name,event_time,created_at")
+        .gte("created_at", start)
+        .lt("created_at", end)
+        .order("created_at", { ascending: false })
         .range(from, from + pageSize - 1);
       if (error) throw error;
       rows.push(...(data || []));
@@ -1019,8 +1047,9 @@ async function renderTopPlayers() {
       };
       current.totalUSD += purchaseAmountUSD(row);
       current.count += 1;
-      if (!current.lastEventTime || String(row.event_time || "") > current.lastEventTime) {
-        current.lastEventTime = row.event_time || "";
+      const logTime = row.created_at || row.event_time || "";
+      if (logTime && (!current.lastEventTime || String(logTime) > current.lastEventTime)) {
+        current.lastEventTime = logTime;
       }
       grouped.set(key, current);
     }
