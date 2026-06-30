@@ -347,6 +347,21 @@ function populateAppDropdown() {
   incomeAppSelect.innerHTML = appsList.map(a => `<option value="${a.id}">${a.title} (${a.id})</option>`).join("");
 }
 
+function asArray(value) {
+  if (Array.isArray(value)) return value;
+  if (value == null || value === "") return [];
+  return [value];
+}
+
+function hasOwnValue(obj, key) {
+  return obj && Object.prototype.hasOwnProperty.call(obj, key) && obj[key] != null;
+}
+
+function looksLikeGcsConfigError(message) {
+  return /PLAY_BUCKET|SA_JSON_B64|Google Cloud Storage|GCS|bucket|service account|credentials|private_key/i
+    .test(String(message || ""));
+}
+
 // --- Sync Handler ---
 async function triggerSync() {
   if (!supabaseClient || !session) return;
@@ -384,15 +399,39 @@ async function triggerSync() {
 
     addLog("Đồng bộ hoàn tất thành công!", "green");
     addLog(`Đã đồng bộ: ${result.message}`, "green");
-    if (result.details) {
-      addLog(`- Số app đã quét: ${result.details.appsSyncedCount}`, "blue");
-      addLog(`- Số bản ghi doanh thu: ${result.details.earningsSyncedCount}`, "blue");
-      addLog(`- Các tháng được cập nhật: ${result.details.monthsSynced.join(", ")}`, "yellow");
+    const details = result.details || {};
+    if (Object.keys(details).length) {
+      if (hasOwnValue(details, "appsSyncedCount")) {
+        addLog(`- Số app đã quét: ${details.appsSyncedCount}`, "blue");
+      }
+      if (hasOwnValue(details, "earningsSyncedCount")) {
+        addLog(`- Số bản ghi doanh thu: ${details.earningsSyncedCount}`, "blue");
+      }
+
+      const monthsSynced = asArray(details.monthsSynced);
+      if (monthsSynced.length) {
+        addLog(`- Các tháng được cập nhật: ${monthsSynced.join(", ")}`, "yellow");
+      } else {
+        const processed = asArray(details.finalizedMonthsProcessed);
+        const skipped = asArray(details.finalizedMonthsSkipped);
+        if (processed.length) addLog(`- Tháng finalized đã xử lý: ${processed.join(", ")}`, "yellow");
+        if (skipped.length) addLog(`- Tháng finalized đã bỏ qua: ${skipped.join(", ")}`, "muted");
+        if (!processed.length && !skipped.length) addLog("- Không có tháng mới cần cập nhật", "yellow");
+      }
+
+      if (hasOwnValue(details, "estimatesSavedCount")) {
+        addLog(`- Estimated sales rows đã lưu: ${details.estimatesSavedCount}`, "blue");
+      }
     }
     setSyncStatus(true, "Đã cập nhật xong. Bấm \"Đóng\" để xem dữ liệu mới.");
   } catch (err) {
-    addLog(`Lỗi đồng bộ: ${err.message}`, "red");
-    addLog("Vui lòng kiểm tra lại cấu hình GCS Bucket (PLAY_BUCKET) và Service Account (SA_JSON_B64) trong Supabase Secrets.", "red");
+    const message = err && err.message ? err.message : String(err || "Unknown error");
+    addLog(`Lỗi đồng bộ: ${message}`, "red");
+    if (looksLikeGcsConfigError(message)) {
+      addLog("Vui lòng kiểm tra lại cấu hình GCS Bucket (PLAY_BUCKET) và Service Account (SA_JSON_B64) trong Supabase Secrets.", "red");
+    } else {
+      addLog("Nếu lỗi vẫn lặp lại, mở console/network để xem response chi tiết từ Edge Function.", "muted");
+    }
     setSyncStatus(false, "Có lỗi xảy ra trong quá trình đồng bộ.");
   } finally {
     btnCloseSyncOverlay.classList.remove("hidden");
