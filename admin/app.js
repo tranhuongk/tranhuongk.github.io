@@ -20,11 +20,13 @@ const PACKAGE_MAP = {
 
 function cleanAppTitle(pkg, fallback) {
   const cleanPkg = String(pkg).trim().toLowerCase();
+  if (cleanPkg === "__adjustments__" || cleanPkg === "adjustments") return "Khác";
   for (const [k, v] of Object.entries(PACKAGE_MAP)) {
     if (k.toLowerCase() === cleanPkg) return v;
   }
   if (fallback) {
     const cleanFallback = String(fallback).trim().toLowerCase();
+    if (cleanFallback === "__adjustments__" || cleanFallback === "adjustments") return "Khác";
     for (const [k, v] of Object.entries(PACKAGE_MAP)) {
       if (k.toLowerCase() === cleanFallback) return v;
     }
@@ -36,6 +38,15 @@ function cleanAppTitle(pkg, fallback) {
     return name.charAt(0).toUpperCase() + name.slice(1);
   }
   return pkg || "Unknown";
+}
+
+function isAdjustmentApp(id, title) {
+  const cleanId = String(id || "").trim().toLowerCase();
+  const cleanTitle = String(title || "").trim().toLowerCase();
+  return cleanId === "__adjustments__" ||
+    cleanId === "adjustments" ||
+    cleanTitle === "khác" ||
+    cleanTitle === "adjustments";
 }
 
 // Local caching of data
@@ -105,6 +116,7 @@ const kpiCurrentEstimateVnd = document.getElementById("kpi-current-estimate-vnd"
 const kpiCurrentEstimateLabel = document.getElementById("kpi-current-estimate-label");
 
 const topAppsList = document.getElementById("top-apps-list");
+const topAppsSyncInfo = document.getElementById("top-apps-sync-info");
 const filterSource = document.getElementById("filter-source");
 const tableSearch = document.getElementById("table-search");
 const earningsTable = document.getElementById("earnings-table");
@@ -633,8 +645,8 @@ function renderDashboard() {
     kpiCurrentEstimateVnd.textContent = `≈ ${fmtVND(csvEstimateUSD * rate)}`;
   }
 
-  // Your earnings = Estimated Sales report + RTDN not already covered by that
-  // report (server-side uses the Estimated report cutoff to remove duplicates).
+  // Your earnings is computed server-side from the Play Payments top-card
+  // snapshot plus valid RTDN rows after that snapshot; local math is fallback.
   let yourEarningsUSD = currentEstimateUSD + recentRtdnClientUSD;
   if (unfiltered && serverSummary && serverSummary.kpis) {
     yourEarningsUSD = serverSummary.kpis.yourEarningsUSD != null
@@ -695,6 +707,23 @@ function statusLabel(raw) {
   const s = (raw || "").toString();
   if (!s) return "—";
   return s.toUpperCase() === "PROCESSED" ? "Processed" : s.charAt(0) + s.slice(1).toLowerCase();
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[ch]));
+}
+
+function tableAppIconHtml(pkg, title) {
+  const safePkg = escapeHtml(pkg);
+  const safeTitle = escapeHtml(title || pkg);
+  const initial = escapeHtml((title || pkg || "?").charAt(0).toUpperCase());
+  return `<img class="table-app-logo" src="app-icons/${safePkg}.png" alt="${safeTitle}" onerror="this.outerHTML='<div class=&quot;table-app-fallback&quot;>${initial}</div>'">`;
 }
 
 // One table row (Play Console "Order management" style).
@@ -829,15 +858,51 @@ function monthLabel(p) {
   return p;
 }
 
-// Render Top Apps — ranked by RTDN estimated revenue (from the shared summary).
-// Falls back to official earnings only if the summary function is unavailable.
+function syncTransactionDateLabel(info) {
+  if (!info) return "";
+  if (info.transactionAt) {
+    const parts = vnDateParts(info.transactionAt);
+    return [parts.date, parts.time.replace(" (GMT+7)", "")].filter(Boolean).join(" ");
+  }
+  if (info.transactionDate) {
+    const ms = Date.parse(`${info.transactionDate}T00:00:00`);
+    if (!isNaN(ms)) {
+      return new Date(ms).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+    }
+    return info.transactionDate;
+  }
+  return "";
+}
+
+function currentMonthSyncText(summary) {
+  const info = summary && summary.currentMonthSync;
+  if (!info) return "";
+  const subject = info.orderId || info.productTitle || "giao dịch cuối";
+  const details = [
+    subject,
+    info.orderId ? (info.productTitle || info.appTitle) : "",
+    syncTransactionDateLabel(info),
+  ].filter(Boolean);
+  return details.length
+    ? `Dữ liệu đồng bộ tới giao dịch ${details.join(" · ")}`
+    : "";
+}
+
+// Render revenue by app. Server priority: payment ledger app rows first, then
+// current-month earnings when the ledger cannot be split by app.
 function renderTopApps(filtered, appMap, rate) {
+  if (topAppsSyncInfo) {
+    const syncText = currentMonthSyncText(serverSummary);
+    topAppsSyncInfo.textContent = syncText || "Chưa có thông tin giao dịch đồng bộ";
+  }
+
   let sortedApps;
-  if (serverSummary && serverSummary.topAppsRtdn) {
-    sortedApps = serverSummary.topAppsRtdn
-      .filter(a => a.totalUSD)
-      .map(a => ({ id: a.id, title: a.title, total: a.totalUSD }))
-      .slice(0, 5);
+  const revenueByApp = serverSummary && (serverSummary.revenueByApp || serverSummary.topAppsRtdn);
+  if (revenueByApp) {
+    sortedApps = revenueByApp
+      .filter(a => !isAdjustmentApp(a.id, a.title))
+      .map(a => ({ id: a.id, title: a.title, total: Number(a.totalUSD || 0) }))
+      .sort((a, b) => b.total - a.total);
   } else {
     const totals = {};
     filtered
@@ -847,10 +912,13 @@ function renderTopApps(filtered, appMap, rate) {
         const usd = e.currency === "USD" ? amt : amt / rate;
         totals[e.app_id] = (totals[e.app_id] || 0) + usd;
       });
-    sortedApps = Object.entries(totals)
-      .map(([id, total]) => ({ id, title: appMap[id] || id, total }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 5);
+    const appIds = new Set([
+      ...Object.keys(appMap).filter(id => !isAdjustmentApp(id, appMap[id])),
+      ...Object.keys(totals).filter(id => !isAdjustmentApp(id, appMap[id])),
+    ]);
+    sortedApps = Array.from(appIds)
+      .map(id => ({ id, title: appMap[id] || id, total: totals[id] || 0 }))
+      .sort((a, b) => b.total - a.total);
   }
 
   if (sortedApps.length === 0) {
@@ -978,11 +1046,17 @@ function renderPivotTable(filtered, uniqueApps, uniqueMonths, appMap) {
   // For each app, calculate rows
   const appRows = uniqueApps.map(appId => {
     const title = appMap[appId] || appId;
+    const icon = tableAppIconHtml(appId, title);
     let appTotalUSD = 0;
     
     let rowCellsHtml = `<td>
-      <div><strong>${title}</strong></div>
-      <div style="font-size:10px;color:var(--text-muted)">${appId}</div>
+      <div class="table-app-cell">
+        ${icon}
+        <div class="table-app-meta">
+          <div class="table-app-name">${escapeHtml(title)}</div>
+          <div class="table-app-pkg">${escapeHtml(appId)}</div>
+        </div>
+      </div>
     </td>`;
 
     months.forEach(m => {

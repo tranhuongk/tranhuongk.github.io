@@ -15,7 +15,7 @@
   <!-- Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/umd/supabase.js"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=20260630d">
   <style>
     /* RTDN order table (clones Play Console "Order management") */
     .rtdn-app-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; display: block; }
@@ -133,7 +133,7 @@
         </div>
       </div>
 
-      <div class="glass-panel kpi-card">
+      <div class="glass-panel kpi-card is-hidden" id="kpi-current-estimate-card" style="display: none;">
         <div class="kpi-icon color-orange">
           <i class="fa-solid fa-chart-line"></i>
         </div>
@@ -172,7 +172,10 @@
 
       <div class="glass-panel top-apps-box">
         <div class="panel-header">
-          <h4><i class="fa-solid fa-crown"></i> Top ứng dụng doanh thu (RTDN)</h4>
+          <div class="table-title">
+            <h4><i class="fa-solid fa-crown"></i> Doanh thu tháng này</h4>
+            <span class="subtitle" id="top-apps-sync-info">Đang tải dữ liệu đồng bộ...</span>
+          </div>
         </div>
         <div id="top-apps-list" class="top-apps-list">
           <!-- Dynamically populated -->
@@ -182,7 +185,7 @@
     </section>
 
     <!-- Detailed Data Table Section -->
-    <section class="data-section">
+    <section class="data-section" style="display: flex; flex-direction: column; gap: 28px;">
       <div class="glass-panel table-card">
         <div class="panel-header table-actions">
           <div class="table-title">
@@ -364,6 +367,6 @@
   </div>
 
   <!-- Script logic -->
-  <script src="app.js?v=20260630c"></script>
+  <script src="app.js?v=20260630e"></script>
 </body>
 </html>

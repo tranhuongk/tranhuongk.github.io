@@ -367,6 +367,10 @@ textarea:focus,
   margin-bottom: 28px;
 }
 
+.is-hidden {
+  display: none !important;
+}
+
 .kpi-card {
   display: flex;
   align-items: center;
@@ -441,6 +445,12 @@ textarea:focus,
   }
 }
 
+.data-section {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
 .panel-header {
   display: flex;
   justify-content: space-between;
@@ -474,6 +484,14 @@ textarea:focus,
   padding: 24px;
   display: flex;
   flex-direction: column;
+}
+
+.top-apps-box .panel-header {
+  align-items: flex-start;
+}
+
+#top-apps-sync-info {
+  line-height: 1.4;
 }
 
 .top-apps-list {
@@ -593,6 +611,52 @@ textarea:focus,
   border-radius: 16px;
   border: 1px solid var(--border-light);
   background: rgba(0, 0, 0, 0.15);
+}
+
+.table-app-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 230px;
+}
+
+.table-app-logo,
+.table-app-fallback {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  flex: 0 0 34px;
+}
+
+.table-app-logo {
+  object-fit: cover;
+  display: block;
+}
+
+.table-app-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(108, 140, 255, 0.14);
+  border: 1px solid var(--border-light);
+  color: var(--primary-glow);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.table-app-meta {
+  min-width: 0;
+}
+
+.table-app-name {
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.table-app-pkg {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
 }
 
 table {
