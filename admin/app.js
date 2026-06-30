@@ -432,6 +432,18 @@ async function triggerSync() {
         addLog(`- Estimated sales rows đã lưu: ${details.estimatesSavedCount}`, "blue");
       }
 
+      const paymentLedgerDateRange = details.paymentLedgerDateRange || null;
+      if (paymentLedgerDateRange) {
+        const start = ledgerDateLabel(paymentLedgerDateRange.startDate);
+        const end = ledgerDateLabel(paymentLedgerDateRange.endDate);
+        const finalized = paymentLedgerDateRange.latestFinalizedEarningsMonth;
+        addLog(
+          `- Khoảng ledger tính Your earnings: ${start} → ${end}` +
+            (finalized ? ` (sau report earnings ${monthLabel(finalized)})` : ""),
+          "blue",
+        );
+      }
+
       const paymentLedgerImport = details.paymentLedgerImport || null;
       if (paymentLedgerImport) {
         const months = asArray(paymentLedgerImport.months);
@@ -995,6 +1007,13 @@ function monthLabel(p) {
     return p.slice(4, 6) + "/" + p.slice(0, 4);
   }
   return p;
+}
+
+function ledgerDateLabel(value) {
+  if (!value) return "—";
+  const ms = Date.parse(`${value}T00:00:00`);
+  if (isNaN(ms)) return value;
+  return new Date(ms).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
 }
 
 function syncTransactionDateLabel(info) {
