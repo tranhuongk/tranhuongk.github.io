@@ -801,6 +801,44 @@ function rtdnPriceValue(t) {
   return t.amount;
 }
 
+function rtdnPlayerName(t) {
+  return String(t.player_name || "").trim();
+}
+
+async function attachPlayerNamesToRtdnRows(rows) {
+  if (!supabaseClient || !rows.length) return rows;
+  const missingOrderIds = Array.from(new Set(
+    rows
+      .filter(row => !rtdnPlayerName(row))
+      .map(row => row.order_id)
+      .filter(Boolean)
+  ));
+  if (!missingOrderIds.length) return rows;
+
+  try {
+    const { data, error } = await supabaseClient
+      .from("client_purchase_logs")
+      .select("order_id,player_name,created_at")
+      .in("order_id", missingOrderIds)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    const playerByOrder = new Map();
+    for (const row of data || []) {
+      const player = String(row.player_name || "").trim();
+      if (row.order_id && player && !playerByOrder.has(row.order_id)) {
+        playerByOrder.set(row.order_id, player);
+      }
+    }
+    return rows.map(row => ({
+      ...row,
+      player_name: rtdnPlayerName(row) || playerByOrder.get(row.order_id) || null,
+    }));
+  } catch (err) {
+    console.warn("Không tải được tên người chơi cho RTDN:", err);
+    return rows;
+  }
+}
+
 // One table row (Play Console "Order management" style).
 function rtdnRowHtml(t) {
   const d = t.details || {};
@@ -808,6 +846,7 @@ function rtdnRowHtml(t) {
   const pkg = t.package_name || "";
   const logo = appIconHtml(pkg, t.title || pkg, "rtdn-app-logo", "rtdn-app-fallback");
   const price = rtdnPriceValue(t);
+  const player = rtdnPlayerName(t);
   return `<tr>
       <td><div class="rtdn-date-main">${date}</div><div class="rtdn-sub">${time}</div></td>
       <td>${logo}</td>
@@ -816,6 +855,7 @@ function rtdnRowHtml(t) {
         <div class="rtdn-sub">${t.sku || ""}</div>
         <div class="rtdn-sub">${d.purchaseType || "Buy"}</div>
       </td>
+      <td><span class="rtdn-player-name">${player ? escapeHtml(player) : "—"}</span></td>
       <td>${t.order_id}</td>
       <td><span class="rtdn-status"><i class="fa-solid fa-circle-check"></i> ${statusLabel(d.status)}</span></td>
       <td>${fmtMoneyCode(price, t.currency)}</td>
@@ -855,7 +895,7 @@ function renderRtdnTransactions() {
       : "Chưa có giao dịch nào được ghi nhận";
   }
   if (!txns.length) {
-    body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted)">Chưa có giao dịch RTDN nào. Mỗi giao dịch IAP sẽ xuất hiện ngay khi Google gửi thông báo realtime.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-muted)">Chưa có giao dịch RTDN nào. Mỗi giao dịch IAP sẽ xuất hiện ngay khi Google gửi thông báo realtime.</td></tr>`;
     updateRtdnLoadMore();
     return;
   }
@@ -877,7 +917,7 @@ window.loadMoreRtdn = async () => {
       .order("event_time", { ascending: false })
       .range(rtdnOffset, rtdnOffset + 29);
     if (error) throw error;
-    const rows = (data || []).map(t => ({ ...t, title: cleanAppTitle(t.package_name) }));
+    const rows = await attachPlayerNamesToRtdnRows((data || []).map(t => ({ ...t, title: cleanAppTitle(t.package_name) })));
     rows.forEach(t => { rtdnByOrder[t.order_id] = t; });
     const body = document.getElementById("rtdn-body");
     if (body) body.insertAdjacentHTML("beforeend", rows.map(rtdnRowHtml).join(""));
@@ -902,6 +942,7 @@ window.openRtdnDetail = (orderId) => {
   content.innerHTML =
     row("Order status", `<span class="rtdn-status"><i class="fa-solid fa-circle-check"></i> ${statusLabel(d.status)}</span>`) +
     row("Order ID", t.order_id) +
+    row("Tên người chơi", escapeHtml(rtdnPlayerName(t) || "—")) +
     row("Date", `${date} ${time}`) +
     row("Billing address", d.buyerCountry || "—") +
     row("List price", fmtMoneyCode(d.listPrice != null ? d.listPrice : t.amount, t.currency)) +

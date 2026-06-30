@@ -15,7 +15,7 @@
   <!-- Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/umd/supabase.js"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=20260701c">
+  <link rel="stylesheet" href="style.css?v=20260701d">
   <style>
     /* RTDN order table (clones Play Console "Order management") */
     .rtdn-app-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; display: block; }
@@ -23,6 +23,7 @@
     .rtdn-date-main { font-weight: 500; }
     .rtdn-sub { font-size: 11px; color: var(--text-muted); }
     .rtdn-product-title { font-weight: 600; }
+    .rtdn-player-name { font-weight: 500; white-space: nowrap; }
     .rtdn-status { display: inline-flex; align-items: center; gap: 6px; color: var(--success, #10b981); white-space: nowrap; }
     .rtdn-arrow { background: none; border: none; color: var(--primary-glow, #6c8cff); cursor: pointer; font-size: 15px; padding: 6px 10px; border-radius: 8px; }
     .rtdn-arrow:hover { background: rgba(108,140,255,0.12); }
@@ -253,6 +254,7 @@
                 <th>Date</th>
                 <th>App</th>
                 <th>Product</th>
+                <th>Tên người chơi</th>
                 <th>Order ID</th>
                 <th>Status</th>
                 <th>Price</th>
@@ -382,6 +384,6 @@
   </div>
 
   <!-- Script logic -->
-  <script src="app.js?v=20260701c"></script>
+  <script src="app.js?v=20260701d"></script>
 </body>
 </html>
