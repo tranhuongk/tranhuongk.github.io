@@ -371,6 +371,37 @@ function looksLikeGcsConfigError(message) {
     .test(String(message || ""));
 }
 
+async function readJsonResponse(response) {
+  const bodyText = await response.text();
+  if (!bodyText) return {};
+  try {
+    return JSON.parse(bodyText);
+  } catch {
+    return { error: bodyText };
+  }
+}
+
+function formatGcsApiLine(gcs) {
+  if (!gcs || typeof gcs !== "object") return "";
+  const status = [gcs.status, gcs.statusText].filter(Boolean).join(" ");
+  const operation = gcs.operation || "request";
+  const target = gcs.target ? ` (${gcs.target})` : "";
+  return `GCS ${operation}: ${status || "unknown status"}${target}`;
+}
+
+function numberValue(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function getOrderSyncDetails(details) {
+  if (!details || typeof details !== "object") return {};
+  if (details.orderSync && typeof details.orderSync === "object") return details.orderSync;
+  const step = details.steps && details.steps["sync-orders"];
+  if (step && step.details && typeof step.details === "object") return step.details;
+  return {};
+}
+
 // --- Sync Handler ---
 async function triggerSync() {
   if (!supabaseClient || !session) return;
@@ -392,24 +423,35 @@ async function triggerSync() {
   
   try {
     addLog("Đang gửi yêu cầu xác thực tới Edge Function...", "muted");
-    const response = await fetch(`${supabaseUrl}/functions/v1/sync-earnings`, {
+    const response = await fetch(`${supabaseUrl}/functions/v1/sync-google`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "apikey": supabaseAnonKey,
         "Authorization": `Bearer ${session.access_token}`
-      }
+      },
+      body: JSON.stringify({
+        source: "admin-dashboard",
+      })
     });
 
-    const result = await response.json();
+    const result = await readJsonResponse(response);
     
     if (!response.ok) {
-      throw new Error(result.error || `HTTP error! status: ${response.status}`);
+      const error = new Error(result.error || `HTTP error! status: ${response.status}`);
+      error.errorType = result.errorType || null;
+      error.details = result.details || null;
+      error.timingsMs = result.timingsMs || null;
+      throw error;
     }
 
     addLog("Đồng bộ hoàn tất thành công!", "green");
     addLog(`Đã đồng bộ: ${result.message}`, "green");
     const details = result.details || {};
     if (Object.keys(details).length) {
+      if (details.gcsBackupUsed) {
+        addLog("- GCS dang dung backup service account tam thoi. Khi all-payments doc duoc GCS thi go fallback nay.", "yellow");
+      }
       if (hasOwnValue(details, "appsSyncedCount")) {
         addLog(`- Số app đã quét: ${details.appsSyncedCount}`, "blue");
       }
@@ -440,13 +482,30 @@ async function triggerSync() {
         addLog(`- Bỏ qua rebuild Estimated sales: ${reason}`, "muted");
       }
 
+      const orderSync = getOrderSyncDetails(details);
+      if (Object.keys(orderSync).length) {
+        const syncedDelayedTransactions = numberValue(
+          hasOwnValue(orderSync, "updatedRtdnTransactions")
+            ? orderSync.updatedRtdnTransactions
+            : orderSync.updatedTransactions,
+        );
+        addLog(`- Số lượng transaction delay được đồng bộ lại: ${syncedDelayedTransactions}`, "blue");
+        if (hasOwnValue(orderSync, "delayedStillRtdn")) {
+          addLog(`- Transaction delay còn chờ retry: ${numberValue(orderSync.delayedStillRtdn)}`, "muted");
+        }
+      }
+
     }
     setSyncStatus(true, "Đã cập nhật xong. Bấm \"Đóng\" để xem dữ liệu mới.");
   } catch (err) {
     const message = err && err.message ? err.message : String(err || "Unknown error");
     addLog(`Lỗi đồng bộ: ${message}`, "red");
-    if (looksLikeGcsConfigError(message)) {
-      addLog("Vui lòng kiểm tra lại cấu hình GCS Bucket (PLAY_BUCKET) và Service Account (SA_JSON_B64) trong Supabase Secrets.", "red");
+    const gcs = err && err.details && err.details.gcs ? err.details.gcs : null;
+    if ((err && err.errorType === "gcs_api") || gcs || looksLikeGcsConfigError(message)) {
+      const gcsLine = formatGcsApiLine(gcs);
+      if (gcsLine) addLog(gcsLine, "red");
+      if (gcs && gcs.message) addLog(`Chi tiết GCS: ${gcs.message}`, "red");
+      addLog("Không coi sync là hoàn tất khi GCS trả lỗi. Kiểm tra quyền report trong Play Console/GCS và cấu hình PLAY_BUCKET, SA_JSON_B64.", "red");
     } else {
       addLog("Nếu lỗi vẫn lặp lại, mở console/network để xem response chi tiết từ Edge Function.", "muted");
     }
