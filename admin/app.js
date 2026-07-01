@@ -418,55 +418,28 @@ async function triggerSync() {
       }
 
       const monthsSynced = asArray(details.monthsSynced);
+      const finalizedProcessed = asArray(details.finalizedMonthsProcessed);
+      const finalizedSkipped = asArray(details.finalizedMonthsSkipped);
       if (monthsSynced.length) {
         addLog(`- Các tháng được cập nhật: ${monthsSynced.join(", ")}`, "yellow");
       } else {
-        const processed = asArray(details.finalizedMonthsProcessed);
-        const skipped = asArray(details.finalizedMonthsSkipped);
-        if (processed.length) addLog(`- Tháng finalized đã xử lý: ${processed.join(", ")}`, "yellow");
-        if (skipped.length) addLog(`- Tháng finalized đã bỏ qua: ${skipped.join(", ")}`, "muted");
-        if (!processed.length && !skipped.length) addLog("- Không có tháng mới cần cập nhật", "yellow");
+        if (finalizedProcessed.length) addLog(`- Tháng finalized đã xử lý: ${finalizedProcessed.join(", ")}`, "yellow");
+        if (!finalizedProcessed.length && !finalizedSkipped.length) addLog("- Không có tháng mới cần cập nhật", "yellow");
+      }
+      if (finalizedSkipped.length) {
+        addLog(`- Các tháng đã sync trước đó: ${finalizedSkipped.join(", ")}`, "muted");
       }
 
       if (hasOwnValue(details, "estimatesSavedCount")) {
         addLog(`- Estimated sales rows đã lưu: ${details.estimatesSavedCount}`, "blue");
       }
-
-      const paymentLedgerDateRange = details.paymentLedgerDateRange || null;
-      if (paymentLedgerDateRange) {
-        const start = ledgerDateLabel(paymentLedgerDateRange.startDate);
-        const end = ledgerDateLabel(paymentLedgerDateRange.endDate);
-        const finalized = paymentLedgerDateRange.latestFinalizedEarningsMonth;
-        addLog(
-          `- Khoảng ledger tính Your earnings: ${start} → ${end}` +
-            (finalized ? ` (sau report earnings ${monthLabel(finalized)})` : ""),
-          "blue",
-        );
+      if (details.estimatesRebuildSkipped && details.estimatesRebuildSkipReason) {
+        const reason = details.estimatesRebuildSkipReason === "estimate report unchanged"
+          ? "report chưa thay đổi"
+          : details.estimatesRebuildSkipReason;
+        addLog(`- Bỏ qua rebuild Estimated sales: ${reason}`, "muted");
       }
 
-      const paymentLedgerImport = details.paymentLedgerImport || null;
-      if (paymentLedgerImport) {
-        const months = asArray(paymentLedgerImport.months);
-        addLog(
-          `- Play Payments ledger: ${paymentLedgerImport.rowsUpserted || 0} dòng, ${paymentLedgerImport.filesMatched || 0} file`,
-          paymentLedgerImport.rowsUpserted ? "blue" : "yellow",
-        );
-        if (months.length) {
-          addLog(`- Tháng ledger đã cập nhật: ${months.join(", ")}`, "blue");
-        }
-        if (paymentLedgerImport.skippedReason === "no_payment_ledger_files_found") {
-          addLog("- Không tìm thấy file Play Payments ledger trong GCS, nên Your earnings chưa đổi.", "yellow");
-        } else if (paymentLedgerImport.skippedReason === "no_payment_ledger_rows_found") {
-          addLog("- Có file ledger nhưng không đọc được dòng thanh toán hợp lệ.", "yellow");
-        } else if (paymentLedgerImport.skippedReason === "payment_ledger_parse_failed") {
-          addLog("- Không parse được Play Payments ledger. Kiểm tra format file trong GCS.", "red");
-        }
-      }
-
-      const paymentLedgerSync = details.paymentLedgerSync || null;
-      if (paymentLedgerSync && paymentLedgerSync.skippedReason === "no_play_payments_base_rows") {
-        addLog("- Bảng google_play_payment_ledger chưa có dòng play_payments để tính Your earnings.", "yellow");
-      }
     }
     setSyncStatus(true, "Đã cập nhật xong. Bấm \"Đóng\" để xem dữ liệu mới.");
   } catch (err) {
@@ -733,13 +706,11 @@ function renderDashboard() {
     kpiCurrentEstimateVnd.textContent = `≈ ${fmtVND(csvEstimateUSD * rate)}`;
   }
 
-  // Your earnings is computed server-side from the Play Payments ledger range:
-  // first day after the latest finalized earnings month through current VN date.
-  let yourEarningsUSD = currentEstimateUSD + recentRtdnClientUSD;
+  let yourEarningsUSD = 0;
   if (unfiltered && serverSummary && serverSummary.kpis) {
     yourEarningsUSD = serverSummary.kpis.yourEarningsUSD != null
       ? serverSummary.kpis.yourEarningsUSD
-      : (serverSummary.kpis.estimateUSD || 0) + (serverSummary.kpis.rtdnNonDuplicateUSD || 0);
+      : 0;
   }
   const kpiCurrentRtdn = document.getElementById("kpi-current-rtdn");
   const kpiCurrentRtdnVnd = document.getElementById("kpi-current-rtdn-vnd");
@@ -975,6 +946,7 @@ window.openRtdnDetail = (orderId) => {
   const content = document.getElementById("rtdn-detail-content");
   if (heading) heading.textContent = `Order ${t.order_id}`;
   const row = (label, value) => `<div class="rtdn-detail-row"><span class="label">${label}</span><span class="value">${value}</span></div>`;
+  const hasEstimatedRevenue = d.estimatedRevenue !== null && d.estimatedRevenue !== undefined && d.estimatedRevenue !== "";
   content.innerHTML =
     row("Order status", `<span class="rtdn-status"><i class="fa-solid fa-circle-check"></i> ${statusLabel(d.status)}</span>`) +
     row("Order ID", t.order_id) +
@@ -984,7 +956,7 @@ window.openRtdnDetail = (orderId) => {
     row("List price", fmtMoneyCode(d.listPrice != null ? d.listPrice : t.amount, t.currency)) +
     row("Tax", fmtMoneyCode(d.tax || 0, t.currency)) +
     row("Total", fmtMoneyCode(d.total != null ? d.total : t.amount, t.currency)) +
-    row("Estimated revenue", fmtMoneyCode(d.estimatedRevenue != null ? d.estimatedRevenue : t.amount, t.currency)) +
+    row("Estimated revenue", hasEstimatedRevenue ? fmtMoneyCode(d.estimatedRevenue, t.currency) : "—") +
     `<div class="rtdn-detail-title">Products in this order</div>` +
     `<div class="rtdn-product-title">${d.productTitle || t.title}</div>` +
     `<div class="rtdn-sub">${t.sku || ""} · ${d.purchaseType || "Buy"}</div>`;
@@ -1007,13 +979,6 @@ function monthLabel(p) {
     return p.slice(4, 6) + "/" + p.slice(0, 4);
   }
   return p;
-}
-
-function ledgerDateLabel(value) {
-  if (!value) return "—";
-  const ms = Date.parse(`${value}T00:00:00`);
-  if (isNaN(ms)) return value;
-  return new Date(ms).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
 }
 
 function syncTransactionDateLabel(info) {
@@ -1228,8 +1193,7 @@ async function renderTopPlayers() {
   }
 }
 
-// Render revenue by app. Server priority: payment ledger app rows first, then
-// current-month earnings when the ledger cannot be split by app.
+// Render revenue by app from the server's current-month earnings snapshot.
 function renderTopApps(filtered, appMap, rate) {
   if (topAppsSyncInfo) {
     const syncText = currentMonthSyncText(serverSummary);

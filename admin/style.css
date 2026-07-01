@@ -191,6 +191,20 @@ textarea:focus,
   box-shadow: 0 0 12px rgba(108, 140, 255, 0.2);
 }
 
+.glass-select option {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.glass-select option:checked {
+  background: #bfdbfe;
+  color: #0f172a;
+}
+
+.glass-select option:disabled {
+  color: #64748b;
+}
+
 .accordion-toggle {
   display: flex;
   justify-content: space-between;
