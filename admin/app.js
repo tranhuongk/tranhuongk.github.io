@@ -484,14 +484,32 @@ async function triggerSync() {
 
       const orderSync = getOrderSyncDetails(details);
       if (Object.keys(orderSync).length) {
-        const syncedDelayedTransactions = numberValue(
+        if (hasOwnValue(orderSync, "candidateBatches")) {
+          addLog(
+            `- Sync Orders: ${numberValue(orderSync.candidateBatches)} batch DB, ${numberValue(orderSync.dbBatchSize, 1000)} rows/batch, chạy song song ${numberValue(orderSync.parallelBatches, 1)} batch`,
+            "blue",
+          );
+        }
+        const syncedDelayedRtdn = numberValue(
           hasOwnValue(orderSync, "updatedRtdnTransactions")
             ? orderSync.updatedRtdnTransactions
             : orderSync.updatedTransactions,
         );
-        addLog(`- Số lượng transaction delay được đồng bộ lại: ${syncedDelayedTransactions}`, "blue");
-        if (hasOwnValue(orderSync, "delayedStillRtdn")) {
-          addLog(`- Transaction delay còn chờ retry: ${numberValue(orderSync.delayedStillRtdn)}`, "muted");
+        const syncedDelayedEstimates = numberValue(orderSync.updatedEstimates);
+        const syncedDelayedTotal = hasOwnValue(orderSync, "updatedOrders")
+          ? numberValue(orderSync.updatedOrders)
+          : syncedDelayedRtdn + syncedDelayedEstimates;
+        addLog(`- Số lượng transaction delay được đồng bộ lại: ${syncedDelayedTotal}`, "blue");
+        addLog(`  RTDN: ${syncedDelayedRtdn}, Estimated sales: ${syncedDelayedEstimates}`, "muted");
+
+        if (hasOwnValue(orderSync, "delayedStill") || hasOwnValue(orderSync, "delayedStillRtdn") || hasOwnValue(orderSync, "delayedStillEstimates")) {
+          const delayedStillRtdn = numberValue(orderSync.delayedStillRtdn);
+          const delayedStillEstimates = numberValue(orderSync.delayedStillEstimates);
+          const delayedStillTotal = hasOwnValue(orderSync, "delayedStill")
+            ? numberValue(orderSync.delayedStill)
+            : delayedStillRtdn + delayedStillEstimates;
+          addLog(`- Transaction delay còn chờ retry: ${delayedStillTotal}`, "muted");
+          addLog(`  RTDN: ${delayedStillRtdn}, Estimated sales: ${delayedStillEstimates}`, "muted");
         }
       }
 
