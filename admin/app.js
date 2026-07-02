@@ -10,6 +10,10 @@ const SYNC_PROGRESS_STORAGE_KEY = "galax_admin_sync_progress_durations_v1";
 const CUSTOM_RANGE_VALUE = "__custom__";
 const SOURCE_FILTER_ALL_VALUE = "all";
 const SOURCE_FILTER_ADMIN_EMAIL = "admin@admin.com";
+const ORDER_SYNC_BATCH_LIMIT = 500;
+const ORDER_SYNC_SCAN_LIMIT = 5000;
+const ORDER_SYNC_MAX_RUNS = 20;
+const ORDER_SYNC_RETRY_COOLDOWN_MINUTES = 60;
 const SYNC_PROGRESS_PHASES = [
   { key: "sync-earnings", label: "Đồng bộ finalized earnings", defaultDurationMs: 3000 },
   { key: "sync-estimates", label: "Đồng bộ Estimated sales reports", defaultDurationMs: 25000 },
@@ -774,6 +778,70 @@ function logEstimateProgress(details, elapsedMs) {
   addLog(`Estimated sales: ${rowPart}${reportPart}${monthPart}, ${formatElapsed(elapsedMs)}`, "green");
 }
 
+const ORDER_SYNC_SUM_FIELDS = [
+  "rtdnScanned",
+  "estimatesScanned",
+  "scanned",
+  "candidates",
+  "rtdnCandidates",
+  "estimateCandidates",
+  "ordersFetched",
+  "updatedTransactions",
+  "updatedRtdnTransactions",
+  "updatedEstimates",
+  "updatedOrders",
+  "delayedStill",
+  "delayedStillRtdn",
+  "delayedStillEstimates",
+  "noOrderReturned",
+  "skippedNoOrderId",
+  "skippedRecentEstimateRetries",
+  "batchRequests",
+  "batchRetries",
+  "batchFailures",
+  "batchSplits",
+  "individualRequests",
+  "candidateBatches",
+  "estimateBatches",
+  "rtdnBatches",
+  "errorsCount",
+];
+
+function mergeOrderSyncAggregate(target, source) {
+  for (const field of ORDER_SYNC_SUM_FIELDS) {
+    target[field] = numberValue(target[field]) + numberValue(source[field]);
+  }
+  target.days = source.days || target.days;
+  target.dbBatchSize = source.dbBatchSize || target.dbBatchSize;
+  target.googleBatchSize = source.googleBatchSize || target.googleBatchSize;
+  target.parallelBatches = source.parallelBatches || target.parallelBatches;
+  target.maxCandidates = source.maxCandidates || target.maxCandidates;
+  target.estimateRetryCooldownMinutes = source.estimateRetryCooldownMinutes || target.estimateRetryCooldownMinutes;
+  target.estimateScope = source.estimateScope || target.estimateScope;
+  target.hasMore = Boolean(source.hasMore);
+  target.hasMoreEstimates = Boolean(source.hasMoreEstimates);
+  target.hasMoreRtdn = Boolean(source.hasMoreRtdn);
+  target.dryRun = Boolean(source.dryRun);
+  target.estimateEarningsRefresh = source.estimateEarningsRefresh || target.estimateEarningsRefresh || null;
+  target.errors = [
+    ...asArray(target.errors),
+    ...asArray(source.errors),
+  ].slice(0, 10);
+}
+
+function createOrderSyncAggregate(source) {
+  return {
+    success: true,
+    source,
+    processingOrder: ["estimates", "rtdn", "refresh_estimate_earnings"],
+    runs: [],
+    runsCount: 0,
+    errors: [],
+    hasMore: false,
+    stoppedByMaxRuns: false,
+  };
+}
+
 function logOrderProgress(details, elapsedMs) {
   const candidates = numberValue(details.candidates);
   const updated = hasOwnValue(details, "updatedOrders")
@@ -784,13 +852,16 @@ function logOrderProgress(details, elapsedMs) {
   const batches = numberValue(details.candidateBatches);
   const batchSize = numberValue(details.dbBatchSize);
   const parallel = numberValue(details.parallelBatches, 1);
+  const runs = numberValue(details.runsCount || (Array.isArray(details.runs) ? details.runs.length : 0));
   const candidatePart = candidates
     ? `${formatCount(candidates)}/${formatCount(candidates)} transactions`
     : "0 transaction cần enrich";
   const batchPart = batches
     ? `, ${formatCount(batches)} batch x ${formatCount(batchSize)} rows, song song ${formatCount(parallel)}`
     : "";
-  addLog(`Orders API: ${candidatePart}${batchPart}, fetched ${formatCount(fetched)}, updated ${formatCount(updated)}, còn delay ${formatCount(delayedStill)}, ${formatElapsed(elapsedMs)}`, "green");
+  const runPart = runs ? `, ${formatCount(runs)} lượt` : "";
+  const morePart = details.hasMore ? ", còn backlog cho lượt sau" : "";
+  addLog(`Orders API: ${candidatePart}${batchPart}${runPart}, fetched ${formatCount(fetched)}, updated ${formatCount(updated)}, còn delay ${formatCount(delayedStill)}${morePart}, ${formatElapsed(elapsedMs)}`, "green");
 }
 
 async function invokeAdminSyncStep(name, payload) {
@@ -859,7 +930,8 @@ function buildAdminSyncResult(earningsStep, estimatesStep, ordersStep, totalElap
       estimatesRebuildSkipped: estimateDetails.estimatesRebuildSkipped || false,
       estimatesRebuildSkipReason: estimateDetails.estimatesRebuildSkipReason || null,
       orderSync: orderDetails,
-      orderSyncEstimateLimit: 20000,
+      orderSyncEstimateLimit: ORDER_SYNC_BATCH_LIMIT,
+      orderSyncMaxRuns: ORDER_SYNC_MAX_RUNS,
       estimateEarningsRefresh: orderDetails.estimateEarningsRefresh || null,
       adminIconSync: {
         finalized: earningsDetails.adminIconSync || null,
@@ -898,6 +970,60 @@ function buildAdminSyncResult(earningsStep, estimatesStep, ordersStep, totalElap
   };
 }
 
+async function runAdminOrdersSyncLoop({ source, estimateMonths }) {
+  const startedAt = performance.now();
+  const aggregate = createOrderSyncAggregate(`${source}:sync-orders`);
+  let lastStatus = 200;
+
+  for (let run = 1; run <= ORDER_SYNC_MAX_RUNS; run++) {
+    addLog(`Orders API enrichment: lượt ${run}/${ORDER_SYNC_MAX_RUNS}, tối đa ${formatCount(ORDER_SYNC_BATCH_LIMIT)} transactions`, "blue");
+    const step = await invokeAdminSyncStep("sync-orders", {
+      days: 3,
+      rtdnLimit: ORDER_SYNC_BATCH_LIMIT,
+      estimateLimit: ORDER_SYNC_BATCH_LIMIT,
+      maxCandidates: ORDER_SYNC_BATCH_LIMIT,
+      estimateScanLimit: ORDER_SYNC_SCAN_LIMIT,
+      estimateBatchSize: 250,
+      googleBatchSize: 200,
+      parallelBatches: 1,
+      estimateRetryCooldownMinutes: ORDER_SYNC_RETRY_COOLDOWN_MINUTES,
+      estimateMonths,
+      estimateScope: "all",
+      source: `${source}:sync-orders:batch-${run}`,
+    });
+    const body = step.body || {};
+    lastStatus = step.status;
+    mergeOrderSyncAggregate(aggregate, body);
+    aggregate.runs.push({
+      run,
+      elapsedMs: step.elapsedMs,
+      candidates: numberValue(body.candidates),
+      updatedOrders: numberValue(body.updatedOrders),
+      delayedStill: numberValue(body.delayedStill),
+      hasMore: Boolean(body.hasMore),
+    });
+    aggregate.runsCount = aggregate.runs.length;
+    logOrderProgress({ ...body, runsCount: run }, step.elapsedMs);
+
+    if (!body.hasMore || numberValue(body.candidates) === 0) {
+      aggregate.hasMore = Boolean(body.hasMore);
+      break;
+    }
+
+    if (run === ORDER_SYNC_MAX_RUNS) {
+      aggregate.stoppedByMaxRuns = true;
+      aggregate.hasMore = true;
+      addLog(`Orders API còn backlog sau ${ORDER_SYNC_MAX_RUNS} lượt; cron sẽ xử lý tiếp để tránh timeout Edge.`, "muted");
+    }
+  }
+
+  return {
+    status: lastStatus,
+    elapsedMs: elapsedMsSince(startedAt),
+    body: aggregate,
+  };
+}
+
 async function runAdminSyncWithActualProgress() {
   const startedAt = performance.now();
   const source = "admin-dashboard";
@@ -927,17 +1053,7 @@ async function runAdminSyncWithActualProgress() {
   const estimateMonths = estimateMonthsFromDetails(estimateDetails);
   addLog(`Orders API enrichment: dự kiến ${formatElapsed(syncProgressPlan.phases["sync-orders"].durationMs)}`, "blue");
   startSyncProgressPhase("sync-orders");
-  const ordersStep = await invokeAdminSyncStep("sync-orders", {
-    days: 3,
-    rtdnLimit: 1000,
-    estimateLimit: 20000,
-    estimateBatchSize: 1000,
-    googleBatchSize: 1000,
-    parallelBatches: 2,
-    estimateMonths,
-    estimateScope: "all",
-    source: `${source}:sync-orders`,
-  });
+  const ordersStep = await runAdminOrdersSyncLoop({ source, estimateMonths });
   completeSyncProgressPhase("sync-orders", ordersStep.elapsedMs);
   logOrderProgress(ordersStep.body || {}, ordersStep.elapsedMs);
   setSyncProgress(100, "complete");
