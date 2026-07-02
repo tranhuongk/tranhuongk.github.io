@@ -3,7 +3,10 @@ const supabaseUrl = "https://lnazpyhoojqotnanrvqf.supabase.co";
 const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxuYXpweWhvb2pxb3RuYW5ydnFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1NzAyNjcsImV4cCI6MjA5ODE0NjI2N30.uc4WAXKm_UDKoLEm260mu0RHyHaL4HGtPI3sG-TbJSg";
 let supabaseClient = null;
 let session = null;
-let chart = null;
+let chartMini = null;
+let chartModal = null;
+const SYNC_REQUEST_TIMEOUT_MS = 30 * 60 * 1000;
+let syncProgressCurrent = 0;
 
 // --- App package mappings ---
 const PACKAGE_MAP = {
@@ -58,6 +61,7 @@ let currentUsdToVndRate = 25000;
 // applied) the headline KPI cards render these values verbatim so the web and
 // the bot can never disagree.
 let serverSummary = null;
+let topAppsSelectedMonth = null;
 let topPlayersSelectedMonth = null;
 
 // Fetch exchange rate dynamically
@@ -118,8 +122,13 @@ const kpiCurrentEstimateLabel = document.getElementById("kpi-current-estimate-la
 
 const topAppsList = document.getElementById("top-apps-list");
 const topAppsSyncInfo = document.getElementById("top-apps-sync-info");
+const topAppsMonthSelect = document.getElementById("top-apps-month");
 const topPlayersList = document.getElementById("top-players-list");
 const topPlayersMonthSelect = document.getElementById("top-players-month");
+const monthlyChartCard = document.getElementById("monthly-chart-card");
+const chartKpiSubtitle = document.getElementById("chart-kpi-subtitle");
+const chartModalEl = document.getElementById("chart-modal");
+const btnCloseChartModal = document.querySelector(".btn-close-chart-modal");
 const filterSource = document.getElementById("filter-source");
 const tableSearch = document.getElementById("table-search");
 const earningsTable = document.getElementById("earnings-table");
@@ -149,6 +158,8 @@ const syncLogs = document.getElementById("sync-logs");
 const syncLoader = document.getElementById("sync-loader");
 const syncTitle = document.getElementById("sync-title");
 const syncSubtitle = document.getElementById("sync-subtitle");
+const syncProgressValue = document.getElementById("sync-progress-value");
+const syncProgressFill = document.getElementById("sync-progress-fill");
 
 // --- Initialization ---
 document.addEventListener("DOMContentLoaded", async () => {
@@ -174,6 +185,26 @@ document.addEventListener("DOMContentLoaded", async () => {
   loginForm.addEventListener("submit", handleLogin);
   btnLogout.addEventListener("click", handleLogout);
   btnSync.addEventListener("click", triggerSync);
+  if (monthlyChartCard) {
+    monthlyChartCard.addEventListener("click", openChartModal);
+    monthlyChartCard.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openChartModal();
+      }
+    });
+  }
+  if (btnCloseChartModal) btnCloseChartModal.addEventListener("click", closeChartModal);
+  if (chartModalEl) {
+    chartModalEl.addEventListener("click", (e) => {
+      if (e.target === chartModalEl) closeChartModal();
+    });
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && chartModalEl && !chartModalEl.classList.contains("hidden")) {
+      closeChartModal();
+    }
+  });
   
   document.querySelectorAll(".btn-close-modal").forEach(btn => {
     btn.addEventListener("click", closeIncomeModal);
@@ -204,6 +235,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Filters
   filterSource.addEventListener("change", renderDashboard);
   tableSearch.addEventListener("input", renderDashboard);
+  if (topAppsMonthSelect) {
+    topAppsMonthSelect.addEventListener("change", () => {
+      topAppsSelectedMonth = topAppsMonthSelect.value || null;
+      renderDashboard();
+    });
+  }
   if (topPlayersMonthSelect) {
     topPlayersMonthSelect.addEventListener("change", () => {
       topPlayersSelectedMonth = topPlayersMonthSelect.value || null;
@@ -402,6 +439,224 @@ function getOrderSyncDetails(details) {
   return {};
 }
 
+function openChartModal() {
+  if (!chartModalEl) return;
+  chartModalEl.classList.remove("hidden");
+  if (monthlyChartCard) monthlyChartCard.setAttribute("aria-expanded", "true");
+  window.requestAnimationFrame(() => {
+    if (chartModal) chartModal.resize();
+  });
+}
+
+function closeChartModal() {
+  if (!chartModalEl) return;
+  chartModalEl.classList.add("hidden");
+  if (monthlyChartCard) monthlyChartCard.setAttribute("aria-expanded", "false");
+}
+
+function clampProgress(value) {
+  return Math.max(0, Math.min(100, Math.round(numberValue(value))));
+}
+
+function setSyncProgress(value, state = "") {
+  const percent = clampProgress(value);
+  syncProgressCurrent = percent;
+  if (syncProgressValue) syncProgressValue.textContent = `${percent}%`;
+  if (syncProgressFill) {
+    syncProgressFill.style.width = `${percent}%`;
+    syncProgressFill.classList.toggle("is-complete", state === "complete");
+    syncProgressFill.classList.toggle("is-error", state === "error");
+  }
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = SYNC_REQUEST_TIMEOUT_MS) {
+  if (typeof AbortController === "undefined") {
+    return fetch(url, options);
+  }
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+function elapsedMsSince(startedAt) {
+  return Math.round((performance.now() - startedAt) * 100) / 100;
+}
+
+function formatElapsed(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n)) return "";
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}s` : `${Math.round(n)}ms`;
+}
+
+function stepDetails(result) {
+  return result && result.details && typeof result.details === "object"
+    ? result.details
+    : {};
+}
+
+function estimateMonthsFromDetails(details) {
+  return asArray(details.estimatedReportMonths)
+    .map(m => String(m))
+    .filter(m => /^\d{6}$/.test(m));
+}
+
+async function invokeAdminSyncStep(name, payload) {
+  const startedAt = performance.now();
+  const response = await fetchWithTimeout(`${supabaseUrl}/functions/v1/${name}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": supabaseAnonKey,
+      "Authorization": `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify(payload),
+  }, SYNC_REQUEST_TIMEOUT_MS);
+
+  const result = await readJsonResponse(response);
+  const elapsedMs = elapsedMsSince(startedAt);
+  if (!response.ok) {
+    const error = new Error(result.error || `Step ${name} failed with HTTP ${response.status}`);
+    error.errorType = result.errorType || "admin_sync_step_failed";
+    error.details = result.details || { response: result };
+    error.failedStep = name;
+    error.status = response.status;
+    error.elapsedMs = elapsedMs;
+    throw error;
+  }
+
+  return {
+    status: response.status,
+    elapsedMs,
+    body: result,
+  };
+}
+
+function buildAdminSyncResult(earningsStep, estimatesStep, ordersStep, totalElapsedMs) {
+  const earningsDetails = stepDetails(earningsStep.body);
+  const estimateDetails = stepDetails(estimatesStep.body);
+  const orderDetails = ordersStep.body || {};
+  const estimateMonths = estimateMonthsFromDetails(estimateDetails);
+  const monthsSynced = Array.from(new Set([
+    ...asArray(earningsDetails.monthsSynced).map(String),
+    ...estimateMonths,
+  ]));
+
+  return {
+    success: true,
+    message: "Successfully synced Google Play finalized earnings, estimates, and delayed order revenue.",
+    details: {
+      syncScope: "google_play_full",
+      processingOrder: ["sync-earnings", "sync-estimates", "sync-orders"],
+      monthsSynced,
+      finalizedMonthsAvailable: earningsDetails.finalizedMonthsAvailable || [],
+      finalizedMonthsProcessed: earningsDetails.finalizedMonthsProcessed || [],
+      finalizedMonthsSkipped: earningsDetails.finalizedMonthsSkipped || [],
+      finalizedMonthsRebuild: earningsDetails.finalizedMonthsRebuild || false,
+      latestFinalizedMonth: earningsDetails.latestFinalizedMonth || estimateDetails.latestFinalizedMonth || null,
+      appsSyncedCount: Number(earningsDetails.appsSyncedCount || 0) + Number(estimateDetails.appsSyncedCount || 0),
+      finalizedAppsSyncedCount: Number(earningsDetails.appsSyncedCount || 0),
+      estimateAppsSyncedCount: Number(estimateDetails.appsSyncedCount || 0),
+      earningsSyncedCount: Number(earningsDetails.earningsSyncedCount || 0),
+      estimatesSavedCount: estimateDetails.estimatesSavedCount || 0,
+      estimatesAvailableCount: estimateDetails.estimatesAvailableCount || 0,
+      estimatedReportMonth: estimateDetails.estimatedReportMonth || null,
+      estimatedReportMonths: estimateMonths,
+      estimatesSubmittedCount: estimateDetails.estimatesSubmittedCount || 0,
+      estimatesRebuilt: estimateDetails.estimatesRebuilt || false,
+      estimatesRebuildSkipped: estimateDetails.estimatesRebuildSkipped || false,
+      estimatesRebuildSkipReason: estimateDetails.estimatesRebuildSkipReason || null,
+      orderSync: orderDetails,
+      orderSyncEstimateLimit: 20000,
+      estimateEarningsRefresh: orderDetails.estimateEarningsRefresh || null,
+      adminIconSync: {
+        finalized: earningsDetails.adminIconSync || null,
+        estimates: estimateDetails.adminIconSync || null,
+      },
+      gcsPrimaryServiceAccount: estimateDetails.gcsPrimaryServiceAccount || earningsDetails.gcsPrimaryServiceAccount || null,
+      gcsBackupConfigured: Boolean(estimateDetails.gcsBackupConfigured || earningsDetails.gcsBackupConfigured),
+      gcsBackupUsed: Boolean(estimateDetails.gcsBackupUsed || earningsDetails.gcsBackupUsed),
+      gcsBackupFallbackCount: Number(estimateDetails.gcsBackupFallbackCount || 0) + Number(earningsDetails.gcsBackupFallbackCount || 0),
+      gcsBackupServiceAccount: estimateDetails.gcsBackupServiceAccount || earningsDetails.gcsBackupServiceAccount || null,
+      gcsBackupReason: estimateDetails.gcsBackupReason || earningsDetails.gcsBackupReason || null,
+      steps: {
+        "sync-earnings": {
+          status: earningsStep.status,
+          elapsedMs: earningsStep.elapsedMs,
+          details: earningsDetails,
+        },
+        "sync-estimates": {
+          status: estimatesStep.status,
+          elapsedMs: estimatesStep.elapsedMs,
+          details: estimateDetails,
+        },
+        "sync-orders": {
+          status: ordersStep.status,
+          elapsedMs: ordersStep.elapsedMs,
+          details: orderDetails,
+        },
+      },
+      timingsMs: [
+        { name: "edge.sync-earnings.invoke", ms: earningsStep.elapsedMs },
+        { name: "edge.sync-estimates.invoke", ms: estimatesStep.elapsedMs },
+        { name: "edge.sync-orders.invoke", ms: ordersStep.elapsedMs },
+        { name: "total", ms: totalElapsedMs },
+      ],
+    },
+  };
+}
+
+async function runAdminSyncWithActualProgress() {
+  const startedAt = performance.now();
+  const source = "admin-dashboard";
+  const forceIconSync = false;
+
+  if (syncSubtitle) syncSubtitle.textContent = "Bước 1/3: đồng bộ finalized earnings từ Google Play...";
+  addLog("Bước 1/3: sync finalized earnings...", "blue");
+  const earningsStep = await invokeAdminSyncStep("sync-earnings", {
+    source: `${source}:sync-earnings`,
+    syncIcons: forceIconSync,
+  });
+  setSyncProgress(33);
+  addLog(`Hoàn tất bước 1/3 (${formatElapsed(earningsStep.elapsedMs)})`, "green");
+
+  if (syncSubtitle) syncSubtitle.textContent = "Bước 2/3: đồng bộ Estimated sales reports...";
+  addLog("Bước 2/3: sync estimates...", "blue");
+  const estimatesStep = await invokeAdminSyncStep("sync-estimates", {
+    source: `${source}:sync-estimates`,
+    syncIcons: forceIconSync,
+  });
+  setSyncProgress(66);
+  addLog(`Hoàn tất bước 2/3 (${formatElapsed(estimatesStep.elapsedMs)})`, "green");
+
+  const estimateDetails = stepDetails(estimatesStep.body);
+  const estimateMonths = estimateMonthsFromDetails(estimateDetails);
+  if (syncSubtitle) syncSubtitle.textContent = "Bước 3/3: enrich transaction delay và tính lại doanh thu...";
+  addLog("Bước 3/3: sync orders / enrich transaction delay...", "blue");
+  const ordersStep = await invokeAdminSyncStep("sync-orders", {
+    days: 3,
+    rtdnLimit: 1000,
+    estimateLimit: 20000,
+    estimateBatchSize: 1000,
+    googleBatchSize: 1000,
+    parallelBatches: 2,
+    estimateMonths,
+    estimateScope: "all",
+    source: `${source}:sync-orders`,
+  });
+  setSyncProgress(100, "complete");
+  addLog(`Hoàn tất bước 3/3 (${formatElapsed(ordersStep.elapsedMs)})`, "green");
+
+  return buildAdminSyncResult(earningsStep, estimatesStep, ordersStep, elapsedMsSince(startedAt));
+}
+
 // --- Sync Handler ---
 async function triggerSync() {
   if (!supabaseClient || !session) return;
@@ -413,6 +668,7 @@ async function triggerSync() {
   // Reset to the in-progress state (the overlay may have been left showing a
   // finished/failed state from a previous run).
   if (syncLoader) syncLoader.classList.remove("hidden");
+  setSyncProgress(0);
   if (syncTitle) {
     syncTitle.textContent = "Đang đồng bộ Google Play...";
     syncTitle.style.color = "";
@@ -420,30 +676,11 @@ async function triggerSync() {
   if (syncSubtitle) syncSubtitle.textContent = "Đang tải tệp báo cáo từ Google Cloud Storage và tổng hợp dữ liệu doanh thu...";
 
   addLog("Bắt đầu gọi API đồng bộ...", "blue");
+  addLog("Timeout chờ phản hồi mỗi bước: 30 phút.", "muted");
+  addLog("Tiến độ % chỉ tăng khi từng bước sync hoàn tất thật.", "muted");
   
   try {
-    addLog("Đang gửi yêu cầu xác thực tới Edge Function...", "muted");
-    const response = await fetch(`${supabaseUrl}/functions/v1/sync-google`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "apikey": supabaseAnonKey,
-        "Authorization": `Bearer ${session.access_token}`
-      },
-      body: JSON.stringify({
-        source: "admin-dashboard",
-      })
-    });
-
-    const result = await readJsonResponse(response);
-    
-    if (!response.ok) {
-      const error = new Error(result.error || `HTTP error! status: ${response.status}`);
-      error.errorType = result.errorType || null;
-      error.details = result.details || null;
-      error.timingsMs = result.timingsMs || null;
-      throw error;
-    }
+    const result = await runAdminSyncWithActualProgress();
 
     addLog("Đồng bộ hoàn tất thành công!", "green");
     addLog(`Đã đồng bộ: ${result.message}`, "green");
@@ -514,10 +751,17 @@ async function triggerSync() {
       }
 
     }
+    setSyncProgress(100, "complete");
     setSyncStatus(true, "Đã cập nhật xong. Bấm \"Đóng\" để xem dữ liệu mới.");
   } catch (err) {
-    const message = err && err.message ? err.message : String(err || "Unknown error");
-    addLog(`Lỗi đồng bộ: ${message}`, "red");
+    setSyncProgress(syncProgressCurrent, "error");
+    const isTimeout = err && err.name === "AbortError";
+    const failedStep = err && err.failedStep ? String(err.failedStep) : "";
+    const stepPrefix = failedStep ? ` ở bước ${failedStep}` : "";
+    const message = isTimeout
+      ? "Quá thời gian chờ 30 phút"
+      : (err && err.message ? err.message : String(err || "Unknown error"));
+    addLog(`Lỗi đồng bộ${stepPrefix}: ${message}`, "red");
     const gcs = err && err.details && err.details.gcs ? err.details.gcs : null;
     if ((err && err.errorType === "gcs_api") || gcs || looksLikeGcsConfigError(message)) {
       const gcsLine = formatGcsApiLine(gcs);
@@ -801,6 +1045,7 @@ function renderDashboard() {
   // uniqueApps + uniqueMonths drive the chart + pivot table below.
   const uniqueApps = Array.from(new Set(filtered.map(e => e.app_id)));
   const uniqueMonths = Array.from(new Set(filtered.map(e => e.month))).sort();
+  populateTopAppsMonthOptions();
 
   // 3. Render Top Apps List
   renderTopApps(filtered, appMap, rate);
@@ -932,8 +1177,8 @@ function rtdnRowHtml(t) {
   const price = rtdnPriceValue(t);
   const player = rtdnPlayerName(t);
   return `<tr>
-      <td><div class="rtdn-date-main">${date}</div><div class="rtdn-sub">${time}</div></td>
-      <td>${logo}</td>
+      <td class="rtdn-date-col"><div class="rtdn-date-main">${date}</div><div class="rtdn-sub">${time}</div></td>
+      <td class="rtdn-app-col">${logo}</td>
       <td>
         <div class="rtdn-product-title">${d.productTitle || t.title || pkg}</div>
         <div class="rtdn-sub">${t.sku || ""}</div>
@@ -1127,6 +1372,37 @@ function monthKeyFromIsoVN(iso) {
   return `${vnDate.getUTCFullYear()}${String(vnDate.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
+function populateTopAppsMonthOptions() {
+  if (!topAppsMonthSelect) return;
+
+  const months = new Set();
+  if (serverSummary && serverSummary.currentMonth) months.add(serverSummary.currentMonth);
+  if (serverSummary && serverSummary.calendarMonth) months.add(serverSummary.calendarMonth);
+  earningsData.forEach(row => {
+    if (row && /^\d{6}$/.test(String(row.month || ""))) months.add(String(row.month));
+  });
+
+  const sortedMonths = Array.from(months)
+    .filter(m => /^\d{6}$/.test(String(m)))
+    .sort()
+    .reverse();
+
+  if (!topAppsSelectedMonth) {
+    topAppsSelectedMonth =
+      (serverSummary && serverSummary.currentMonth) ||
+      sortedMonths[0] ||
+      currentMonthKeyVN();
+  }
+  if (!sortedMonths.includes(topAppsSelectedMonth)) {
+    sortedMonths.unshift(topAppsSelectedMonth);
+  }
+
+  topAppsMonthSelect.innerHTML = sortedMonths
+    .map(month => `<option value="${month}">${monthLabel(month)}</option>`)
+    .join("");
+  topAppsMonthSelect.value = topAppsSelectedMonth;
+}
+
 async function populateTopPlayersMonthOptions() {
   if (!topPlayersMonthSelect || !supabaseClient) return;
 
@@ -1270,16 +1546,30 @@ async function renderTopPlayers() {
   }
 }
 
-// Render revenue by app from the server's current-month earnings snapshot.
+// Render revenue by app for the selected month.
 function renderTopApps(filtered, appMap, rate) {
+  if (!topAppsList) return;
+  const selectedMonth = topAppsSelectedMonth || (serverSummary && serverSummary.currentMonth) || currentMonthKeyVN();
+
   if (topAppsSyncInfo) {
     const syncText = currentMonthSyncText(serverSummary);
-    topAppsSyncInfo.textContent = syncText || "Chưa có thông tin giao dịch đồng bộ";
+    topAppsSyncInfo.textContent =
+      selectedMonth === (serverSummary && serverSummary.currentMonth) && syncText
+        ? syncText
+        : `Dữ liệu doanh thu tháng ${monthLabel(selectedMonth)}`;
   }
 
   let sortedApps;
   const revenueByApp = serverSummary && (serverSummary.revenueByApp || serverSummary.topAppsRtdn);
-  if (revenueByApp) {
+  const sourceFilter = filterSource ? filterSource.value : "all";
+  const searchQuery = tableSearch ? tableSearch.value.trim() : "";
+  const canUseServerCurrentMonth =
+    revenueByApp &&
+    selectedMonth === (serverSummary && serverSummary.currentMonth) &&
+    sourceFilter === "all" &&
+    !searchQuery;
+
+  if (canUseServerCurrentMonth) {
     sortedApps = revenueByApp
       .filter(a => !isAdjustmentApp(a.id, a.title))
       .map(a => ({ id: a.id, title: a.title, total: Number(a.totalUSD || 0) }))
@@ -1287,14 +1577,13 @@ function renderTopApps(filtered, appMap, rate) {
   } else {
     const totals = {};
     filtered
-      .filter(e => e.source !== "google_play_estimate")
+      .filter(e => e.month === selectedMonth)
       .forEach(e => {
         const amt = parseFloat(e.amount);
         const usd = e.currency === "USD" ? amt : amt / rate;
         totals[e.app_id] = (totals[e.app_id] || 0) + usd;
       });
     const appIds = new Set([
-      ...Object.keys(appMap).filter(id => !isAdjustmentApp(id, appMap[id])),
       ...Object.keys(totals).filter(id => !isAdjustmentApp(id, appMap[id])),
     ]);
     sortedApps = Array.from(appIds)
@@ -1303,7 +1592,7 @@ function renderTopApps(filtered, appMap, rate) {
   }
 
   if (sortedApps.length === 0) {
-    topAppsList.innerHTML = `<div class="loading-placeholder">Không có dữ liệu</div>`;
+    topAppsList.innerHTML = `<div class="loading-placeholder">Không có dữ liệu tháng ${monthLabel(selectedMonth)}</div>`;
     return;
   }
 
@@ -1312,8 +1601,8 @@ function renderTopApps(filtered, appMap, rate) {
       <div class="app-item-left">
         <div class="app-badge">${idx + 1}</div>
         <div>
-          <span class="app-name">${a.title}</span>
-          <span class="app-pkg">${a.id}</span>
+          <span class="app-name">${escapeHtml(a.title)}</span>
+          <span class="app-pkg">${escapeHtml(a.id)}</span>
         </div>
       </div>
       <span class="app-revenue">${fmtUSD(a.total)}</span>
@@ -1323,14 +1612,18 @@ function renderTopApps(filtered, appMap, rate) {
 
 // Render Chart
 function renderChart(filtered, uniqueMonths, rate) {
-  const ctx = document.getElementById("revenue-chart").getContext("2d");
+  const miniCanvas = document.getElementById("revenue-chart-mini");
+  const modalCanvas = document.getElementById("revenue-chart-modal");
+  const miniCtx = miniCanvas ? miniCanvas.getContext("2d") : null;
+  const modalCtx = modalCanvas ? modalCanvas.getContext("2d") : null;
   
-  if (chart) {
-    chart.destroy();
-  }
+  if (chartMini) chartMini.destroy();
+  if (chartModal) chartModal.destroy();
 
   if (uniqueMonths.length === 0) {
-    ctx.clearRect(0, 0, 400, 300);
+    if (miniCtx) miniCtx.clearRect(0, 0, miniCanvas.width, miniCanvas.height);
+    if (modalCtx) modalCtx.clearRect(0, 0, modalCanvas.width, modalCanvas.height);
+    if (chartKpiSubtitle) chartKpiSubtitle.textContent = "Chưa có dữ liệu";
     return;
   }
 
@@ -1347,19 +1640,47 @@ function renderChart(filtered, uniqueMonths, rate) {
     return Math.round(sum * 100) / 100;
   });
 
-  chart = new Chart(ctx, {
+  const latestMonth = chronologicalMonths[chronologicalMonths.length - 1];
+  if (chartKpiSubtitle) chartKpiSubtitle.textContent = `${monthLabel(latestMonth)} · Biểu đồ tháng`;
+
+  const chartDataset = () => ({
+    label: "Doanh thu (USD)",
+    data: dataPoints,
+    backgroundColor: "rgba(108, 140, 255, 0.45)",
+    borderColor: "#6c8cff",
+    borderWidth: 2,
+    borderRadius: 8,
+    hoverBackgroundColor: "rgba(108, 140, 255, 0.85)",
+  });
+
+  if (miniCtx) {
+    chartMini = new Chart(miniCtx, {
+      type: "bar",
+      data: {
+        labels: chronologicalMonths.map(monthLabel),
+        datasets: [chartDataset()],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { enabled: false },
+        },
+        scales: {
+          x: { display: false },
+          y: { display: false },
+        },
+      },
+    });
+  }
+
+  if (!modalCtx) return;
+  chartModal = new Chart(modalCtx, {
     type: "bar",
     data: {
       labels: chronologicalMonths.map(monthLabel),
-      datasets: [{
-        label: "Doanh thu (USD)",
-        data: dataPoints,
-        backgroundColor: "rgba(108, 140, 255, 0.45)",
-        borderColor: "#6c8cff",
-        borderWidth: 2,
-        borderRadius: 8,
-        hoverBackgroundColor: "rgba(108, 140, 255, 0.85)",
-      }]
+      datasets: [chartDataset()]
     },
     options: {
       responsive: true,
@@ -1402,7 +1723,8 @@ function renderPivotTable(filtered, uniqueApps, uniqueMonths, appMap) {
   const months = [...uniqueMonths].sort(); // Sorted chronological
   
   // Header Row
-  let headerHtml = "<th>Ứng dụng</th>";
+  let headerHtml = `<th class="table-app-sticky-head"><span class="table-app-desktop-label">Ứng dụng</span></th>
+    <th class="table-app-mobile-meta-col">Ứng dụng</th>`;
   months.forEach(m => {
     headerHtml += `<th>${monthLabel(m)}</th>`;
   });
@@ -1430,7 +1752,7 @@ function renderPivotTable(filtered, uniqueApps, uniqueMonths, appMap) {
     const icon = tableAppIconHtml(appId, title);
     let appTotalUSD = 0;
     
-    let rowCellsHtml = `<td>
+    let rowCellsHtml = `<td class="table-app-sticky-cell">
       <div class="table-app-cell">
         ${icon}
         <div class="table-app-meta">
@@ -1438,6 +1760,10 @@ function renderPivotTable(filtered, uniqueApps, uniqueMonths, appMap) {
           <div class="table-app-pkg">${escapeHtml(appId)}</div>
         </div>
       </div>
+    </td>
+    <td class="table-app-mobile-meta-col">
+      <div class="table-app-name">${escapeHtml(title)}</div>
+      <div class="table-app-pkg">${escapeHtml(appId)}</div>
     </td>`;
 
     months.forEach(m => {
@@ -1506,7 +1832,11 @@ function renderPivotTable(filtered, uniqueApps, uniqueMonths, appMap) {
 
   // Grand Total Row
   if (uniqueApps.length > 0) {
-    let totalRowHtml = "<td><strong>TỔNG CỘNG</strong></td>";
+    let totalRowHtml = `<td class="table-app-sticky-cell">
+      <strong class="table-app-desktop-label">TỔNG CỘNG</strong>
+      <strong class="table-app-mobile-total-label">Σ</strong>
+    </td>
+    <td class="table-app-mobile-meta-col"><strong>TỔNG CỘNG</strong></td>`;
     months.forEach(m => {
       const monthSum = monthTotalsUSD[m] || 0;
       totalRowHtml += `<td class="val-pos" style="font-weight:700">${fmtUSD(monthSum)}</td>`;
@@ -1514,7 +1844,7 @@ function renderPivotTable(filtered, uniqueApps, uniqueMonths, appMap) {
     totalRowHtml += `<td class="val-pos" style="font-weight:800;border-left:1px solid var(--border-light)">${fmtUSD(appRows.reduce((sum, r) => sum + r.totalUSD, 0))}</td>`;
     bodyHtml += `<tr class="total-row">${totalRowHtml}</tr>`;
   } else {
-    bodyHtml = `<tr><td colspan="${months.length + 2}" style="text-align:center;padding:40px;color:var(--text-muted)">Không tìm thấy bản ghi thu nhập nào. Bấm 'Đồng bộ Google Play' hoặc 'Thêm thu nhập' để bắt đầu.</td></tr>`;
+    bodyHtml = `<tr><td colspan="${months.length + 3}" style="text-align:center;padding:40px;color:var(--text-muted)">Không tìm thấy bản ghi thu nhập nào. Bấm 'Đồng bộ Google Play' hoặc 'Thêm thu nhập' để bắt đầu.</td></tr>`;
   }
 
   tableBody.innerHTML = bodyHtml;

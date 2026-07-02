@@ -15,7 +15,7 @@
   <!-- Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/umd/supabase.js"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=20260701e">
+  <link rel="stylesheet" href="style.css?v=20260702i">
   <style>
     /* RTDN order table (clones Play Console "Order management") */
     .rtdn-app-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; display: block; }
@@ -145,37 +145,32 @@
         </div>
       </div>
 
-      <div class="glass-panel kpi-card">
+      <button class="glass-panel kpi-card earnings-chart-card" id="monthly-chart-card" type="button" aria-haspopup="dialog" aria-controls="chart-modal" aria-expanded="false">
         <div class="kpi-icon color-green">
           <i class="fa-solid fa-bolt"></i>
         </div>
-        <div class="kpi-info">
+        <div class="kpi-info earnings-kpi-info">
           <span class="kpi-label">Your earnings</span>
           <h3 class="kpi-val" id="kpi-current-rtdn">$0.00</h3>
           <div id="kpi-current-rtdn-vnd" style="font-size: 14px; color: var(--text-muted); margin-top: 4px;">≈ 0 đ</div>
+          <div class="earnings-chart-subtitle" id="chart-kpi-subtitle">Biểu đồ tháng</div>
         </div>
-      </div>
+        <div class="earnings-chart-spark" aria-hidden="true">
+          <canvas id="revenue-chart-mini"></canvas>
+        </div>
+      </button>
     </section>
 
-    <!-- Chart & Top Apps Section -->
+    <!-- Top Apps Section -->
     <section class="analytics-row">
-      <div class="glass-panel chart-box">
-        <div class="panel-header">
-          <h4><i class="fa-solid fa-chart-column"></i> Biểu đồ thu nhập qua các tháng</h4>
-          <div class="chart-filters">
-            <button class="active">Thực nhận</button>
-          </div>
-        </div>
-        <div class="chart-wrapper">
-          <canvas id="revenue-chart"></canvas>
-        </div>
-      </div>
-
       <div class="glass-panel top-apps-box">
         <div class="panel-header">
           <div class="table-title">
-            <h4><i class="fa-solid fa-crown"></i> Doanh thu tháng này</h4>
+            <h4><i class="fa-solid fa-crown"></i> Top doanh thu</h4>
             <span class="subtitle" id="top-apps-sync-info">Đang tải dữ liệu đồng bộ...</span>
+          </div>
+          <div class="top-apps-controls">
+            <select id="top-apps-month" class="glass-select" title="Chọn tháng hiển thị"></select>
           </div>
         </div>
         <div id="top-apps-list" class="top-apps-list">
@@ -202,7 +197,7 @@
 
     <!-- Detailed Data Table Section -->
     <section class="data-section" style="display: flex; flex-direction: column; gap: 28px;">
-      <div class="glass-panel table-card">
+      <div class="glass-panel table-card" id="earnings-detail-card">
         <div class="panel-header table-actions">
           <div class="table-title">
             <h4><i class="fa-solid fa-table"></i> Bảng kê doanh thu chi tiết</h4>
@@ -251,8 +246,8 @@
           <table id="rtdn-table">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>App</th>
+                <th class="rtdn-date-col">Date</th>
+                <th class="rtdn-app-col">App</th>
                 <th>Product</th>
                 <th>Tên người chơi</th>
                 <th>Order ID</th>
@@ -281,6 +276,19 @@
         <button class="btn-close-rtdn-detail btn-close-modal"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div id="rtdn-detail-content"><!-- populated by JS --></div>
+    </div>
+  </div>
+
+  <!-- MONTHLY CHART MODAL -->
+  <div id="chart-modal" class="modal-overlay hidden">
+    <div class="glass-panel modal-card chart-modal-card">
+      <div class="modal-header">
+        <h4><i class="fa-solid fa-chart-column"></i> Biểu đồ thu nhập qua các tháng</h4>
+        <button class="btn-close-chart-modal" type="button" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="chart-modal-wrapper">
+        <canvas id="revenue-chart-modal"></canvas>
+      </div>
     </div>
   </div>
 
@@ -370,8 +378,12 @@
   <div id="sync-overlay" class="modal-overlay hidden">
     <div class="glass-panel sync-card">
       <div class="sync-loader" id="sync-loader">
-        <div class="spinner"></div>
-        <div class="spinner-glow"></div>
+        <div class="sync-progress">
+          <div id="sync-progress-value" class="sync-progress-value">0%</div>
+          <div class="sync-progress-track" aria-hidden="true">
+            <div id="sync-progress-fill" class="sync-progress-fill"></div>
+          </div>
+        </div>
       </div>
       <h4 id="sync-title">Đang đồng bộ Google Play...</h4>
       <p id="sync-subtitle">Đang tải tệp báo cáo từ Google Cloud Storage và tổng hợp dữ liệu doanh thu...</p>
@@ -384,6 +396,6 @@
   </div>
 
   <!-- Script logic -->
-  <script src="app.js?v=20260702d"></script>
+  <script src="app.js?v=20260702l"></script>
 </body>
 </html>
