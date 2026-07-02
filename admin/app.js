@@ -6,7 +6,19 @@ let session = null;
 let chartMini = null;
 let chartModal = null;
 const SYNC_REQUEST_TIMEOUT_MS = 30 * 60 * 1000;
+const SYNC_PROGRESS_STORAGE_KEY = "galax_admin_sync_progress_durations_v1";
+const CUSTOM_RANGE_VALUE = "__custom__";
+const SOURCE_FILTER_ALL_VALUE = "all";
+const SOURCE_FILTER_ADMIN_EMAIL = "admin@admin.com";
+const SYNC_PROGRESS_PHASES = [
+  { key: "sync-earnings", label: "Đồng bộ finalized earnings", defaultDurationMs: 3000 },
+  { key: "sync-estimates", label: "Đồng bộ Estimated sales reports", defaultDurationMs: 25000 },
+  { key: "sync-orders", label: "Enrich Orders API", defaultDurationMs: 45000 },
+];
 let syncProgressCurrent = 0;
+let syncProgressTimer = null;
+let syncProgressPlan = null;
+let syncProgressPhase = null;
 
 // --- App package mappings ---
 const PACKAGE_MAP = {
@@ -52,6 +64,38 @@ function isAdjustmentApp(id, title) {
     cleanTitle === "adjustments";
 }
 
+function appRecordById(id) {
+  const cleanId = String(id || "").trim().toLowerCase();
+  return appsList.find(app => String(app.id || "").trim().toLowerCase() === cleanId) || null;
+}
+
+function isPublishedApp(id, title) {
+  const app = appRecordById(id) || {};
+  const boolFields = ["published", "is_published", "isPublished", "active", "is_active"];
+  for (const field of boolFields) {
+    if (typeof app[field] === "boolean") return app[field];
+  }
+
+  const statusText = String(
+    app.publish_status ||
+    app.play_status ||
+    app.status ||
+    app.state ||
+    ""
+  ).trim().toLowerCase();
+  if (statusText) {
+    if (/unpublish|not[_\s-]*publish|removed|deleted|suspend|inactive|archived|draft/.test(statusText)) return false;
+    if (/publish|production|active|live/.test(statusText)) return true;
+  }
+
+  return Object.prototype.hasOwnProperty.call(PACKAGE_MAP, String(id || "").trim().toLowerCase()) ||
+    Object.values(PACKAGE_MAP).some(name => String(name).toLowerCase() === String(title || "").trim().toLowerCase());
+}
+
+function shouldHideTopApp(app) {
+  return Math.abs(numberValue(app.total)) < 0.005 && !isPublishedApp(app.id, app.title);
+}
+
 // Local caching of data
 let appsList = [];
 let earningsData = [];
@@ -63,6 +107,10 @@ let currentUsdToVndRate = 25000;
 let serverSummary = null;
 let topAppsSelectedMonth = null;
 let topPlayersSelectedMonth = null;
+let topAppsFilterMode = "month";
+let topPlayersFilterMode = "month";
+let topAppsRangeRequestId = 0;
+let topPlayersRangeRequestId = 0;
 
 // Fetch exchange rate dynamically
 async function fetchExchangeRate() {
@@ -123,8 +171,14 @@ const kpiCurrentEstimateLabel = document.getElementById("kpi-current-estimate-la
 const topAppsList = document.getElementById("top-apps-list");
 const topAppsSyncInfo = document.getElementById("top-apps-sync-info");
 const topAppsMonthSelect = document.getElementById("top-apps-month");
+const topAppsRangeControls = document.getElementById("top-apps-range");
+const topAppsRangeStart = document.getElementById("top-apps-range-start");
+const topAppsRangeEnd = document.getElementById("top-apps-range-end");
 const topPlayersList = document.getElementById("top-players-list");
 const topPlayersMonthSelect = document.getElementById("top-players-month");
+const topPlayersRangeControls = document.getElementById("top-players-range");
+const topPlayersRangeStart = document.getElementById("top-players-range-start");
+const topPlayersRangeEnd = document.getElementById("top-players-range-end");
 const monthlyChartCard = document.getElementById("monthly-chart-card");
 const chartKpiSubtitle = document.getElementById("chart-kpi-subtitle");
 const chartModalEl = document.getElementById("chart-modal");
@@ -237,16 +291,47 @@ document.addEventListener("DOMContentLoaded", async () => {
   tableSearch.addEventListener("input", renderDashboard);
   if (topAppsMonthSelect) {
     topAppsMonthSelect.addEventListener("change", () => {
-      topAppsSelectedMonth = topAppsMonthSelect.value || null;
+      if (topAppsMonthSelect.value === CUSTOM_RANGE_VALUE) {
+        topAppsFilterMode = "custom";
+        ensureRangeInputs("top-apps");
+      } else {
+        topAppsFilterMode = "month";
+        topAppsSelectedMonth = topAppsMonthSelect.value || null;
+      }
+      updateRangeControlVisibility();
       renderDashboard();
     });
   }
+  [topAppsRangeStart, topAppsRangeEnd].forEach(input => {
+    if (!input) return;
+    input.addEventListener("change", () => {
+      topAppsFilterMode = "custom";
+      if (topAppsMonthSelect) topAppsMonthSelect.value = CUSTOM_RANGE_VALUE;
+      renderDashboard();
+    });
+  });
   if (topPlayersMonthSelect) {
     topPlayersMonthSelect.addEventListener("change", () => {
-      topPlayersSelectedMonth = topPlayersMonthSelect.value || null;
+      if (topPlayersMonthSelect.value === CUSTOM_RANGE_VALUE) {
+        topPlayersFilterMode = "custom";
+        ensureRangeInputs("top-players");
+      } else {
+        topPlayersFilterMode = "month";
+        topPlayersSelectedMonth = topPlayersMonthSelect.value || null;
+      }
+      updateRangeControlVisibility();
       renderTopPlayers();
     });
   }
+  [topPlayersRangeStart, topPlayersRangeEnd].forEach(input => {
+    if (!input) return;
+    input.addEventListener("change", () => {
+      topPlayersFilterMode = "custom";
+      if (topPlayersMonthSelect) topPlayersMonthSelect.value = CUSTOM_RANGE_VALUE;
+      updateRangeControlVisibility();
+      renderTopPlayers();
+    });
+  });
   
   btnCloseSyncOverlay.addEventListener("click", () => {
     syncOverlay.classList.add("hidden");
@@ -258,9 +343,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   const { data } = await supabaseClient.auth.getSession();
   if (data && data.session) {
     session = data.session;
+    updateSourceFilterAccess();
     showScreen("dashboard");
     loadDataAndRender();
   } else {
+    updateSourceFilterAccess();
     showScreen("auth");
   }
 });
@@ -276,6 +363,25 @@ function showScreen(screen) {
   } else {
     authScreen.classList.add("hidden");
     dashboardScreen.classList.remove("hidden");
+  }
+}
+
+function currentSessionEmail() {
+  return String(session && session.user && session.user.email || "").trim().toLowerCase();
+}
+
+function canViewAllSourceFilter() {
+  return currentSessionEmail() === SOURCE_FILTER_ADMIN_EMAIL;
+}
+
+function updateSourceFilterAccess() {
+  if (!filterSource) return;
+
+  const canViewFilter = canViewAllSourceFilter();
+  filterSource.classList.toggle("hidden", !canViewFilter);
+
+  if (!canViewFilter || !filterSource.value) {
+    filterSource.value = SOURCE_FILTER_ALL_VALUE;
   }
 }
 
@@ -300,6 +406,7 @@ async function handleLogin(e) {
     if (error) throw error;
     
     session = data.session;
+    updateSourceFilterAccess();
     showScreen("dashboard");
     loadDataAndRender();
   } catch (err) {
@@ -315,6 +422,7 @@ async function handleLogout() {
     await supabaseClient.auth.signOut();
   }
   session = null;
+  updateSourceFilterAccess();
   showScreen("auth");
 }
 
@@ -459,7 +567,10 @@ function clampProgress(value) {
 }
 
 function setSyncProgress(value, state = "") {
-  const percent = clampProgress(value);
+  const rawPercent = clampProgress(value);
+  const percent = rawPercent <= 0 || state === "error"
+    ? rawPercent
+    : Math.max(syncProgressCurrent, rawPercent);
   syncProgressCurrent = percent;
   if (syncProgressValue) syncProgressValue.textContent = `${percent}%`;
   if (syncProgressFill) {
@@ -496,6 +607,133 @@ function formatElapsed(ms) {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}s` : `${Math.round(n)}ms`;
 }
 
+function formatCount(value) {
+  return new Intl.NumberFormat("vi-VN").format(numberValue(value));
+}
+
+function readSyncProgressDurations() {
+  const durations = Object.fromEntries(
+    SYNC_PROGRESS_PHASES.map(phase => [phase.key, phase.defaultDurationMs])
+  );
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SYNC_PROGRESS_STORAGE_KEY) || "{}");
+    SYNC_PROGRESS_PHASES.forEach(phase => {
+      const stored = numberValue(parsed[phase.key], phase.defaultDurationMs);
+      if (stored > 500 && stored < SYNC_REQUEST_TIMEOUT_MS) {
+        durations[phase.key] = stored;
+      }
+    });
+  } catch {
+    // Ignore corrupt local progress history and fall back to defaults.
+  }
+  return durations;
+}
+
+function saveSyncProgressDuration(phaseKey, elapsedMs) {
+  const elapsed = numberValue(elapsedMs);
+  if (!elapsed || elapsed <= 0) return;
+
+  const durations = readSyncProgressDurations();
+  const previous = numberValue(durations[phaseKey], elapsed);
+  const smoothed = previous
+    ? Math.round(previous * 0.35 + elapsed * 0.65)
+    : Math.round(elapsed);
+  durations[phaseKey] = Math.max(800, Math.min(SYNC_REQUEST_TIMEOUT_MS, smoothed));
+
+  try {
+    localStorage.setItem(SYNC_PROGRESS_STORAGE_KEY, JSON.stringify(durations));
+  } catch {
+    // Storage is optional; progress still works for the current run.
+  }
+}
+
+function buildSyncProgressPlan() {
+  const durations = readSyncProgressDurations();
+  const totalDuration = SYNC_PROGRESS_PHASES.reduce(
+    (sum, phase) => sum + Math.max(1, numberValue(durations[phase.key], phase.defaultDurationMs)),
+    0,
+  );
+  const phases = {};
+  let cursor = 0;
+
+  SYNC_PROGRESS_PHASES.forEach((phase, index) => {
+    const durationMs = Math.max(1, numberValue(durations[phase.key], phase.defaultDurationMs));
+    const span = index === SYNC_PROGRESS_PHASES.length - 1
+      ? 100 - cursor
+      : Math.max(2, (durationMs / totalDuration) * 100);
+    const end = index === SYNC_PROGRESS_PHASES.length - 1
+      ? 100
+      : Math.min(98, cursor + span);
+    const reserved = Math.max(1, Math.min(4, (end - cursor) * 0.12));
+
+    phases[phase.key] = {
+      ...phase,
+      durationMs,
+      start: cursor,
+      end,
+      softEnd: Math.max(cursor, end - reserved),
+    };
+    cursor = end;
+  });
+
+  return { phases, durations };
+}
+
+function stopSyncProgressTimer() {
+  if (syncProgressTimer) {
+    window.clearInterval(syncProgressTimer);
+    syncProgressTimer = null;
+  }
+  syncProgressPhase = null;
+}
+
+function phaseSubtitle(phase, elapsedMs) {
+  const estimated = formatElapsed(phase.durationMs);
+  const elapsed = formatElapsed(elapsedMs);
+  if (elapsedMs > phase.durationMs * 1.1) {
+    return `${phase.label}: đang chạy ${elapsed}, lâu hơn dự kiến ${estimated}...`;
+  }
+  return `${phase.label}: ${elapsed} / dự kiến ${estimated}...`;
+}
+
+function tickSyncProgressPhase() {
+  if (!syncProgressPhase) return;
+
+  const elapsedMs = performance.now() - syncProgressPhase.startedAt;
+  const rawRatio = Math.min(1.4, elapsedMs / Math.max(1, syncProgressPhase.durationMs));
+  const ratio = Math.min(0.985, rawRatio);
+  const eased = 1 - Math.pow(1 - ratio, 2);
+  const nextPercent = syncProgressPhase.start +
+    (syncProgressPhase.softEnd - syncProgressPhase.start) * eased;
+
+  setSyncProgress(nextPercent);
+  if (syncSubtitle) {
+    syncSubtitle.textContent = phaseSubtitle(syncProgressPhase, elapsedMs);
+  }
+}
+
+function startSyncProgressPhase(phaseKey) {
+  if (!syncProgressPlan) syncProgressPlan = buildSyncProgressPlan();
+  const phase = syncProgressPlan.phases[phaseKey];
+  if (!phase) return;
+
+  stopSyncProgressTimer();
+  syncProgressPhase = {
+    ...phase,
+    startedAt: performance.now(),
+  };
+  setSyncProgress(phase.start);
+  tickSyncProgressPhase();
+  syncProgressTimer = window.setInterval(tickSyncProgressPhase, 250);
+}
+
+function completeSyncProgressPhase(phaseKey, elapsedMs) {
+  stopSyncProgressTimer();
+  saveSyncProgressDuration(phaseKey, elapsedMs);
+  const phase = syncProgressPlan && syncProgressPlan.phases[phaseKey];
+  if (phase) setSyncProgress(phase.end);
+}
+
 function stepDetails(result) {
   return result && result.details && typeof result.details === "object"
     ? result.details
@@ -506,6 +744,53 @@ function estimateMonthsFromDetails(details) {
   return asArray(details.estimatedReportMonths)
     .map(m => String(m))
     .filter(m => /^\d{6}$/.test(m));
+}
+
+function logFinalizedProgress(details, elapsedMs) {
+  const processed = asArray(details.finalizedMonthsProcessed);
+  const available = asArray(details.finalizedMonthsAvailable);
+  const skipped = asArray(details.finalizedMonthsSkipped);
+  const rows = numberValue(details.earningsSyncedCount);
+  const totalMonths = Math.max(processed.length + skipped.length, available.length);
+  const monthPart = totalMonths
+    ? `${formatCount(processed.length)}/${formatCount(totalMonths)} tháng cần xử lý`
+    : `${formatCount(processed.length)} tháng`;
+  addLog(`Finalized earnings: ${formatCount(rows)} rows, ${monthPart}, ${formatElapsed(elapsedMs)}`, "green");
+}
+
+function logEstimateProgress(details, elapsedMs) {
+  const saved = numberValue(details.estimatesSavedCount);
+  const submitted = numberValue(details.estimatesSubmittedCount);
+  const available = numberValue(details.estimatesAvailableCount);
+  const months = estimateMonthsFromDetails(details);
+  const denominator = submitted || available;
+  const rowPart = denominator
+    ? `${formatCount(saved)}/${formatCount(denominator)} rows mới đã insert`
+    : `${formatCount(saved)} rows mới đã insert`;
+  const reportPart = available && available !== denominator
+    ? `, ${formatCount(available)} rows trong report`
+    : "";
+  const monthPart = months.length ? `, tháng ${months.join(", ")}` : "";
+  addLog(`Estimated sales: ${rowPart}${reportPart}${monthPart}, ${formatElapsed(elapsedMs)}`, "green");
+}
+
+function logOrderProgress(details, elapsedMs) {
+  const candidates = numberValue(details.candidates);
+  const updated = hasOwnValue(details, "updatedOrders")
+    ? numberValue(details.updatedOrders)
+    : numberValue(details.updatedTransactions) + numberValue(details.updatedEstimates);
+  const delayedStill = numberValue(details.delayedStill);
+  const fetched = numberValue(details.ordersFetched);
+  const batches = numberValue(details.candidateBatches);
+  const batchSize = numberValue(details.dbBatchSize);
+  const parallel = numberValue(details.parallelBatches, 1);
+  const candidatePart = candidates
+    ? `${formatCount(candidates)}/${formatCount(candidates)} transactions`
+    : "0 transaction cần enrich";
+  const batchPart = batches
+    ? `, ${formatCount(batches)} batch x ${formatCount(batchSize)} rows, song song ${formatCount(parallel)}`
+    : "";
+  addLog(`Orders API: ${candidatePart}${batchPart}, fetched ${formatCount(fetched)}, updated ${formatCount(updated)}, còn delay ${formatCount(delayedStill)}, ${formatElapsed(elapsedMs)}`, "green");
 }
 
 async function invokeAdminSyncStep(name, payload) {
@@ -618,28 +903,30 @@ async function runAdminSyncWithActualProgress() {
   const source = "admin-dashboard";
   const forceIconSync = false;
 
-  if (syncSubtitle) syncSubtitle.textContent = "Bước 1/3: đồng bộ finalized earnings từ Google Play...";
-  addLog("Bước 1/3: sync finalized earnings...", "blue");
+  syncProgressPlan = buildSyncProgressPlan();
+
+  addLog(`Finalized earnings: dự kiến ${formatElapsed(syncProgressPlan.phases["sync-earnings"].durationMs)}`, "blue");
+  startSyncProgressPhase("sync-earnings");
   const earningsStep = await invokeAdminSyncStep("sync-earnings", {
     source: `${source}:sync-earnings`,
     syncIcons: forceIconSync,
   });
-  setSyncProgress(33);
-  addLog(`Hoàn tất bước 1/3 (${formatElapsed(earningsStep.elapsedMs)})`, "green");
+  completeSyncProgressPhase("sync-earnings", earningsStep.elapsedMs);
+  logFinalizedProgress(stepDetails(earningsStep.body), earningsStep.elapsedMs);
 
-  if (syncSubtitle) syncSubtitle.textContent = "Bước 2/3: đồng bộ Estimated sales reports...";
-  addLog("Bước 2/3: sync estimates...", "blue");
+  addLog(`Estimated sales reports: dự kiến ${formatElapsed(syncProgressPlan.phases["sync-estimates"].durationMs)}`, "blue");
+  startSyncProgressPhase("sync-estimates");
   const estimatesStep = await invokeAdminSyncStep("sync-estimates", {
     source: `${source}:sync-estimates`,
     syncIcons: forceIconSync,
   });
-  setSyncProgress(66);
-  addLog(`Hoàn tất bước 2/3 (${formatElapsed(estimatesStep.elapsedMs)})`, "green");
+  completeSyncProgressPhase("sync-estimates", estimatesStep.elapsedMs);
+  logEstimateProgress(stepDetails(estimatesStep.body), estimatesStep.elapsedMs);
 
   const estimateDetails = stepDetails(estimatesStep.body);
   const estimateMonths = estimateMonthsFromDetails(estimateDetails);
-  if (syncSubtitle) syncSubtitle.textContent = "Bước 3/3: enrich transaction delay và tính lại doanh thu...";
-  addLog("Bước 3/3: sync orders / enrich transaction delay...", "blue");
+  addLog(`Orders API enrichment: dự kiến ${formatElapsed(syncProgressPlan.phases["sync-orders"].durationMs)}`, "blue");
+  startSyncProgressPhase("sync-orders");
   const ordersStep = await invokeAdminSyncStep("sync-orders", {
     days: 3,
     rtdnLimit: 1000,
@@ -651,8 +938,9 @@ async function runAdminSyncWithActualProgress() {
     estimateScope: "all",
     source: `${source}:sync-orders`,
   });
+  completeSyncProgressPhase("sync-orders", ordersStep.elapsedMs);
+  logOrderProgress(ordersStep.body || {}, ordersStep.elapsedMs);
   setSyncProgress(100, "complete");
-  addLog(`Hoàn tất bước 3/3 (${formatElapsed(ordersStep.elapsedMs)})`, "green");
 
   return buildAdminSyncResult(earningsStep, estimatesStep, ordersStep, elapsedMsSince(startedAt));
 }
@@ -664,6 +952,8 @@ async function triggerSync() {
   syncOverlay.classList.remove("hidden");
   btnCloseSyncOverlay.classList.add("hidden");
   syncLogs.innerHTML = "";
+  stopSyncProgressTimer();
+  syncProgressPlan = null;
 
   // Reset to the in-progress state (the overlay may have been left showing a
   // finished/failed state from a previous run).
@@ -677,7 +967,7 @@ async function triggerSync() {
 
   addLog("Bắt đầu gọi API đồng bộ...", "blue");
   addLog("Timeout chờ phản hồi mỗi bước: 30 phút.", "muted");
-  addLog("Tiến độ % chỉ tăng khi từng bước sync hoàn tất thật.", "muted");
+  addLog("Tiến độ % tính theo thời gian thực tế/dự kiến từng task; row count sẽ cập nhật khi API trả metadata.", "muted");
   
   try {
     const result = await runAdminSyncWithActualProgress();
@@ -754,6 +1044,7 @@ async function triggerSync() {
     setSyncProgress(100, "complete");
     setSyncStatus(true, "Đã cập nhật xong. Bấm \"Đóng\" để xem dữ liệu mới.");
   } catch (err) {
+    stopSyncProgressTimer();
     setSyncProgress(syncProgressCurrent, "error");
     const isTimeout = err && err.name === "AbortError";
     const failedStep = err && err.failedStep ? String(err.failedStep) : "";
@@ -773,6 +1064,7 @@ async function triggerSync() {
     }
     setSyncStatus(false, "Có lỗi xảy ra trong quá trình đồng bộ.");
   } finally {
+    stopSyncProgressTimer();
     btnCloseSyncOverlay.classList.remove("hidden");
   }
 }
@@ -924,6 +1216,7 @@ async function deleteEarning(id) {
 
 // --- Dashboard Rendering ---
 function renderDashboard() {
+  updateSourceFilterAccess();
   const sourceFilter = filterSource.value;
   const searchQuery = tableSearch.value.trim().toLowerCase();
 
@@ -1120,6 +1413,10 @@ function appIconHtml(pkg, title, imgClass, fallbackClass, iconUrl = appIconUrl(p
 
 function tableAppIconHtml(pkg, title) {
   return appIconHtml(pkg, title, "table-app-logo", "table-app-fallback");
+}
+
+function topAppIconHtml(pkg, title) {
+  return appIconHtml(pkg, title, "top-app-logo", "top-app-fallback");
 }
 
 function rtdnPriceValue(t) {
@@ -1353,6 +1650,87 @@ function currentMonthWindowVN(monthKey) {
   };
 }
 
+function dateInputValueFromUtcDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function dateRangeFromMonthKeyVN(monthKey) {
+  let year;
+  let month;
+  if (typeof monthKey === "string" && /^\d{6}$/.test(monthKey)) {
+    year = Number(monthKey.slice(0, 4));
+    month = Number(monthKey.slice(4, 6)) - 1;
+  } else {
+    const vnNow = new Date(Date.now() + 7 * 3600 * 1000);
+    year = vnNow.getUTCFullYear();
+    month = vnNow.getUTCMonth();
+  }
+  return {
+    startDate: dateInputValueFromUtcDate(new Date(Date.UTC(year, month, 1))),
+    endDate: dateInputValueFromUtcDate(new Date(Date.UTC(year, month + 1, 0))),
+  };
+}
+
+function dateInputToIsoStartVN(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) return null;
+  const ms = Date.parse(`${value}T00:00:00+07:00`);
+  return isNaN(ms) ? null : new Date(ms).toISOString();
+}
+
+function dateInputToIsoEndExclusiveVN(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) return null;
+  const ms = Date.parse(`${value}T00:00:00+07:00`);
+  return isNaN(ms) ? null : new Date(ms + 24 * 3600 * 1000).toISOString();
+}
+
+function dateRangeLabel(startDate, endDate) {
+  const fmt = (value) => {
+    const ms = Date.parse(`${value}T00:00:00+07:00`);
+    return isNaN(ms)
+      ? value
+      : new Date(ms).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+  };
+  return `${fmt(startDate)} - ${fmt(endDate)}`;
+}
+
+function getCustomRangeWindow(startInput, endInput) {
+  const startDate = startInput && startInput.value;
+  const endDate = endInput && endInput.value;
+  const start = dateInputToIsoStartVN(startDate);
+  const end = dateInputToIsoEndExclusiveVN(endDate);
+  if (!start || !end || Date.parse(start) >= Date.parse(end)) {
+    return null;
+  }
+  return {
+    start,
+    end,
+    startDate,
+    endDate,
+    label: dateRangeLabel(startDate, endDate),
+  };
+}
+
+function ensureRangeInputs(target) {
+  const isTopApps = target === "top-apps";
+  const startInput = isTopApps ? topAppsRangeStart : topPlayersRangeStart;
+  const endInput = isTopApps ? topAppsRangeEnd : topPlayersRangeEnd;
+  const selectedMonth = isTopApps
+    ? (topAppsSelectedMonth || (serverSummary && serverSummary.currentMonth) || currentMonthKeyVN())
+    : (topPlayersSelectedMonth || (serverSummary && serverSummary.currentMonth) || currentMonthKeyVN());
+  const defaults = dateRangeFromMonthKeyVN(selectedMonth);
+  if (startInput && !startInput.value) startInput.value = defaults.startDate;
+  if (endInput && !endInput.value) endInput.value = defaults.endDate;
+}
+
+function updateRangeControlVisibility() {
+  if (topAppsRangeControls) {
+    topAppsRangeControls.classList.toggle("hidden", topAppsFilterMode !== "custom");
+  }
+  if (topPlayersRangeControls) {
+    topPlayersRangeControls.classList.toggle("hidden", topPlayersFilterMode !== "custom");
+  }
+}
+
 function purchaseAmountUSD(row) {
   const amount = Number(row.amount || 0);
   const currency = String(row.currency || "USD").toUpperCase();
@@ -1397,10 +1775,12 @@ function populateTopAppsMonthOptions() {
     sortedMonths.unshift(topAppsSelectedMonth);
   }
 
-  topAppsMonthSelect.innerHTML = sortedMonths
-    .map(month => `<option value="${month}">${monthLabel(month)}</option>`)
-    .join("");
-  topAppsMonthSelect.value = topAppsSelectedMonth;
+  topAppsMonthSelect.innerHTML = [
+    ...sortedMonths.map(month => `<option value="${month}">${monthLabel(month)}</option>`),
+    `<option value="${CUSTOM_RANGE_VALUE}">Tuỳ chỉnh</option>`,
+  ].join("");
+  topAppsMonthSelect.value = topAppsFilterMode === "custom" ? CUSTOM_RANGE_VALUE : topAppsSelectedMonth;
+  updateRangeControlVisibility();
 }
 
 async function populateTopPlayersMonthOptions() {
@@ -1446,37 +1826,173 @@ async function populateTopPlayersMonthOptions() {
     sortedMonths.unshift(topPlayersSelectedMonth);
   }
 
-  topPlayersMonthSelect.innerHTML = sortedMonths
-    .map(month => `<option value="${month}">${monthLabel(month)}</option>`)
-    .join("");
-  topPlayersMonthSelect.value = topPlayersSelectedMonth;
+  topPlayersMonthSelect.innerHTML = [
+    ...sortedMonths.map(month => `<option value="${month}">${monthLabel(month)}</option>`),
+    `<option value="${CUSTOM_RANGE_VALUE}">Tuỳ chỉnh</option>`,
+  ].join("");
+  topPlayersMonthSelect.value = topPlayersFilterMode === "custom" ? CUSTOM_RANGE_VALUE : topPlayersSelectedMonth;
+  updateRangeControlVisibility();
+}
+
+function groupTopPlayersFromRows(rows) {
+  const grouped = new Map();
+  for (const row of rows) {
+    const player = String(row.player_name || "Ẩn danh").trim() || "Ẩn danh";
+    const packageName = row.package_name || "";
+    const appTitle = cleanAppTitle(packageName, row.app_name || packageName || "Unknown");
+    const key = `${player}|${packageName || appTitle}`;
+    const current = grouped.get(key) || {
+      player,
+      appTitle,
+      packageName,
+      totalUSD: 0,
+      count: 0,
+      lastEventTime: "",
+    };
+    current.totalUSD += purchaseAmountUSD(row);
+    current.count += 1;
+    const logTime = row.created_at || row.event_time || "";
+    if (logTime && (!current.lastEventTime || String(logTime) > current.lastEventTime)) {
+      current.lastEventTime = logTime;
+    }
+    grouped.set(key, current);
+  }
+
+  return Array.from(grouped.values())
+    .sort((a, b) => b.totalUSD - a.totalUSD || b.count - a.count)
+    .slice(0, 10);
+}
+
+function renderTopPlayersList(topPlayers, emptyText) {
+  if (!topPlayers.length) {
+    topPlayersList.innerHTML = `<div class="loading-placeholder">${escapeHtml(emptyText)}</div>`;
+    return;
+  }
+
+  topPlayersList.innerHTML = topPlayers.map((p, idx) => `
+    <div class="app-item">
+      <div class="app-item-left">
+        <div class="app-badge">${idx + 1}</div>
+        <div>
+          <span class="app-name">${escapeHtml(p.player)}</span>
+          <span class="app-pkg">${escapeHtml(p.appTitle)} · ${p.count} lượt</span>
+        </div>
+      </div>
+      <span class="app-revenue">${fmtUSD(p.totalUSD)}</span>
+    </div>
+  `).join("");
+}
+
+function amountToUSD(amount, currency, rate) {
+  const numericAmount = parseFloat(amount);
+  const safeAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
+  return String(currency || "USD").toUpperCase() === "VND" ? safeAmount / rate : safeAmount;
+}
+
+function renderTopAppsList(sortedApps, emptyText) {
+  if (sortedApps.length === 0) {
+    topAppsList.innerHTML = `<div class="loading-placeholder">${escapeHtml(emptyText)}</div>`;
+    return;
+  }
+
+  topAppsList.innerHTML = sortedApps.map((a, idx) => {
+    const icon = topAppIconHtml(a.id, a.title);
+    return `
+    <div class="app-item">
+      <div class="app-item-left">
+        <div class="app-badge">${idx + 1}</div>
+        ${icon}
+        <div class="app-item-meta">
+          <span class="app-name">${escapeHtml(a.title)}</span>
+          <span class="app-pkg">${escapeHtml(a.id)}</span>
+        </div>
+      </div>
+      <span class="app-revenue">${fmtUSD(a.total)}</span>
+    </div>
+  `;
+  }).join("");
+}
+
+async function renderTopAppsCustomRange(range, appMap, rate) {
+  if (!range) {
+    topAppsList.innerHTML = `<div class="loading-placeholder">Chọn khoảng ngày hợp lệ</div>`;
+    return;
+  }
+
+  const sourceFilter = filterSource ? filterSource.value : "all";
+  const searchQuery = tableSearch ? tableSearch.value.trim().toLowerCase() : "";
+  const requestId = ++topAppsRangeRequestId;
+  topAppsList.innerHTML = `<div class="loading-placeholder">Đang tải dữ liệu...</div>`;
+  if (topAppsSyncInfo) {
+    topAppsSyncInfo.textContent = `Dữ liệu doanh thu từ ${range.label}`;
+  }
+
+  if (sourceFilter !== "all" && sourceFilter !== "google_play_estimate") {
+    renderTopAppsList([], `Không có dữ liệu doanh thu trong khoảng ${range.label}`);
+    return;
+  }
+
+  try {
+    const rows = [];
+    const pageSize = 1000;
+    const maxRows = 50000;
+    for (let from = 0; from < maxRows; from += pageSize) {
+      const { data, error } = await supabaseClient
+        .from("estimates")
+        .select("app_id,amount,currency,transaction_at")
+        .eq("included_in_estimate", true)
+        .not("amount", "is", null)
+        .gte("transaction_at", range.start)
+        .lt("transaction_at", range.end)
+        .order("transaction_at", { ascending: false, nullsFirst: false })
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      rows.push(...(data || []));
+      if (!data || data.length < pageSize) break;
+    }
+    if (requestId !== topAppsRangeRequestId) return;
+
+    const totals = {};
+    rows.forEach(row => {
+      totals[row.app_id] = (totals[row.app_id] || 0) + amountToUSD(row.amount, row.currency, rate);
+    });
+
+    const sortedApps = Object.entries(totals)
+      .map(([id, total]) => ({
+        id,
+        title: appMap[id] || cleanAppTitle(id),
+        total: Math.round(numberValue(total) * 100) / 100,
+      }))
+      .filter(a => !isAdjustmentApp(a.id, a.title))
+      .filter(a => !searchQuery || a.id.toLowerCase().includes(searchQuery) || a.title.toLowerCase().includes(searchQuery))
+      .filter(a => !shouldHideTopApp(a))
+      .sort((a, b) => b.total - a.total);
+
+    renderTopAppsList(sortedApps, `Không có dữ liệu doanh thu trong khoảng ${range.label}`);
+  } catch (err) {
+    console.error("load custom top apps failed:", err);
+    topAppsList.innerHTML = `<div class="loading-placeholder">Không tải được top doanh thu</div>`;
+  }
 }
 
 async function renderTopPlayers() {
   if (!topPlayersList || !supabaseClient) return;
   const selectedMonth = topPlayersSelectedMonth || (serverSummary && serverSummary.currentMonth) || currentMonthKeyVN();
-  const { start, end } = currentMonthWindowVN(selectedMonth);
+  const customRange = topPlayersFilterMode === "custom"
+    ? getCustomRangeWindow(topPlayersRangeStart, topPlayersRangeEnd)
+    : null;
+  const { start, end } = customRange || currentMonthWindowVN(selectedMonth);
   topPlayersList.innerHTML = `<div class="loading-placeholder">Đang tải dữ liệu...</div>`;
+  const requestId = ++topPlayersRangeRequestId;
 
   try {
-    if (serverSummary && selectedMonth === serverSummary.currentMonth && Array.isArray(serverSummary.topPlayersCurrentMonth)) {
-      const topPlayers = serverSummary.topPlayersCurrentMonth;
-      if (!topPlayers.length) {
-        topPlayersList.innerHTML = `<div class="loading-placeholder">Chưa có log nạp trong tháng này</div>`;
-        return;
-      }
-      topPlayersList.innerHTML = topPlayers.map((p, idx) => `
-        <div class="app-item">
-          <div class="app-item-left">
-            <div class="app-badge">${idx + 1}</div>
-            <div>
-              <span class="app-name">${escapeHtml(p.player)}</span>
-              <span class="app-pkg">${escapeHtml(p.appTitle)} · ${p.count} lượt</span>
-            </div>
-          </div>
-          <span class="app-revenue">${fmtUSD(p.totalUSD)}</span>
-        </div>
-      `).join("");
+    if (!customRange && serverSummary && selectedMonth === serverSummary.currentMonth && Array.isArray(serverSummary.topPlayersCurrentMonth)) {
+      renderTopPlayersList(serverSummary.topPlayersCurrentMonth, "Chưa có log nạp trong tháng này");
+      return;
+    }
+
+    if (topPlayersFilterMode === "custom" && !customRange) {
+      topPlayersList.innerHTML = `<div class="loading-placeholder">Chọn khoảng ngày hợp lệ</div>`;
       return;
     }
 
@@ -1495,51 +2011,12 @@ async function renderTopPlayers() {
       rows.push(...(data || []));
       if (!data || data.length < pageSize) break;
     }
+    if (requestId !== topPlayersRangeRequestId) return;
 
-    if (!rows.length) {
-      topPlayersList.innerHTML = `<div class="loading-placeholder">Chưa có log nạp trong tháng này</div>`;
-      return;
-    }
-
-    const grouped = new Map();
-    for (const row of rows) {
-      const player = String(row.player_name || "Ẩn danh").trim() || "Ẩn danh";
-      const packageName = row.package_name || "";
-      const appTitle = cleanAppTitle(packageName, row.app_name || packageName || "Unknown");
-      const key = `${player}|${packageName || appTitle}`;
-      const current = grouped.get(key) || {
-        player,
-        appTitle,
-        packageName,
-        totalUSD: 0,
-        count: 0,
-        lastEventTime: "",
-      };
-      current.totalUSD += purchaseAmountUSD(row);
-      current.count += 1;
-      const logTime = row.created_at || row.event_time || "";
-      if (logTime && (!current.lastEventTime || String(logTime) > current.lastEventTime)) {
-        current.lastEventTime = logTime;
-      }
-      grouped.set(key, current);
-    }
-
-    const topPlayers = Array.from(grouped.values())
-      .sort((a, b) => b.totalUSD - a.totalUSD || b.count - a.count)
-      .slice(0, 10);
-
-    topPlayersList.innerHTML = topPlayers.map((p, idx) => `
-      <div class="app-item">
-        <div class="app-item-left">
-          <div class="app-badge">${idx + 1}</div>
-          <div>
-            <span class="app-name">${escapeHtml(p.player)}</span>
-            <span class="app-pkg">${escapeHtml(p.appTitle)} · ${p.count} lượt</span>
-          </div>
-        </div>
-        <span class="app-revenue">${fmtUSD(p.totalUSD)}</span>
-      </div>
-    `).join("");
+    const emptyText = customRange
+      ? `Chưa có log nạp trong khoảng ${customRange.label}`
+      : "Chưa có log nạp trong tháng này";
+    renderTopPlayersList(groupTopPlayersFromRows(rows), emptyText);
   } catch (err) {
     console.error("load top players failed:", err);
     topPlayersList.innerHTML = `<div class="loading-placeholder">Không tải được top người chơi</div>`;
@@ -1550,6 +2027,15 @@ async function renderTopPlayers() {
 function renderTopApps(filtered, appMap, rate) {
   if (!topAppsList) return;
   const selectedMonth = topAppsSelectedMonth || (serverSummary && serverSummary.currentMonth) || currentMonthKeyVN();
+  const customRange = topAppsFilterMode === "custom"
+    ? getCustomRangeWindow(topAppsRangeStart, topAppsRangeEnd)
+    : null;
+
+  if (topAppsFilterMode === "custom") {
+    renderTopAppsCustomRange(customRange, appMap, rate);
+    return;
+  }
+  topAppsRangeRequestId += 1;
 
   if (topAppsSyncInfo) {
     const syncText = currentMonthSyncText(serverSummary);
@@ -1573,6 +2059,7 @@ function renderTopApps(filtered, appMap, rate) {
     sortedApps = revenueByApp
       .filter(a => !isAdjustmentApp(a.id, a.title))
       .map(a => ({ id: a.id, title: a.title, total: Number(a.totalUSD || 0) }))
+      .filter(a => !shouldHideTopApp(a))
       .sort((a, b) => b.total - a.total);
   } else {
     const totals = {};
@@ -1588,26 +2075,11 @@ function renderTopApps(filtered, appMap, rate) {
     ]);
     sortedApps = Array.from(appIds)
       .map(id => ({ id, title: appMap[id] || id, total: totals[id] || 0 }))
+      .filter(a => !shouldHideTopApp(a))
       .sort((a, b) => b.total - a.total);
   }
 
-  if (sortedApps.length === 0) {
-    topAppsList.innerHTML = `<div class="loading-placeholder">Không có dữ liệu tháng ${monthLabel(selectedMonth)}</div>`;
-    return;
-  }
-
-  topAppsList.innerHTML = sortedApps.map((a, idx) => `
-    <div class="app-item">
-      <div class="app-item-left">
-        <div class="app-badge">${idx + 1}</div>
-        <div>
-          <span class="app-name">${escapeHtml(a.title)}</span>
-          <span class="app-pkg">${escapeHtml(a.id)}</span>
-        </div>
-      </div>
-      <span class="app-revenue">${fmtUSD(a.total)}</span>
-    </div>
-  `).join("");
+  renderTopAppsList(sortedApps, `Không có dữ liệu tháng ${monthLabel(selectedMonth)}`);
 }
 
 // Render Chart

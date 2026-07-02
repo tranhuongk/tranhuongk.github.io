@@ -15,7 +15,7 @@
   <!-- Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/umd/supabase.js"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=20260702i">
+  <link rel="stylesheet" href="style.css?v=20260702t">
   <style>
     /* RTDN order table (clones Play Console "Order management") */
     .rtdn-app-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; display: block; }
@@ -171,6 +171,11 @@
           </div>
           <div class="top-apps-controls">
             <select id="top-apps-month" class="glass-select" title="Chọn tháng hiển thị"></select>
+            <div id="top-apps-range" class="custom-range-controls hidden">
+              <input type="date" id="top-apps-range-start" class="glass-date" title="Từ ngày">
+              <span class="range-separator">→</span>
+              <input type="date" id="top-apps-range-end" class="glass-date" title="Đến ngày">
+            </div>
           </div>
         </div>
         <div id="top-apps-list" class="top-apps-list">
@@ -186,6 +191,11 @@
           </div>
           <div class="top-players-controls">
             <select id="top-players-month" class="glass-select" title="Chọn tháng hiển thị"></select>
+            <div id="top-players-range" class="custom-range-controls hidden">
+              <input type="date" id="top-players-range-start" class="glass-date" title="Từ ngày">
+              <span class="range-separator">→</span>
+              <input type="date" id="top-players-range-end" class="glass-date" title="Đến ngày">
+            </div>
           </div>
         </div>
         <div id="top-players-list" class="top-apps-list">
@@ -208,7 +218,7 @@
               <i class="fa-solid fa-magnifying-glass"></i>
               <input type="text" id="table-search" placeholder="Tìm app...">
             </div>
-            <select id="filter-source" class="glass-select">
+            <select id="filter-source" class="glass-select hidden">
               <option value="all">Tất cả nguồn</option>
               <option value="google_play">Google Play (Chính thức)</option>
               <option value="google_play_estimate">Google Play (Ước tính)</option>
@@ -396,6 +406,6 @@
   </div>
 
   <!-- Script logic -->
-  <script src="app.js?v=20260702l"></script>
+  <script src="app.js?v=20260702t"></script>
 </body>
 </html>
