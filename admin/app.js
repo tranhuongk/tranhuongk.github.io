@@ -113,6 +113,8 @@ let topAppsSelectedMonth = null;
 let topPlayersSelectedMonth = null;
 let topAppsFilterMode = "month";
 let topPlayersFilterMode = "month";
+let topAppsRangePopupOpen = false;
+let topPlayersRangePopupOpen = false;
 let topAppsRangeRequestId = 0;
 let topPlayersRangeRequestId = 0;
 
@@ -175,11 +177,13 @@ const kpiCurrentEstimateLabel = document.getElementById("kpi-current-estimate-la
 const topAppsList = document.getElementById("top-apps-list");
 const topAppsSyncInfo = document.getElementById("top-apps-sync-info");
 const topAppsMonthSelect = document.getElementById("top-apps-month");
+const topAppsCustomRangeBtn = document.getElementById("top-apps-custom-range-btn");
 const topAppsRangeControls = document.getElementById("top-apps-range");
 const topAppsRangeStart = document.getElementById("top-apps-range-start");
 const topAppsRangeEnd = document.getElementById("top-apps-range-end");
 const topPlayersList = document.getElementById("top-players-list");
 const topPlayersMonthSelect = document.getElementById("top-players-month");
+const topPlayersCustomRangeBtn = document.getElementById("top-players-custom-range-btn");
 const topPlayersRangeControls = document.getElementById("top-players-range");
 const topPlayersRangeStart = document.getElementById("top-players-range-start");
 const topPlayersRangeEnd = document.getElementById("top-players-range-end");
@@ -262,6 +266,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (e.key === "Escape" && chartModalEl && !chartModalEl.classList.contains("hidden")) {
       closeChartModal();
     }
+    if (e.key === "Escape") {
+      closeRangePopups();
+    }
   });
   
   document.querySelectorAll(".btn-close-modal").forEach(btn => {
@@ -295,13 +302,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   tableSearch.addEventListener("input", renderDashboard);
   if (topAppsMonthSelect) {
     topAppsMonthSelect.addEventListener("change", () => {
-      if (topAppsMonthSelect.value === CUSTOM_RANGE_VALUE) {
-        topAppsFilterMode = "custom";
-        ensureRangeInputs("top-apps");
-      } else {
-        topAppsFilterMode = "month";
-        topAppsSelectedMonth = topAppsMonthSelect.value || null;
-      }
+      topAppsFilterMode = "month";
+      topAppsSelectedMonth = topAppsMonthSelect.value || null;
+      topAppsRangePopupOpen = false;
+      updateRangeControlVisibility();
+      renderDashboard();
+    });
+  }
+  if (topAppsCustomRangeBtn) {
+    topAppsCustomRangeBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const shouldOpen = !topAppsRangePopupOpen;
+      topAppsFilterMode = "custom";
+      topAppsRangePopupOpen = shouldOpen;
+      topPlayersRangePopupOpen = false;
+      ensureRangeInputs("top-apps");
       updateRangeControlVisibility();
       renderDashboard();
     });
@@ -310,19 +325,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!input) return;
     input.addEventListener("change", () => {
       topAppsFilterMode = "custom";
+      topAppsRangePopupOpen = true;
       if (topAppsMonthSelect) topAppsMonthSelect.value = CUSTOM_RANGE_VALUE;
+      updateRangeControlVisibility();
       renderDashboard();
     });
   });
   if (topPlayersMonthSelect) {
     topPlayersMonthSelect.addEventListener("change", () => {
-      if (topPlayersMonthSelect.value === CUSTOM_RANGE_VALUE) {
-        topPlayersFilterMode = "custom";
-        ensureRangeInputs("top-players");
-      } else {
-        topPlayersFilterMode = "month";
-        topPlayersSelectedMonth = topPlayersMonthSelect.value || null;
-      }
+      topPlayersFilterMode = "month";
+      topPlayersSelectedMonth = topPlayersMonthSelect.value || null;
+      topPlayersRangePopupOpen = false;
+      updateRangeControlVisibility();
+      renderTopPlayers();
+    });
+  }
+  if (topPlayersCustomRangeBtn) {
+    topPlayersCustomRangeBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const shouldOpen = !topPlayersRangePopupOpen;
+      topPlayersFilterMode = "custom";
+      topPlayersRangePopupOpen = shouldOpen;
+      topAppsRangePopupOpen = false;
+      ensureRangeInputs("top-players");
       updateRangeControlVisibility();
       renderTopPlayers();
     });
@@ -331,10 +356,28 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!input) return;
     input.addEventListener("change", () => {
       topPlayersFilterMode = "custom";
+      topPlayersRangePopupOpen = true;
       if (topPlayersMonthSelect) topPlayersMonthSelect.value = CUSTOM_RANGE_VALUE;
       updateRangeControlVisibility();
       renderTopPlayers();
     });
+  });
+  [topAppsRangeControls, topPlayersRangeControls].forEach(control => {
+    if (!control) return;
+    control.addEventListener("click", (event) => event.stopPropagation());
+  });
+  document.querySelectorAll("[data-range-close]").forEach(button => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const target = button.getAttribute("data-range-close");
+      if (target === "top-apps") topAppsRangePopupOpen = false;
+      if (target === "top-players") topPlayersRangePopupOpen = false;
+      updateRangeControlVisibility();
+    });
+  });
+  document.addEventListener("click", (event) => {
+    if (isRangePopupEventTarget(event.target)) return;
+    closeRangePopups();
   });
   
   btnCloseSyncOverlay.addEventListener("click", () => {
@@ -1838,12 +1881,57 @@ function ensureRangeInputs(target) {
   if (endInput && !endInput.value) endInput.value = defaults.endDate;
 }
 
+function isRangePopupEventTarget(target) {
+  if (!(target instanceof Element)) return false;
+  return Boolean(
+    (topAppsCustomRangeBtn && topAppsCustomRangeBtn.contains(target)) ||
+    (topAppsRangeControls && topAppsRangeControls.contains(target)) ||
+    (topPlayersCustomRangeBtn && topPlayersCustomRangeBtn.contains(target)) ||
+    (topPlayersRangeControls && topPlayersRangeControls.contains(target))
+  );
+}
+
+function closeRangePopups() {
+  if (!topAppsRangePopupOpen && !topPlayersRangePopupOpen) return;
+  topAppsRangePopupOpen = false;
+  topPlayersRangePopupOpen = false;
+  updateRangeControlVisibility();
+}
+
 function updateRangeControlVisibility() {
+  if (topAppsMonthSelect) {
+    if (topAppsFilterMode === "custom") {
+      topAppsMonthSelect.value = CUSTOM_RANGE_VALUE;
+    } else if (topAppsMonthSelect.value === CUSTOM_RANGE_VALUE && topAppsSelectedMonth) {
+      topAppsMonthSelect.value = topAppsSelectedMonth;
+    }
+  }
   if (topAppsRangeControls) {
-    topAppsRangeControls.classList.toggle("hidden", topAppsFilterMode !== "custom");
+    topAppsRangeControls.classList.toggle("hidden", !topAppsRangePopupOpen);
+    topAppsRangeControls.setAttribute("aria-hidden", topAppsRangePopupOpen ? "false" : "true");
+  }
+  if (topAppsCustomRangeBtn) {
+    topAppsCustomRangeBtn.classList.toggle("is-active", topAppsFilterMode === "custom");
+    topAppsCustomRangeBtn.classList.toggle("is-open", topAppsRangePopupOpen);
+    topAppsCustomRangeBtn.setAttribute("aria-pressed", topAppsFilterMode === "custom" ? "true" : "false");
+    topAppsCustomRangeBtn.setAttribute("aria-expanded", topAppsRangePopupOpen ? "true" : "false");
+  }
+  if (topPlayersMonthSelect) {
+    if (topPlayersFilterMode === "custom") {
+      topPlayersMonthSelect.value = CUSTOM_RANGE_VALUE;
+    } else if (topPlayersMonthSelect.value === CUSTOM_RANGE_VALUE && topPlayersSelectedMonth) {
+      topPlayersMonthSelect.value = topPlayersSelectedMonth;
+    }
   }
   if (topPlayersRangeControls) {
-    topPlayersRangeControls.classList.toggle("hidden", topPlayersFilterMode !== "custom");
+    topPlayersRangeControls.classList.toggle("hidden", !topPlayersRangePopupOpen);
+    topPlayersRangeControls.setAttribute("aria-hidden", topPlayersRangePopupOpen ? "false" : "true");
+  }
+  if (topPlayersCustomRangeBtn) {
+    topPlayersCustomRangeBtn.classList.toggle("is-active", topPlayersFilterMode === "custom");
+    topPlayersCustomRangeBtn.classList.toggle("is-open", topPlayersRangePopupOpen);
+    topPlayersCustomRangeBtn.setAttribute("aria-pressed", topPlayersFilterMode === "custom" ? "true" : "false");
+    topPlayersCustomRangeBtn.setAttribute("aria-expanded", topPlayersRangePopupOpen ? "true" : "false");
   }
 }
 
@@ -1892,8 +1980,8 @@ function populateTopAppsMonthOptions() {
   }
 
   topAppsMonthSelect.innerHTML = [
+    `<option value="${CUSTOM_RANGE_VALUE}" hidden>Tuỳ chỉnh</option>`,
     ...sortedMonths.map(month => `<option value="${month}">${monthLabel(month)}</option>`),
-    `<option value="${CUSTOM_RANGE_VALUE}">Tuỳ chỉnh</option>`,
   ].join("");
   topAppsMonthSelect.value = topAppsFilterMode === "custom" ? CUSTOM_RANGE_VALUE : topAppsSelectedMonth;
   updateRangeControlVisibility();
@@ -1943,8 +2031,8 @@ async function populateTopPlayersMonthOptions() {
   }
 
   topPlayersMonthSelect.innerHTML = [
+    `<option value="${CUSTOM_RANGE_VALUE}" hidden>Tuỳ chỉnh</option>`,
     ...sortedMonths.map(month => `<option value="${month}">${monthLabel(month)}</option>`),
-    `<option value="${CUSTOM_RANGE_VALUE}">Tuỳ chỉnh</option>`,
   ].join("");
   topPlayersMonthSelect.value = topPlayersFilterMode === "custom" ? CUSTOM_RANGE_VALUE : topPlayersSelectedMonth;
   updateRangeControlVisibility();
@@ -1954,29 +2042,51 @@ function groupTopPlayersFromRows(rows) {
   const grouped = new Map();
   for (const row of rows) {
     const player = String(row.player_name || "Ẩn danh").trim() || "Ẩn danh";
+    const playerKey = player.toLocaleLowerCase("vi-VN");
     const packageName = row.package_name || "";
     const appTitle = cleanAppTitle(packageName, row.app_name || packageName || "Unknown");
-    const key = `${player}|${packageName || appTitle}`;
-    const current = grouped.get(key) || {
+    const appKey = packageName || appTitle;
+    const current = grouped.get(playerKey) || {
       player,
       appTitle,
       packageName,
+      appTitles: [],
+      appKeys: new Set(),
+      appCount: 0,
       totalUSD: 0,
       count: 0,
       lastEventTime: "",
     };
+    if (appKey && !current.appKeys.has(appKey)) {
+      current.appKeys.add(appKey);
+      current.appTitles.push(appTitle);
+      current.appCount = current.appKeys.size;
+    }
     current.totalUSD += purchaseAmountUSD(row);
     current.count += 1;
     const logTime = row.created_at || row.event_time || "";
     if (logTime && (!current.lastEventTime || String(logTime) > current.lastEventTime)) {
       current.lastEventTime = logTime;
     }
-    grouped.set(key, current);
+    grouped.set(playerKey, current);
   }
 
   return Array.from(grouped.values())
+    .map(player => ({
+      ...player,
+      appKeys: undefined,
+      appTitle: player.appCount > 1 ? `${player.appCount} ứng dụng` : (player.appTitles[0] || player.appTitle),
+    }))
     .sort((a, b) => b.totalUSD - a.totalUSD || b.count - a.count)
     .slice(0, 10);
+}
+
+function topPlayerSubtitle(player) {
+  const appCount = numberValue(player.appCount);
+  const appText = appCount > 1
+    ? `${formatCount(appCount)} ứng dụng`
+    : (player.appTitle || "Không rõ app");
+  return `${appText} · ${formatCount(player.count)} lượt`;
 }
 
 function renderTopPlayersList(topPlayers, emptyText) {
@@ -1991,7 +2101,7 @@ function renderTopPlayersList(topPlayers, emptyText) {
         <div class="app-badge">${idx + 1}</div>
         <div>
           <span class="app-name">${escapeHtml(p.player)}</span>
-          <span class="app-pkg">${escapeHtml(p.appTitle)} · ${p.count} lượt</span>
+          <span class="app-pkg">${escapeHtml(topPlayerSubtitle(p))}</span>
         </div>
       </div>
       <span class="app-revenue">${fmtUSD(p.totalUSD)}</span>

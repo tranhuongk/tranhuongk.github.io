@@ -15,7 +15,7 @@
   <!-- Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/umd/supabase.js"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=20260702t">
+  <link rel="stylesheet" href="style.css?v=20260702y">
   <style>
     /* RTDN order table (clones Play Console "Order management") */
     .rtdn-app-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; display: block; }
@@ -171,10 +171,16 @@
           </div>
           <div class="top-apps-controls">
             <select id="top-apps-month" class="glass-select" title="Chọn tháng hiển thị"></select>
-            <div id="top-apps-range" class="custom-range-controls hidden">
+            <button id="top-apps-custom-range-btn" class="glass-icon-btn range-toggle-btn" type="button" title="Chọn khoảng ngày tuỳ chỉnh" aria-label="Chọn khoảng ngày tuỳ chỉnh">
+              <i class="fa-regular fa-calendar-days"></i>
+            </button>
+            <div id="top-apps-range" class="custom-range-controls hidden" role="dialog" aria-label="Chọn khoảng ngày Top doanh thu">
               <input type="date" id="top-apps-range-start" class="glass-date" title="Từ ngày">
               <span class="range-separator">→</span>
               <input type="date" id="top-apps-range-end" class="glass-date" title="Đến ngày">
+              <button class="glass-icon-btn range-apply-btn" type="button" title="Áp dụng khoảng ngày" aria-label="Áp dụng khoảng ngày" data-range-close="top-apps">
+                <i class="fa-solid fa-check"></i>
+              </button>
             </div>
           </div>
         </div>
@@ -191,10 +197,16 @@
           </div>
           <div class="top-players-controls">
             <select id="top-players-month" class="glass-select" title="Chọn tháng hiển thị"></select>
-            <div id="top-players-range" class="custom-range-controls hidden">
+            <button id="top-players-custom-range-btn" class="glass-icon-btn range-toggle-btn" type="button" title="Chọn khoảng ngày tuỳ chỉnh" aria-label="Chọn khoảng ngày tuỳ chỉnh">
+              <i class="fa-regular fa-calendar-days"></i>
+            </button>
+            <div id="top-players-range" class="custom-range-controls hidden" role="dialog" aria-label="Chọn khoảng ngày Top người chơi">
               <input type="date" id="top-players-range-start" class="glass-date" title="Từ ngày">
               <span class="range-separator">→</span>
               <input type="date" id="top-players-range-end" class="glass-date" title="Đến ngày">
+              <button class="glass-icon-btn range-apply-btn" type="button" title="Áp dụng khoảng ngày" aria-label="Áp dụng khoảng ngày" data-range-close="top-players">
+                <i class="fa-solid fa-check"></i>
+              </button>
             </div>
           </div>
         </div>
@@ -406,6 +418,6 @@
   </div>
 
   <!-- Script logic -->
-  <script src="app.js?v=20260702t"></script>
+  <script src="app.js?v=20260702y"></script>
 </body>
 </html>
