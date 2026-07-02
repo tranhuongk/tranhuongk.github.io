@@ -499,9 +499,6 @@ async function loadDataAndRender() {
         currentUsdToVndRate = s.rate || currentUsdToVndRate;
         appsList = (s.apps || []).map(a => ({ ...a, title: cleanAppTitle(a.id, a.title) }));
         earningsData = s.earnings || [];
-        if (s.rtdnRecentEstimates && s.rtdnRecentEstimates.length > 0) {
-          earningsData = [...earningsData, ...s.rtdnRecentEstimates];
-        }
         populateAppDropdown();
         renderDashboard();
         await populateTopPlayersMonthOptions();
@@ -1404,11 +1401,9 @@ function renderDashboard() {
   const rate = currentUsdToVndRate;
   const toUSD = e => (e.currency === "VND" ? parseFloat(e.amount) / rate : parseFloat(e.amount));
   const isEstimate = e => e.source === "google_play_estimate";
-  const isRtdnRecent = e => e.source === "rtdn_recent";
 
-  const officialRows = filtered.filter(e => !isEstimate(e) && !isRtdnRecent(e));
+  const officialRows = filtered.filter(e => !isEstimate(e));
   const currentEstimateUSD = filtered.filter(isEstimate).reduce((sum, e) => sum + toUSD(e), 0);
-  const recentRtdnClientUSD = filtered.filter(isRtdnRecent).reduce((sum, e) => sum + toUSD(e), 0);
 
   // "Tháng N-1": official revenue of the most recent finalized month.
   const officialMonths = Array.from(new Set(officialRows.map(e => e.month))).sort();
@@ -2167,6 +2162,7 @@ async function renderTopAppsCustomRange(range, appMap, rate) {
         .from("estimates")
         .select("app_id,amount,currency,transaction_at")
         .eq("included_in_estimate", true)
+        .eq("source", "google_play_estimate")
         .not("amount", "is", null)
         .gte("transaction_at", range.start)
         .lt("transaction_at", range.end)
@@ -2272,7 +2268,7 @@ function renderTopApps(filtered, appMap, rate) {
   }
 
   let sortedApps;
-  const revenueByApp = serverSummary && (serverSummary.revenueByApp || serverSummary.topAppsRtdn);
+  const revenueByApp = serverSummary && serverSummary.revenueByApp;
   const sourceFilter = filterSource ? filterSource.value : "all";
   const searchQuery = tableSearch ? tableSearch.value.trim() : "";
   const canUseServerCurrentMonth =
@@ -2483,8 +2479,8 @@ function renderPivotTable(filtered, uniqueApps, uniqueMonths, appMap) {
           appTotalUSD += usd;
           monthTotalsUSD[m] = (monthTotalsUSD[m] || 0) + usd;
           
-          if (e.source === "google_play_estimate" || e.source === "rtdn_recent") isEstimate = true;
-          if (e.source !== "google_play" && e.source !== "google_play_estimate" && e.source !== "rtdn_recent") {
+          if (e.source === "google_play_estimate") isEstimate = true;
+          if (e.source !== "google_play" && e.source !== "google_play_estimate") {
             editableEntry = e; // Store for edit action
           }
         });
