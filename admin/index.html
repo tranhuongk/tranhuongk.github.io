@@ -15,7 +15,7 @@
   <!-- Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/umd/supabase.js"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=20260702y">
+  <link rel="stylesheet" href="style.css?v=20260703d">
   <style>
     /* RTDN order table (clones Play Console "Order management") */
     .rtdn-app-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; display: block; }
@@ -145,48 +145,45 @@
         </div>
       </div>
 
-      <button class="glass-panel kpi-card earnings-chart-card" id="monthly-chart-card" type="button" aria-haspopup="dialog" aria-controls="chart-modal" aria-expanded="false">
+      <div class="glass-panel kpi-card earnings-month-card" id="monthly-chart-card">
         <div class="kpi-icon color-green">
           <i class="fa-solid fa-bolt"></i>
         </div>
         <div class="kpi-info earnings-kpi-info">
-          <span class="kpi-label">Your earnings</span>
+          <span class="kpi-label" id="kpi-current-rtdn-label">Ước tính tháng N</span>
           <h3 class="kpi-val" id="kpi-current-rtdn">$0.00</h3>
           <div id="kpi-current-rtdn-vnd" style="font-size: 14px; color: var(--text-muted); margin-top: 4px;">≈ 0 đ</div>
-          <div class="earnings-chart-subtitle" id="chart-kpi-subtitle">Biểu đồ tháng</div>
+          <div class="earnings-chart-subtitle" id="chart-kpi-subtitle">KPI tháng gần nhất</div>
         </div>
-        <div class="earnings-chart-spark" aria-hidden="true">
-          <canvas id="revenue-chart-mini"></canvas>
-        </div>
-      </button>
+      </div>
     </section>
 
-    <!-- Top Apps Section -->
-    <section class="analytics-row">
-      <div class="glass-panel top-apps-box">
+    <!-- Top Revenue Section -->
+    <section class="top-revenue-section">
+      <div class="glass-panel play-revenue-box">
         <div class="panel-header">
           <div class="table-title">
-            <h4><i class="fa-solid fa-crown"></i> Top doanh thu</h4>
-            <span class="subtitle" id="top-apps-sync-info">Đang tải dữ liệu đồng bộ...</span>
-          </div>
-          <div class="top-apps-controls">
-            <select id="top-apps-month" class="glass-select" title="Chọn tháng hiển thị"></select>
-            <button id="top-apps-custom-range-btn" class="glass-icon-btn range-toggle-btn" type="button" title="Chọn khoảng ngày tuỳ chỉnh" aria-label="Chọn khoảng ngày tuỳ chỉnh">
-              <i class="fa-regular fa-calendar-days"></i>
-            </button>
-            <div id="top-apps-range" class="custom-range-controls hidden" role="dialog" aria-label="Chọn khoảng ngày Top doanh thu">
-              <input type="date" id="top-apps-range-start" class="glass-date" title="Từ ngày">
-              <span class="range-separator">→</span>
-              <input type="date" id="top-apps-range-end" class="glass-date" title="Đến ngày">
-              <button class="glass-icon-btn range-apply-btn" type="button" title="Áp dụng khoảng ngày" aria-label="Áp dụng khoảng ngày" data-range-close="top-apps">
-                <i class="fa-solid fa-check"></i>
-              </button>
-            </div>
+            <h4><i class="fa-solid fa-ranking-star"></i> Top doanh thu</h4>
+            <span class="subtitle" id="top-apps-sync-info">Ước tính ledger trong tháng hiện tại, chỉ gồm app đang publish</span>
           </div>
         </div>
-        <div id="top-apps-list" class="top-apps-list">
-          <!-- Dynamically populated -->
+        <div id="top-apps-list" class="play-revenue-list">
           <div class="loading-placeholder">Đang tải dữ liệu...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Analytics Section -->
+    <section class="analytics-row">
+      <div class="glass-panel monthly-revenue-box">
+        <div class="panel-header">
+          <div class="table-title">
+            <h4><i class="fa-solid fa-chart-column"></i> Biểu đồ thu nhập qua các tháng</h4>
+            <span class="subtitle">Theo dữ liệu đang hiển thị trong bảng kê doanh thu</span>
+          </div>
+        </div>
+        <div class="monthly-chart-wrapper">
+          <canvas id="revenue-chart-main"></canvas>
         </div>
       </div>
 
@@ -301,19 +298,6 @@
     </div>
   </div>
 
-  <!-- MONTHLY CHART MODAL -->
-  <div id="chart-modal" class="modal-overlay hidden">
-    <div class="glass-panel modal-card chart-modal-card">
-      <div class="modal-header">
-        <h4><i class="fa-solid fa-chart-column"></i> Biểu đồ thu nhập qua các tháng</h4>
-        <button class="btn-close-chart-modal" type="button" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-      <div class="chart-modal-wrapper">
-        <canvas id="revenue-chart-modal"></canvas>
-      </div>
-    </div>
-  </div>
-
   <!-- ADD/EDIT INCOME MODAL -->
   <div id="income-modal" class="modal-overlay hidden">
     <div class="glass-panel modal-card">
@@ -418,6 +402,6 @@
   </div>
 
   <!-- Script logic -->
-  <script src="app.js?v=20260702z"></script>
+  <script src="app.js?v=20260703d"></script>
 </body>
 </html>

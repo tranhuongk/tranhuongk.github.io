@@ -3,8 +3,7 @@ const supabaseUrl = "https://lnazpyhoojqotnanrvqf.supabase.co";
 const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxuYXpweWhvb2pxb3RuYW5ydnFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1NzAyNjcsImV4cCI6MjA5ODE0NjI2N30.uc4WAXKm_UDKoLEm260mu0RHyHaL4HGtPI3sG-TbJSg";
 let supabaseClient = null;
 let session = null;
-let chartMini = null;
-let chartModal = null;
+let chartMain = null;
 const SYNC_REQUEST_TIMEOUT_MS = 30 * 60 * 1000;
 const SYNC_PROGRESS_STORAGE_KEY = "galax_admin_sync_progress_durations_v1";
 const CUSTOM_RANGE_VALUE = "__custom__";
@@ -64,6 +63,8 @@ function isPublishedApp(id, title) {
   const statusText = String(
     app.publish_status ||
     app.play_status ||
+    app.play_store_status ||
+    app.play_production_status ||
     app.status ||
     app.state ||
     ""
@@ -77,7 +78,7 @@ function isPublishedApp(id, title) {
 }
 
 function shouldHideTopApp(app) {
-  return Math.abs(numberValue(app.total)) < 0.005 && !isPublishedApp(app.id, app.title);
+  return isAdjustmentApp(app.id, app.title);
 }
 
 // Local caching of data
@@ -153,6 +154,9 @@ const kpiPrevMonthLabel = document.getElementById("kpi-prev-month-label");
 const kpiCurrentEstimate = document.getElementById("kpi-current-estimate");
 const kpiCurrentEstimateVnd = document.getElementById("kpi-current-estimate-vnd");
 const kpiCurrentEstimateLabel = document.getElementById("kpi-current-estimate-label");
+const kpiCurrentRtdn = document.getElementById("kpi-current-rtdn");
+const kpiCurrentRtdnVnd = document.getElementById("kpi-current-rtdn-vnd");
+const kpiCurrentRtdnLabel = document.getElementById("kpi-current-rtdn-label");
 
 const topAppsList = document.getElementById("top-apps-list");
 const topAppsSyncInfo = document.getElementById("top-apps-sync-info");
@@ -167,10 +171,7 @@ const topPlayersCustomRangeBtn = document.getElementById("top-players-custom-ran
 const topPlayersRangeControls = document.getElementById("top-players-range");
 const topPlayersRangeStart = document.getElementById("top-players-range-start");
 const topPlayersRangeEnd = document.getElementById("top-players-range-end");
-const monthlyChartCard = document.getElementById("monthly-chart-card");
 const chartKpiSubtitle = document.getElementById("chart-kpi-subtitle");
-const chartModalEl = document.getElementById("chart-modal");
-const btnCloseChartModal = document.querySelector(".btn-close-chart-modal");
 const filterSource = document.getElementById("filter-source");
 const tableSearch = document.getElementById("table-search");
 const earningsTable = document.getElementById("earnings-table");
@@ -227,25 +228,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   loginForm.addEventListener("submit", handleLogin);
   btnLogout.addEventListener("click", handleLogout);
   btnSync.addEventListener("click", triggerSync);
-  if (monthlyChartCard) {
-    monthlyChartCard.addEventListener("click", openChartModal);
-    monthlyChartCard.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        openChartModal();
-      }
-    });
-  }
-  if (btnCloseChartModal) btnCloseChartModal.addEventListener("click", closeChartModal);
-  if (chartModalEl) {
-    chartModalEl.addEventListener("click", (e) => {
-      if (e.target === chartModalEl) closeChartModal();
-    });
-  }
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && chartModalEl && !chartModalEl.classList.contains("hidden")) {
-      closeChartModal();
-    }
     if (e.key === "Escape") {
       closeRangePopups();
     }
@@ -571,21 +554,6 @@ function getOrderSyncDetails(details) {
   return {};
 }
 
-function openChartModal() {
-  if (!chartModalEl) return;
-  chartModalEl.classList.remove("hidden");
-  if (monthlyChartCard) monthlyChartCard.setAttribute("aria-expanded", "true");
-  window.requestAnimationFrame(() => {
-    if (chartModal) chartModal.resize();
-  });
-}
-
-function closeChartModal() {
-  if (!chartModalEl) return;
-  chartModalEl.classList.add("hidden");
-  if (monthlyChartCard) monthlyChartCard.setAttribute("aria-expanded", "false");
-}
-
 function clampProgress(value) {
   return Math.max(0, Math.min(100, Math.round(numberValue(value))));
 }
@@ -633,6 +601,20 @@ function formatElapsed(ms) {
 
 function formatCount(value) {
   return new Intl.NumberFormat("vi-VN").format(numberValue(value));
+}
+
+function formatCompactNumber(value, digits = 2) {
+  const n = numberValue(value);
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000_000) return `${trimNumber(n / 1_000_000_000, digits)}B`;
+  if (abs >= 1_000_000) return `${trimNumber(n / 1_000_000, digits)}M`;
+  if (abs >= 1_000) return `${trimNumber(n / 1_000, digits)}K`;
+  return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: digits }).format(n);
+}
+
+function trimNumber(value, digits = 2) {
+  const fixed = Number(value || 0).toFixed(digits);
+  return fixed.replace(/\.?0+$/, "");
 }
 
 function readSyncProgressDurations() {
@@ -1382,54 +1364,19 @@ function renderDashboard() {
   const toUSD = e => (e.currency === "VND" ? parseFloat(e.amount) / rate : parseFloat(e.amount));
   const isEstimate = e => e.source === "google_play_estimate";
 
-  const officialRows = filtered.filter(e => !isEstimate(e));
-  const currentEstimateUSD = filtered.filter(isEstimate).reduce((sum, e) => sum + toUSD(e), 0);
-
-  // "Tháng N-1": official revenue of the most recent finalized month.
-  const officialMonths = Array.from(new Set(officialRows.map(e => e.month))).sort();
-  const prevMonth = officialMonths.length ? officialMonths[officialMonths.length - 1] : null;
-  const prevMonthUSD = prevMonth
-    ? officialRows.filter(e => e.month === prevMonth).reduce((sum, e) => sum + toUSD(e), 0)
-    : 0;
-    
-  // "Tháng N-2": official revenue of the second most recent finalized month.
-  const prev2Month = officialMonths.length > 1 ? officialMonths[officialMonths.length - 2] : null;
-  const prev2MonthUSD = prev2Month
-    ? officialRows.filter(e => e.month === prev2Month).reduce((sum, e) => sum + toUSD(e), 0)
-    : 0;
-
   // For the full, unfiltered view, render the edge function's precomputed KPIs
   // verbatim so these cards match the Telegram bot exactly. Client-side
   // recomputation still drives the cards whenever a filter/search is active.
   const unfiltered = sourceFilter === "all" && !searchQuery;
-  let dPrevMonth = prevMonth, dPrevMonthUSD = prevMonthUSD;
-  let dPrev2Month = prev2Month, dPrev2MonthUSD = prev2MonthUSD;
-  if (unfiltered && serverSummary && serverSummary.kpis) {
-    dPrevMonth = serverSummary.kpis.prevMonth;
-    dPrevMonthUSD = serverSummary.kpis.prevMonthUSD;
-    if (serverSummary.kpis.prev2Month) {
-      dPrev2Month = serverSummary.kpis.prev2Month;
-      dPrev2MonthUSD = serverSummary.kpis.prev2MonthUSD;
-    }
-  }
+  const recentMonthlyKpis = unfiltered && serverSummary && serverSummary.kpis && Array.isArray(serverSummary.kpis.recentMonths)
+    ? serverSummary.kpis.recentMonths
+    : buildRecentMonthlyKpisFromEarnings(filtered, rate);
 
   // Guard against null: a browser may have an older cached index.html whose
   // KPI elements differ from this script during a deploy transition.
-  if (kpiPrev2Month) kpiPrev2Month.textContent = fmtUSD(dPrev2MonthUSD);
-  if (kpiPrev2MonthVnd) {
-    kpiPrev2MonthVnd.textContent = `≈ ${fmtVND(dPrev2MonthUSD * rate)}`;
-  }
-  if (kpiPrev2MonthLabel) kpiPrev2MonthLabel.textContent = dPrev2Month
-    ? `Tháng ${monthLabel(dPrev2Month)}`
-    : "Tháng N-2";
-
-  if (kpiPrevMonth) kpiPrevMonth.textContent = fmtUSD(dPrevMonthUSD);
-  if (kpiPrevMonthVnd) {
-    kpiPrevMonthVnd.textContent = `≈ ${fmtVND(dPrevMonthUSD * rate)}`;
-  }
-  if (kpiPrevMonthLabel) kpiPrevMonthLabel.textContent = dPrevMonth
-    ? `Tháng ${monthLabel(dPrevMonth)}`
-    : "Tháng N-1";
+  renderMonthlyKpi(kpiPrev2MonthLabel, kpiPrev2Month, kpiPrev2MonthVnd, recentMonthlyKpis[0], "Tháng N-2");
+  renderMonthlyKpi(kpiPrevMonthLabel, kpiPrevMonth, kpiPrevMonthVnd, recentMonthlyKpis[1], "Tháng N-1");
+  renderMonthlyKpi(kpiCurrentRtdnLabel, kpiCurrentRtdn, kpiCurrentRtdnVnd, recentMonthlyKpis[2], "Ước tính tháng N");
 
   // Fix maxTime for Card 3 label to only use google_play_estimate rows
   if (kpiCurrentEstimateLabel) {
@@ -1454,17 +1401,6 @@ function renderDashboard() {
     kpiCurrentEstimateVnd.textContent = `≈ ${fmtVND(csvEstimateUSD * rate)}`;
   }
 
-  let yourEarningsUSD = 0;
-  if (unfiltered && serverSummary && serverSummary.kpis) {
-    yourEarningsUSD = serverSummary.kpis.yourEarningsUSD != null
-      ? serverSummary.kpis.yourEarningsUSD
-      : 0;
-  }
-  const kpiCurrentRtdn = document.getElementById("kpi-current-rtdn");
-  const kpiCurrentRtdnVnd = document.getElementById("kpi-current-rtdn-vnd");
-  if (kpiCurrentRtdn) kpiCurrentRtdn.textContent = fmtUSD(yourEarningsUSD);
-  if (kpiCurrentRtdnVnd) kpiCurrentRtdnVnd.textContent = `≈ ${fmtVND(yourEarningsUSD * rate)}`;
-  
   if (navExchangeRate) {
     navExchangeRate.textContent = `Tỷ giá: ${fmtVND(rate)} / USD`;
   }
@@ -1539,9 +1475,7 @@ function appIconHtml(pkg, title, imgClass, fallbackClass, iconUrl = appIconUrl(p
   const localSrc = `app-icons/${safePkg}.png`;
   const src = escapeHtml(iconUrl || localSrc);
   const fallback = `<div class=&quot;${fallbackClass}&quot;>${initial}</div>`;
-  const onerror = iconUrl
-    ? `this.onerror=function(){this.outerHTML='${fallback}'};this.src='${localSrc}';`
-    : `this.outerHTML='${fallback}'`;
+  const onerror = `this.outerHTML='${fallback}'`;
   return `<img class="${imgClass}" src="${src}" alt="${safeTitle}" onerror="${onerror}">`;
 }
 
@@ -1735,6 +1669,61 @@ function monthLabel(p) {
     return p.slice(4, 6) + "/" + p.slice(0, 4);
   }
   return p;
+}
+
+function roundMoney(value) {
+  return Math.round(numberValue(value) * 100) / 100;
+}
+
+function monthlyKpiLabel(row, fallback) {
+  if (!row || !row.month) return fallback;
+  const prefix = row.kind === "final" ? "Thu nhập tháng" : "Ước tính tháng";
+  return `${prefix} ${monthLabel(row.month)}`;
+}
+
+function renderMonthlyKpi(labelEl, amountEl, vndEl, row, fallbackLabel) {
+  const usd = row ? numberValue(row.amountUSD) : 0;
+  if (labelEl) labelEl.textContent = monthlyKpiLabel(row, fallbackLabel);
+  if (amountEl) amountEl.textContent = fmtUSD(usd);
+  if (vndEl) vndEl.textContent = `≈ ${fmtVND(usd * currentUsdToVndRate)}`;
+}
+
+function buildRecentMonthlyKpisFromEarnings(rows, rate) {
+  const byMonth = new Map();
+  rows.forEach(e => {
+    const month = String(e.month || "");
+    if (!/^\d{6}$/.test(month)) return;
+    const current = byMonth.get(month) || {
+      month,
+      officialUSD: 0,
+      estimateUSD: 0,
+      officialRows: 0,
+      estimateRows: 0,
+    };
+    const amount = e.currency === "VND"
+      ? parseFloat(e.amount || 0) / rate
+      : parseFloat(e.amount || 0);
+    if (e.source === "google_play") {
+      current.officialUSD += amount;
+      current.officialRows += 1;
+    } else if (e.source === "google_play_estimate") {
+      current.estimateUSD += amount;
+      current.estimateRows += 1;
+    }
+    byMonth.set(month, current);
+  });
+
+  return Array.from(byMonth.values())
+    .sort((a, b) => a.month.localeCompare(b.month))
+    .slice(-3)
+    .map(row => {
+      const isFinal = row.officialRows > 0;
+      return {
+        month: row.month,
+        kind: isFinal ? "final" : "estimate",
+        amountUSD: roundMoney(isFinal ? row.officialUSD : row.estimateUSD),
+      };
+    });
 }
 
 function syncTransactionDateLabel(info) {
@@ -2093,26 +2082,141 @@ function amountToUSD(amount, currency, rate) {
   return String(currency || "USD").toUpperCase() === "VND" ? safeAmount / rate : safeAmount;
 }
 
+function topRevenueValue(app) {
+  return Math.max(0, numberValue(app.totalUSD != null ? app.totalUSD : app.total));
+}
+
+function formatPlayMetricNumber(value) {
+  if (value === null || value === undefined || value === "") return "—";
+  return formatCompactNumber(value, 2);
+}
+
+function formatPlayRating(value) {
+  const n = numberValue(value, NaN);
+  if (!Number.isFinite(n) || n <= 0) return "—";
+  return `${n.toFixed(3)}★`;
+}
+
+function formatPlayRevenue(value) {
+  const n = Math.max(0, numberValue(value));
+  return n >= 1000 ? `$${formatCompactNumber(n, 2)}` : fmtUSD(n);
+}
+
+function formatPlayDate(value) {
+  if (!value) return "";
+  const ms = Date.parse(value);
+  if (!Number.isFinite(ms)) return String(value);
+  return new Date(ms).toLocaleDateString("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function playProductionLabel(value) {
+  const raw = String(value || "").trim();
+  const normalized = raw.toLowerCase();
+  if (!raw || normalized === "published" || normalized === "completed" || normalized === "inprogress") {
+    return "Production";
+  }
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+function playDeltaHtml(value) {
+  if (value === null || value === undefined || value === "") return `<span class="play-delta is-muted">Chưa có so sánh 30 ngày trước</span>`;
+  const n = numberValue(value);
+  const cls = n > 0 ? "is-up" : n < 0 ? "is-down" : "is-flat";
+  const icon = n > 0 ? "fa-arrow-up" : n < 0 ? "fa-arrow-down" : "fa-minus";
+  return `<span class="play-delta ${cls}"><i class="fa-solid ${icon}"></i> ${trimNumber(Math.abs(n), 1)}% so với 30 ngày trước</span>`;
+}
+
+function playMetricHtml(label, value, tooltip, deltaHtml, extraClass = "") {
+  return `
+    <div class="play-metric ${extraClass}">
+      <span class="play-metric-label" data-tooltip="${escapeHtml(tooltip)}">${escapeHtml(label)}</span>
+      <strong>${value}</strong>
+      ${deltaHtml || ""}
+    </div>
+  `;
+}
+
+function normalizeTopRevenueCards(sortedApps) {
+  return sortedApps.map(app => ({
+    id: app.id,
+    title: app.title || cleanAppTitle(app.id),
+    iconUrl: app.iconUrl || app.icon_url || appIconUrl(app.id),
+    totalUSD: topRevenueValue(app),
+    playStoreUrl: app.playStoreUrl || app.play_store_url || `https://play.google.com/store/apps/details?id=${encodeURIComponent(app.id)}`,
+    playStoreStatus: app.playStoreStatus || app.play_store_status || "published",
+    productionStatus: app.productionStatus || app.play_production_status || "Production",
+    lastUpdatedAt: app.lastUpdatedAt || app.play_last_updated_at || app.play_stats_source_date || "",
+    installedAudience: app.installedAudience ?? app.installed_audience ?? null,
+    installedAudienceDeltaPct: app.installedAudienceDeltaPct ?? app.installed_audience_delta_pct ?? null,
+    userAcquisition: app.userAcquisition ?? app.user_acquisition ?? null,
+    userAcquisitionDeltaPct: app.userAcquisitionDeltaPct ?? app.user_acquisition_delta_pct ?? null,
+    googlePlayRating: app.googlePlayRating ?? app.google_play_rating ?? null,
+  }));
+}
+
 function renderTopAppsList(sortedApps, emptyText) {
   if (sortedApps.length === 0) {
     topAppsList.innerHTML = `<div class="loading-placeholder">${escapeHtml(emptyText)}</div>`;
     return;
   }
 
-  topAppsList.innerHTML = sortedApps.map((a, idx) => {
-    const icon = topAppIconHtml(a.id, a.title);
+  const cards = normalizeTopRevenueCards(sortedApps);
+  topAppsList.innerHTML = cards.map((a) => {
+    const icon = appIconHtml(a.id, a.title, "play-app-logo", "play-app-fallback", a.iconUrl);
+    const updated = formatPlayDate(a.lastUpdatedAt);
+    const status = playProductionLabel(a.productionStatus || a.playStoreStatus);
+    const meta = [
+      a.id,
+      updated ? `Cập nhật ${updated}` : "",
+      status,
+    ].filter(Boolean);
     return `
-    <div class="app-item">
-      <div class="app-item-left">
-        <div class="app-badge">${idx + 1}</div>
-        ${icon}
-        <div class="app-item-meta">
-          <span class="app-name">${escapeHtml(a.title)}</span>
-          <span class="app-pkg">${escapeHtml(a.id)}</span>
+    <article class="play-revenue-card">
+      <div class="play-app-header">
+        <div class="play-app-identity">
+          ${icon}
+          <div class="play-app-title-wrap">
+            <h5>${escapeHtml(a.title)}</h5>
+            <p>${meta.map(escapeHtml).join(" · ")}</p>
+          </div>
         </div>
+        <a class="play-view-link" href="${escapeHtml(a.playStoreUrl)}" target="_blank" rel="noopener">
+          Xem app <i class="fa-solid fa-arrow-right"></i>
+        </a>
       </div>
-      <span class="app-revenue">${fmtUSD(a.total)}</span>
-    </div>
+      <div class="play-metrics-grid">
+        ${playMetricHtml(
+          "Người dùng đang cài",
+          formatPlayMetricNumber(a.installedAudience),
+          "Số thiết bị đang hoạt động có cài ứng dụng theo ngày mới nhất trong báo cáo Google Play.",
+          playDeltaHtml(a.installedAudienceDeltaPct),
+        )}
+        ${playMetricHtml(
+          "Người dùng mới",
+          formatPlayMetricNumber(a.userAcquisition),
+          "Số người dùng cài ứng dụng và trước đó không cài trên bất kỳ thiết bị nào. Bao gồm người dùng kích hoạt thiết bị mới hoặc kích hoạt lại thiết bị không hoạt động có cài app.",
+          playDeltaHtml(a.userAcquisitionDeltaPct),
+        )}
+        ${playMetricHtml(
+          "Đánh giá Google Play",
+          formatPlayRating(a.googlePlayRating),
+          "Điểm đánh giá trung bình hiện có của ứng dụng trên Google Play.",
+          "",
+        )}
+        ${playMetricHtml(
+          "Ước tính (USD)",
+          formatPlayRevenue(a.totalUSD),
+          "Doanh thu ledger ước tính trong tháng hiện tại. Giá trị âm được hiển thị là 0.",
+          "",
+          "is-revenue",
+        )}
+      </div>
+    </article>
   `;
   }).join("");
 }
@@ -2231,12 +2335,12 @@ async function renderTopPlayers() {
 // Render revenue by app for the selected month.
 function renderTopApps(filtered, appMap, rate) {
   if (!topAppsList) return;
-  const selectedMonth = topAppsSelectedMonth || (serverSummary && serverSummary.currentMonth) || currentMonthKeyVN();
+  const selectedMonth = (serverSummary && serverSummary.currentMonth) || currentMonthKeyVN();
   const customRange = topAppsFilterMode === "custom"
     ? getCustomRangeWindow(topAppsRangeStart, topAppsRangeEnd)
     : null;
 
-  if (topAppsFilterMode === "custom") {
+  if (topAppsFilterMode === "custom" && topAppsMonthSelect) {
     renderTopAppsCustomRange(customRange, appMap, rate);
     return;
   }
@@ -2245,27 +2349,20 @@ function renderTopApps(filtered, appMap, rate) {
   if (topAppsSyncInfo) {
     const syncText = currentMonthSyncText(serverSummary);
     topAppsSyncInfo.textContent =
-      selectedMonth === (serverSummary && serverSummary.currentMonth) && syncText
-        ? syncText
-        : `Dữ liệu doanh thu tháng ${monthLabel(selectedMonth)}`;
+      syncText
+        ? `${syncText} · Ước tính ledger tháng ${monthLabel(selectedMonth)}, chỉ gồm app đang publish`
+        : `Ước tính ledger tháng ${monthLabel(selectedMonth)}, chỉ gồm app đang publish`;
   }
 
-  let sortedApps;
-  const revenueByApp = serverSummary && serverSummary.revenueByApp;
-  const sourceFilter = filterSource ? filterSource.value : "all";
-  const searchQuery = tableSearch ? tableSearch.value.trim() : "";
-  const canUseServerCurrentMonth =
-    revenueByApp &&
-    selectedMonth === (serverSummary && serverSummary.currentMonth) &&
-    sourceFilter === "all" &&
-    !searchQuery;
+  let sortedApps = [];
+  const topRevenueCards = serverSummary && Array.isArray(serverSummary.topRevenueCards)
+    ? serverSummary.topRevenueCards
+    : null;
 
-  if (canUseServerCurrentMonth) {
-    sortedApps = revenueByApp
-      .filter(a => !isAdjustmentApp(a.id, a.title))
-      .map(a => ({ id: a.id, title: a.title, total: Number(a.totalUSD || 0) }))
+  if (topRevenueCards) {
+    sortedApps = topRevenueCards
       .filter(a => !shouldHideTopApp(a))
-      .sort((a, b) => b.total - a.total);
+      .sort((a, b) => topRevenueValue(b) - topRevenueValue(a));
   } else {
     const totals = {};
     filtered
@@ -2276,30 +2373,39 @@ function renderTopApps(filtered, appMap, rate) {
         totals[e.app_id] = (totals[e.app_id] || 0) + usd;
       });
     const appIds = new Set([
+      ...appsList
+        .filter(app => isPublishedApp(app.id, app.title))
+        .map(app => app.id),
       ...Object.keys(totals).filter(id => !isAdjustmentApp(id, appMap[id])),
     ]);
     sortedApps = Array.from(appIds)
-      .map(id => ({ id, title: appMap[id] || id, total: totals[id] || 0 }))
+      .map(id => {
+        const app = appRecordById(id) || {};
+        return {
+          ...app,
+          id,
+          title: appMap[id] || app.title || id,
+          totalUSD: Math.max(0, totals[id] || 0),
+        };
+      })
+      .filter(a => isPublishedApp(a.id, a.title))
       .filter(a => !shouldHideTopApp(a))
-      .sort((a, b) => b.total - a.total);
+      .sort((a, b) => topRevenueValue(b) - topRevenueValue(a));
   }
 
-  renderTopAppsList(sortedApps, `Không có dữ liệu tháng ${monthLabel(selectedMonth)}`);
+  renderTopAppsList(sortedApps, `Không có ứng dụng đang publish trong tháng ${monthLabel(selectedMonth)}`);
 }
 
 // Render Chart
 function renderChart(filtered, uniqueMonths, rate) {
-  const miniCanvas = document.getElementById("revenue-chart-mini");
-  const modalCanvas = document.getElementById("revenue-chart-modal");
-  const miniCtx = miniCanvas ? miniCanvas.getContext("2d") : null;
-  const modalCtx = modalCanvas ? modalCanvas.getContext("2d") : null;
+  const mainCanvas = document.getElementById("revenue-chart-main");
+  const mainCtx = mainCanvas ? mainCanvas.getContext("2d") : null;
   
-  if (chartMini) chartMini.destroy();
-  if (chartModal) chartModal.destroy();
+  if (chartMain) chartMain.destroy();
+  chartMain = null;
 
   if (uniqueMonths.length === 0) {
-    if (miniCtx) miniCtx.clearRect(0, 0, miniCanvas.width, miniCanvas.height);
-    if (modalCtx) modalCtx.clearRect(0, 0, modalCanvas.width, modalCanvas.height);
+    if (mainCtx) mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
     if (chartKpiSubtitle) chartKpiSubtitle.textContent = "Chưa có dữ liệu";
     return;
   }
@@ -2318,7 +2424,7 @@ function renderChart(filtered, uniqueMonths, rate) {
   });
 
   const latestMonth = chronologicalMonths[chronologicalMonths.length - 1];
-  if (chartKpiSubtitle) chartKpiSubtitle.textContent = `${monthLabel(latestMonth)} · Biểu đồ tháng`;
+  if (chartKpiSubtitle) chartKpiSubtitle.textContent = `${monthLabel(latestMonth)} · KPI tháng gần nhất`;
 
   const chartDataset = () => ({
     label: "Doanh thu (USD)",
@@ -2330,30 +2436,8 @@ function renderChart(filtered, uniqueMonths, rate) {
     hoverBackgroundColor: "rgba(108, 140, 255, 0.85)",
   });
 
-  if (miniCtx) {
-    chartMini = new Chart(miniCtx, {
-      type: "bar",
-      data: {
-        labels: chronologicalMonths.map(monthLabel),
-        datasets: [chartDataset()],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: { enabled: false },
-        },
-        scales: {
-          x: { display: false },
-          y: { display: false },
-        },
-      },
-    });
-  }
-
-  if (!modalCtx) return;
-  chartModal = new Chart(modalCtx, {
+  if (!mainCtx) return;
+  chartMain = new Chart(mainCtx, {
     type: "bar",
     data: {
       labels: chronologicalMonths.map(monthLabel),
