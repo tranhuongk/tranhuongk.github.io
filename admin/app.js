@@ -238,7 +238,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     btn.addEventListener("click", closeIncomeModal);
   });
 
-  // RTDN order detail modal: close button + click-outside.
+  // Realtime order detail modal: close button + click-outside.
   document.querySelectorAll(".btn-close-rtdn-detail").forEach(btn => {
     btn.addEventListener("click", () => window.closeRtdnDetail && window.closeRtdnDetail());
   });
@@ -1145,7 +1145,7 @@ async function triggerSync() {
           ? numberValue(orderSync.updatedOrders)
           : syncedDelayedRtdn + syncedDelayedEstimates;
         addLog(`- Số lượng transaction delay được đồng bộ lại: ${syncedDelayedTotal}`, "blue");
-        addLog(`  RTDN: ${syncedDelayedRtdn}, Estimated sales: ${syncedDelayedEstimates}`, "muted");
+        addLog(`  Giao dịch realtime: ${syncedDelayedRtdn}, Estimated sales: ${syncedDelayedEstimates}`, "muted");
 
         if (hasOwnValue(orderSync, "delayedStill") || hasOwnValue(orderSync, "delayedStillRtdn") || hasOwnValue(orderSync, "delayedStillEstimates")) {
           const delayedStillRtdn = numberValue(orderSync.delayedStillRtdn);
@@ -1154,7 +1154,7 @@ async function triggerSync() {
             ? numberValue(orderSync.delayedStill)
             : delayedStillRtdn + delayedStillEstimates;
           addLog(`- Transaction delay còn chờ retry: ${delayedStillTotal}`, "muted");
-          addLog(`  RTDN: ${delayedStillRtdn}, Estimated sales: ${delayedStillEstimates}`, "muted");
+          addLog(`  Giao dịch realtime: ${delayedStillRtdn}, Estimated sales: ${delayedStillEstimates}`, "muted");
         }
       }
 
@@ -1419,12 +1419,11 @@ function renderDashboard() {
   // 5. Render Pivot Table
   renderPivotTable(filtered, uniqueApps, uniqueMonths, appMap);
 
-  // 6. Render RTDN realtime transactions (from the shared summary)
+  // 6. Render realtime transactions (from the shared summary)
   renderRtdnTransactions();
 }
 
-// Render the individual RTDN-reported transactions. Source: the durable
-// rtdn_transactions records returned by the dashboard-summary edge function.
+// Render the individual realtime transactions returned by dashboard-summary.
 // order_id -> transaction, for the detail modal. Plus paging state.
 let rtdnByOrder = {};
 let rtdnOffset = 0;   // how many transactions are currently loaded
@@ -1528,7 +1527,7 @@ async function attachPlayerNamesToRtdnRows(rows) {
       player_name: rtdnPlayerName(row) || playerByOrder.get(row.order_id) || null,
     }));
   } catch (err) {
-    console.warn("Không tải được tên người chơi cho RTDN:", err);
+    console.warn("Không tải được tên người chơi cho giao dịch realtime:", err);
     return rows;
   }
 }
@@ -1589,7 +1588,7 @@ function renderRtdnTransactions() {
       : "Chưa có giao dịch nào được ghi nhận";
   }
   if (!txns.length) {
-    body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-muted)">Chưa có giao dịch RTDN nào. Mỗi giao dịch IAP sẽ xuất hiện ngay khi Google gửi thông báo realtime.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-muted)">Chưa có giao dịch nào. Mỗi giao dịch IAP sẽ xuất hiện ngay khi Google gửi thông báo realtime.</td></tr>`;
     updateRtdnLoadMore();
     return;
   }
