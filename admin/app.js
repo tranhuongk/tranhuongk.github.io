@@ -588,9 +588,22 @@ function skeletonBlock(extraClass = "") {
 
 function renderKpiSkeleton(labelEl, valueEl, vndEl, subtitleEl) {
   if (labelEl) labelEl.innerHTML = skeletonLine("112px", "skeleton-label");
-  if (valueEl) valueEl.innerHTML = skeletonLine("156px", "skeleton-value");
-  if (vndEl) vndEl.innerHTML = skeletonLine("118px", "skeleton-subline");
+  if (valueEl) {
+    valueEl.innerHTML = skeletonLine("156px", "skeleton-value");
+    resetKpiNumberState(valueEl);
+  }
+  if (vndEl) {
+    vndEl.innerHTML = skeletonLine("118px", "skeleton-subline");
+    resetKpiNumberState(vndEl);
+  }
   if (subtitleEl) subtitleEl.innerHTML = skeletonLine("148px", "skeleton-subline");
+}
+
+function resetKpiNumberState(el) {
+  if (!el) return;
+  delete el.dataset.kpiNumber;
+  delete el.dataset.kpiAnimationId;
+  el.classList.remove("kpi-counting");
 }
 
 function renderPlayRevenueSkeleton(count = 3) {
@@ -998,7 +1011,7 @@ async function loadDataAndRender() {
     applyDashboardSummary(s);
     populateAppDropdown();
     await waitForVisibleSkeleton();
-    renderDashboard();
+    renderDashboard({ animateLatestKpi: true });
     await populateTopPlayersMonthOptions();
     renderTopPlayers();
     await loadLoginLogs();
@@ -1031,7 +1044,7 @@ async function loadDataAndRender() {
 
     populateAppDropdown();
     await waitForVisibleSkeleton();
-    renderDashboard();
+    renderDashboard({ animateLatestKpi: true });
     await populateTopPlayersMonthOptions();
     renderTopPlayers();
     await loadLoginLogs();
@@ -2252,7 +2265,7 @@ async function deleteEarning(id) {
 }
 
 // --- Dashboard Rendering ---
-function renderDashboard() {
+function renderDashboard(options = {}) {
   updateSourceFilterAccess();
   const sourceFilter = filterSource.value;
   const searchQuery = tableSearch.value.trim().toLowerCase();
@@ -2295,7 +2308,10 @@ function renderDashboard() {
   // KPI elements differ from this script during a deploy transition.
   renderMonthlyKpi(kpiPrev2MonthLabel, kpiPrev2Month, kpiPrev2MonthVnd, recentMonthlyKpis[0], "Tháng N-2");
   renderMonthlyKpi(kpiPrevMonthLabel, kpiPrevMonth, kpiPrevMonthVnd, recentMonthlyKpis[1], "Tháng N-1");
-  renderMonthlyKpi(kpiCurrentRtdnLabel, kpiCurrentRtdn, kpiCurrentRtdnVnd, recentMonthlyKpis[2], "Ước tính tháng N");
+  renderMonthlyKpi(kpiCurrentRtdnLabel, kpiCurrentRtdn, kpiCurrentRtdnVnd, recentMonthlyKpis[2], "Ước tính tháng N", {
+    animate: options.animateLatestKpi,
+    animateInitial: options.animateLatestKpi,
+  });
 
   // The hidden legacy estimate card follows the same estimate + realtime snapshot.
   if (kpiCurrentEstimateLabel) {
@@ -2652,16 +2668,20 @@ function monthlyKpiLabel(row, fallback) {
 function renderMonthlyKpi(labelEl, amountEl, vndEl, row, fallbackLabel, options = {}) {
   const usd = row ? numberValue(row.amountUSD) : 0;
   if (labelEl) labelEl.textContent = monthlyKpiLabel(row, fallbackLabel);
-  setKpiNumber(amountEl, usd, fmtUSD, options.animate);
-  setKpiNumber(vndEl, usd * currentUsdToVndRate, (value) => `≈ ${fmtVND(value)}`, options.animate);
+  setKpiNumber(amountEl, usd, fmtUSD, options.animate, { animateInitial: options.animateInitial });
+  setKpiNumber(vndEl, usd * currentUsdToVndRate, (value) => `≈ ${fmtVND(value)}`, options.animate, {
+    animateInitial: options.animateInitial,
+  });
 }
 
-function setKpiNumber(el, value, formatter, animate = false) {
+function setKpiNumber(el, value, formatter, animate = false, options = {}) {
   if (!el) return;
   const next = numberValue(value);
   const previous = Number(el.dataset.kpiNumber);
   const hasPrevious = Number.isFinite(previous);
-  const changed = hasPrevious && Math.abs(previous - next) >= 0.005;
+  const startValue = hasPrevious ? previous : 0;
+  const canAnimate = hasPrevious || options.animateInitial;
+  const changed = canAnimate && Math.abs(startValue - next) >= 0.005;
 
   if (!animate || !changed) {
     el.textContent = formatter(next);
@@ -2675,12 +2695,12 @@ function setKpiNumber(el, value, formatter, animate = false) {
   pulseKpiCard(el);
 
   const startedAt = performance.now();
-  const diff = next - previous;
+  const diff = next - startValue;
   const tick = (now) => {
     if (String(animationId) !== el.dataset.kpiAnimationId) return;
     const rawProgress = Math.min(1, (now - startedAt) / KPI_COUNT_ANIMATION_MS);
     const eased = 1 - Math.pow(1 - rawProgress, 3);
-    el.textContent = formatter(previous + diff * eased);
+    el.textContent = formatter(startValue + diff * eased);
     if (rawProgress < 1) {
       requestAnimationFrame(tick);
       return;
