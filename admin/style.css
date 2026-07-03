@@ -564,6 +564,30 @@ input[type="date"]:focus,
   font-weight: 700;
 }
 
+.kpi-val.kpi-counting {
+  color: var(--success);
+  text-shadow: 0 0 18px rgba(16, 185, 129, 0.28);
+}
+
+.kpi-card.kpi-live-pulse {
+  animation: kpiLivePulse 760ms ease-out;
+}
+
+@keyframes kpiLivePulse {
+  0% {
+    border-color: rgba(16, 185, 129, 0.66);
+    box-shadow: var(--glass-shadow), 0 0 0 0 rgba(16, 185, 129, 0.34);
+  }
+  58% {
+    border-color: rgba(16, 185, 129, 0.34);
+    box-shadow: var(--glass-shadow), 0 0 0 12px rgba(16, 185, 129, 0);
+  }
+  100% {
+    border-color: var(--border-light);
+    box-shadow: var(--glass-shadow), 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
 /* Analytics Row */
 .analytics-row {
   display: grid;

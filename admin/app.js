@@ -20,6 +20,7 @@ const DASHBOARD_SKELETON_MIN_MS = 450;
 const REALTIME_REFRESH_DEBOUNCE_MS = 1500;
 const REALTIME_RECONCILE_DEBOUNCE_MS = 10000;
 const REALTIME_RTDN_PAGE_SIZE = 30;
+const KPI_COUNT_ANIMATION_MS = 720;
 const SYNC_PROGRESS_PHASES = [
   { key: "sync-earnings", label: "Đồng bộ finalized earnings", defaultDurationMs: 3000 },
   { key: "sync-estimates", label: "Đồng bộ Estimated sales reports", defaultDurationMs: 25000 },
@@ -768,13 +769,15 @@ function applyDashboardSummary(summary) {
   earningsData = mergeRtdnAddonIntoEarnings(summary.earnings || [], summary);
 }
 
-function renderRealtimeUpdatedSections() {
+function renderRealtimeUpdatedSections({ animateKpi = true } = {}) {
   const recent = serverSummary && serverSummary.kpis && Array.isArray(serverSummary.kpis.recentMonths)
     ? serverSummary.kpis.recentMonths
     : buildRecentMonthlyKpisFromEarnings(earningsData, currentUsdToVndRate);
   const latestKpi = recent[recent.length - 1] || null;
 
-  renderMonthlyKpi(kpiCurrentRtdnLabel, kpiCurrentRtdn, kpiCurrentRtdnVnd, latestKpi, "Ước tính tháng N");
+  renderMonthlyKpi(kpiCurrentRtdnLabel, kpiCurrentRtdn, kpiCurrentRtdnVnd, latestKpi, "Ước tính tháng N", {
+    animate: animateKpi,
+  });
   if (chartKpiSubtitle && latestKpi && latestKpi.month) {
     chartKpiSubtitle.textContent = `${monthLabel(latestKpi.month)} · KPI tháng gần nhất`;
   }
@@ -2596,11 +2599,56 @@ function monthlyKpiLabel(row, fallback) {
   return `${prefix} ${monthLabel(row.month)}`;
 }
 
-function renderMonthlyKpi(labelEl, amountEl, vndEl, row, fallbackLabel) {
+function renderMonthlyKpi(labelEl, amountEl, vndEl, row, fallbackLabel, options = {}) {
   const usd = row ? numberValue(row.amountUSD) : 0;
   if (labelEl) labelEl.textContent = monthlyKpiLabel(row, fallbackLabel);
-  if (amountEl) amountEl.textContent = fmtUSD(usd);
-  if (vndEl) vndEl.textContent = `≈ ${fmtVND(usd * currentUsdToVndRate)}`;
+  setKpiNumber(amountEl, usd, fmtUSD, options.animate);
+  setKpiNumber(vndEl, usd * currentUsdToVndRate, (value) => `≈ ${fmtVND(value)}`, options.animate);
+}
+
+function setKpiNumber(el, value, formatter, animate = false) {
+  if (!el) return;
+  const next = numberValue(value);
+  const previous = Number(el.dataset.kpiNumber);
+  const hasPrevious = Number.isFinite(previous);
+  const changed = hasPrevious && Math.abs(previous - next) >= 0.005;
+
+  if (!animate || !changed) {
+    el.textContent = formatter(next);
+    el.dataset.kpiNumber = String(next);
+    return;
+  }
+
+  const animationId = numberValue(el.dataset.kpiAnimationId) + 1;
+  el.dataset.kpiAnimationId = String(animationId);
+  el.classList.add("kpi-counting");
+  pulseKpiCard(el);
+
+  const startedAt = performance.now();
+  const diff = next - previous;
+  const tick = (now) => {
+    if (String(animationId) !== el.dataset.kpiAnimationId) return;
+    const rawProgress = Math.min(1, (now - startedAt) / KPI_COUNT_ANIMATION_MS);
+    const eased = 1 - Math.pow(1 - rawProgress, 3);
+    el.textContent = formatter(previous + diff * eased);
+    if (rawProgress < 1) {
+      requestAnimationFrame(tick);
+      return;
+    }
+    el.textContent = formatter(next);
+    el.dataset.kpiNumber = String(next);
+    el.classList.remove("kpi-counting");
+  };
+
+  requestAnimationFrame(tick);
+}
+
+function pulseKpiCard(el) {
+  const card = el.closest(".kpi-card");
+  if (!card) return;
+  card.classList.remove("kpi-live-pulse");
+  void card.offsetWidth;
+  card.classList.add("kpi-live-pulse");
 }
 
 function buildRecentMonthlyKpisFromEarnings(rows, rate) {
