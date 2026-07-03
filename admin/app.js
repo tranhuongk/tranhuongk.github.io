@@ -16,6 +16,7 @@ const ORDER_SYNC_SCAN_LIMIT = 5000;
 const ORDER_SYNC_MAX_RUNS = 20;
 const ORDER_SYNC_RETRY_COOLDOWN_MINUTES = 60;
 const DASHBOARD_SKELETON_MIN_MS = 450;
+const REALTIME_REFRESH_DEBOUNCE_MS = 1500;
 const SYNC_PROGRESS_PHASES = [
   { key: "sync-earnings", label: "Đồng bộ finalized earnings", defaultDurationMs: 3000 },
   { key: "sync-estimates", label: "Đồng bộ Estimated sales reports", defaultDurationMs: 25000 },
@@ -25,6 +26,10 @@ let syncProgressCurrent = 0;
 let syncProgressTimer = null;
 let syncProgressPlan = null;
 let syncProgressPhase = null;
+let realtimeChannel = null;
+let realtimeRefreshTimer = null;
+let realtimeRefreshInFlight = false;
+let realtimeRefreshQueued = false;
 
 function cleanAppTitle(pkg, fallback) {
   const cleanPkg = String(pkg).trim().toLowerCase();
@@ -111,8 +116,8 @@ function currentPlayAccountId() {
   return selectedPlayAccountId || DEFAULT_PLAY_ACCOUNT_ID;
 }
 
-function googlePlayAccountPayload() {
-  return { playAccountId: currentPlayAccountId() };
+function googlePlayAccountPayload(accountId = currentPlayAccountId()) {
+  return { playAccountId: accountId };
 }
 
 function activeAccountAppIds() {
@@ -314,6 +319,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       topAppsFilterMode = "month";
       topPlayersFilterMode = "month";
       closeRangePopups();
+      setupRealtimeSubscriptions();
       loadDataAndRender();
     });
   }
@@ -447,8 +453,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderDashboardSkeleton();
     recordAdminLogin("reload");
     await loadGooglePlayAccounts();
+    setupRealtimeSubscriptions();
     loadDataAndRender();
   } else {
+    clearRealtimeSubscriptions();
     updateSourceFilterAccess();
     showScreen("auth");
   }
@@ -532,6 +540,7 @@ async function handleLogin(e) {
     renderDashboardSkeleton();
     recordAdminLogin("login");
     await loadGooglePlayAccounts();
+    setupRealtimeSubscriptions();
     loadDataAndRender();
   } catch (err) {
     showError(err.message || "Đăng nhập thất bại. Kiểm tra lại thông tin đăng nhập.");
@@ -547,6 +556,7 @@ async function handleLogout() {
   }
   session = null;
   googlePlayAccounts = [];
+  clearRealtimeSubscriptions();
   updatePlayAccountSelect();
   updateSourceFilterAccess();
   showScreen("auth");
@@ -729,6 +739,137 @@ async function recordAdminLogin(eventType = "login") {
   }
 }
 
+async function fetchDashboardSummary(accountId = currentPlayAccountId()) {
+  const res = await fetch(`${supabaseUrl}/functions/v1/dashboard-summary`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${session ? session.access_token : supabaseAnonKey}`,
+    },
+    body: JSON.stringify(googlePlayAccountPayload(accountId)),
+  });
+  const summary = await readJsonResponse(res);
+  if (!res.ok || summary.error) {
+    throw new Error(summary.error || `dashboard-summary ${res.status}`);
+  }
+  return summary;
+}
+
+function applyDashboardSummary(summary) {
+  serverSummary = summary;
+  currentUsdToVndRate = summary.rate || currentUsdToVndRate;
+  appsList = (summary.apps || []).map(a => ({ ...a, title: cleanAppTitle(a.id, a.title) }));
+  earningsData = mergeRtdnAddonIntoEarnings(summary.earnings || [], summary);
+}
+
+function renderRealtimeUpdatedSections() {
+  const recent = serverSummary && serverSummary.kpis && Array.isArray(serverSummary.kpis.recentMonths)
+    ? serverSummary.kpis.recentMonths
+    : buildRecentMonthlyKpisFromEarnings(earningsData, currentUsdToVndRate);
+  const latestKpi = recent[recent.length - 1] || null;
+
+  renderMonthlyKpi(kpiCurrentRtdnLabel, kpiCurrentRtdn, kpiCurrentRtdnVnd, latestKpi, "Ước tính tháng N");
+  if (chartKpiSubtitle && latestKpi && latestKpi.month) {
+    chartKpiSubtitle.textContent = `${monthLabel(latestKpi.month)} · KPI tháng gần nhất`;
+  }
+  if (navExchangeRate) {
+    navExchangeRate.textContent = `Tỷ giá: ${fmtVND(currentUsdToVndRate)} / USD`;
+  }
+
+  if (topAppsSyncInfo) {
+    const selectedMonth = (serverSummary && serverSummary.currentMonth) || currentMonthKeyVN();
+    const syncText = currentMonthSyncText(serverSummary);
+    topAppsSyncInfo.textContent = syncText
+      ? `${syncText} · Ước tính ledger tháng ${monthLabel(selectedMonth)}, chỉ gồm app đang publish`
+      : `Ước tính ledger tháng ${monthLabel(selectedMonth)}, chỉ gồm app đang publish`;
+  }
+
+  renderRtdnTransactions();
+}
+
+function clearRealtimeSubscriptions() {
+  if (realtimeRefreshTimer) {
+    window.clearTimeout(realtimeRefreshTimer);
+    realtimeRefreshTimer = null;
+  }
+  realtimeRefreshQueued = false;
+  realtimeRefreshInFlight = false;
+  if (realtimeChannel && supabaseClient) {
+    supabaseClient.removeChannel(realtimeChannel).catch((err) => {
+      console.warn("Không gỡ được realtime channel:", err);
+    });
+  }
+  realtimeChannel = null;
+}
+
+function setupRealtimeSubscriptions() {
+  clearRealtimeSubscriptions();
+  if (!supabaseClient || !session || !session.access_token) return;
+
+  if (supabaseClient.realtime && typeof supabaseClient.realtime.setAuth === "function") {
+    supabaseClient.realtime.setAuth(session.access_token);
+  }
+
+  const accountId = currentPlayAccountId();
+  realtimeChannel = supabaseClient
+    .channel(`admin-dashboard-${accountId}-${session.user?.id || "user"}`)
+    .on("postgres_changes", {
+      event: "*",
+      schema: "public",
+      table: "earnings",
+      filter: `play_account_id=eq.${accountId}`,
+    }, (payload) => scheduleRealtimeRefresh(payload))
+    .on("postgres_changes", {
+      event: "*",
+      schema: "public",
+      table: "rtdn_transactions",
+      filter: `play_account_id=eq.${accountId}`,
+    }, (payload) => scheduleRealtimeRefresh(payload))
+    .subscribe((status, err) => {
+      if (status === "SUBSCRIBED") {
+        console.info(`Realtime dashboard active for Google Play account ${accountId}`);
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        console.warn("Realtime dashboard channel status:", status, err || "");
+      }
+    });
+}
+
+function scheduleRealtimeRefresh(payload) {
+  if (!session) return;
+  if (realtimeRefreshTimer) window.clearTimeout(realtimeRefreshTimer);
+  realtimeRefreshTimer = window.setTimeout(() => {
+    realtimeRefreshTimer = null;
+    refreshRealtimeDashboardParts(payload);
+  }, REALTIME_REFRESH_DEBOUNCE_MS);
+}
+
+async function refreshRealtimeDashboardParts(payload) {
+  if (!session) return;
+  if (realtimeRefreshInFlight) {
+    realtimeRefreshQueued = true;
+    return;
+  }
+
+  realtimeRefreshInFlight = true;
+  const accountId = currentPlayAccountId();
+  try {
+    const summary = await fetchDashboardSummary(accountId);
+    if (accountId !== currentPlayAccountId()) return;
+    applyDashboardSummary(summary);
+    populateAppDropdown();
+    renderRealtimeUpdatedSections();
+  } catch (err) {
+    console.warn("Không refresh được dữ liệu realtime:", err, payload || "");
+  } finally {
+    realtimeRefreshInFlight = false;
+    if (realtimeRefreshQueued) {
+      realtimeRefreshQueued = false;
+      scheduleRealtimeRefresh({ source: "queued" });
+    }
+  }
+}
+
 // --- Data Fetching ---
 async function loadDataAndRender() {
   if (!supabaseClient) return;
@@ -746,32 +887,15 @@ async function loadDataAndRender() {
   // function so the KPI numbers, exchange rate, and app titles match the
   // Telegram bot exactly (same computation, same rate snapshot).
   try {
-    const res = await fetch(`${supabaseUrl}/functions/v1/dashboard-summary`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: supabaseAnonKey,
-        Authorization: `Bearer ${session ? session.access_token : supabaseAnonKey}`,
-      },
-      body: JSON.stringify(googlePlayAccountPayload()),
-    });
-    if (res.ok) {
-      const s = await res.json();
-      if (!s.error) {
-        serverSummary = s;
-        currentUsdToVndRate = s.rate || currentUsdToVndRate;
-        appsList = (s.apps || []).map(a => ({ ...a, title: cleanAppTitle(a.id, a.title) }));
-        earningsData = mergeRtdnAddonIntoEarnings(s.earnings || [], s);
-        populateAppDropdown();
-        await waitForVisibleSkeleton();
-        renderDashboard();
-        await populateTopPlayersMonthOptions();
-        renderTopPlayers();
-        await loadLoginLogs();
-        return;
-      }
-    }
-    console.warn("dashboard-summary unavailable, falling back to direct table reads.");
+    const s = await fetchDashboardSummary();
+    applyDashboardSummary(s);
+    populateAppDropdown();
+    await waitForVisibleSkeleton();
+    renderDashboard();
+    await populateTopPlayersMonthOptions();
+    renderTopPlayers();
+    await loadLoginLogs();
+    return;
   } catch (err) {
     console.warn("dashboard-summary fetch failed, falling back:", err);
   }
