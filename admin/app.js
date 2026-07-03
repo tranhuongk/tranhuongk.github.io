@@ -11,6 +11,7 @@ const SOURCE_FILTER_ALL_VALUE = "all";
 const SOURCE_FILTER_ADMIN_EMAIL = "admin@admin.com";
 const PLAY_ACCOUNT_STORAGE_KEY = "galax_admin_google_play_account_id_v1";
 const DEFAULT_PLAY_ACCOUNT_ID = "default";
+const DEFAULT_PLAY_ACCOUNT_LABEL = "Galax VN Team";
 const ORDER_SYNC_BATCH_LIMIT = 500;
 const ORDER_SYNC_SCAN_LIMIT = 5000;
 const ORDER_SYNC_MAX_RUNS = 20;
@@ -134,7 +135,7 @@ function updatePlayAccountSelect() {
   if (!playAccountSelect || !playAccountSwitcher) return;
   const accounts = googlePlayAccounts.length
     ? googlePlayAccounts
-    : [{ id: DEFAULT_PLAY_ACCOUNT_ID, label: "Galaxy VN Team", isDefault: true }];
+    : [{ id: DEFAULT_PLAY_ACCOUNT_ID, label: DEFAULT_PLAY_ACCOUNT_LABEL, isDefault: true }];
   if (!accounts.some(account => account.id === selectedPlayAccountId)) {
     const fallback = accounts.find(account => account.isDefault) || accounts[0];
     selectedPlayAccountId = fallback.id || DEFAULT_PLAY_ACCOUNT_ID;
@@ -173,7 +174,7 @@ async function loadGooglePlayAccounts() {
     googlePlayAccounts = Array.isArray(body.accounts) ? body.accounts : [];
   } catch (err) {
     console.warn("Không tải được danh sách account Google Play:", err);
-    googlePlayAccounts = [{ id: DEFAULT_PLAY_ACCOUNT_ID, label: "Galaxy VN Team", isDefault: true }];
+    googlePlayAccounts = [{ id: DEFAULT_PLAY_ACCOUNT_ID, label: DEFAULT_PLAY_ACCOUNT_LABEL, isDefault: true }];
   }
   updatePlayAccountSelect();
 }
