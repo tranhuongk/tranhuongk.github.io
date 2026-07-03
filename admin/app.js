@@ -13,6 +13,7 @@ const ORDER_SYNC_BATCH_LIMIT = 500;
 const ORDER_SYNC_SCAN_LIMIT = 5000;
 const ORDER_SYNC_MAX_RUNS = 20;
 const ORDER_SYNC_RETRY_COOLDOWN_MINUTES = 60;
+const DASHBOARD_SKELETON_MIN_MS = 450;
 const SYNC_PROGRESS_PHASES = [
   { key: "sync-earnings", label: "Đồng bộ finalized earnings", defaultDurationMs: 3000 },
   { key: "sync-estimates", label: "Đồng bộ Estimated sales reports", defaultDurationMs: 25000 },
@@ -97,6 +98,10 @@ let topAppsRangePopupOpen = false;
 let topPlayersRangePopupOpen = false;
 let topAppsRangeRequestId = 0;
 let topPlayersRangeRequestId = 0;
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 // Fetch exchange rate dynamically
 async function fetchExchangeRate() {
@@ -355,9 +360,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const { data } = await supabaseClient.auth.getSession();
   if (data && data.session) {
     session = data.session;
-    await recordAdminLogin("reload");
     updateSourceFilterAccess();
     showScreen("dashboard");
+    renderDashboardSkeleton();
+    recordAdminLogin("reload");
     loadDataAndRender();
   } else {
     updateSourceFilterAccess();
@@ -423,9 +429,10 @@ async function handleLogin(e) {
     if (error) throw error;
     
     session = data.session;
-    await recordAdminLogin("login");
     updateSourceFilterAccess();
     showScreen("dashboard");
+    renderDashboardSkeleton();
+    recordAdminLogin("login");
     loadDataAndRender();
   } catch (err) {
     showError(err.message || "Đăng nhập thất bại. Kiểm tra lại thông tin đăng nhập.");
@@ -447,6 +454,138 @@ async function handleLogout() {
 function showError(msg) {
   authError.textContent = msg;
   authError.classList.remove("hidden");
+}
+
+function skeletonLine(width = "100%", extraClass = "") {
+  return `<span class="skeleton-line ${extraClass}" style="width:${width}"></span>`;
+}
+
+function skeletonBlock(extraClass = "") {
+  return `<span class="skeleton-block ${extraClass}"></span>`;
+}
+
+function renderKpiSkeleton(labelEl, valueEl, vndEl, subtitleEl) {
+  if (labelEl) labelEl.innerHTML = skeletonLine("112px", "skeleton-label");
+  if (valueEl) valueEl.innerHTML = skeletonLine("156px", "skeleton-value");
+  if (vndEl) vndEl.innerHTML = skeletonLine("118px", "skeleton-subline");
+  if (subtitleEl) subtitleEl.innerHTML = skeletonLine("148px", "skeleton-subline");
+}
+
+function renderPlayRevenueSkeleton(count = 3) {
+  return Array.from({ length: count }).map(() => `
+    <article class="play-revenue-card skeleton-card" aria-hidden="true">
+      <div class="play-app-header">
+        <div class="play-app-identity">
+          ${skeletonBlock("skeleton-logo play-app-logo")}
+          <div class="play-app-title-wrap skeleton-copy">
+            ${skeletonLine("180px", "skeleton-title")}
+            ${skeletonLine("260px", "skeleton-subline")}
+          </div>
+        </div>
+        ${skeletonLine("72px", "skeleton-link")}
+      </div>
+      <div class="play-metrics-grid">
+        ${Array.from({ length: 4 }).map(() => `
+          <div class="play-metric">
+            ${skeletonLine("74%", "skeleton-subline")}
+            ${skeletonLine("58%", "skeleton-metric")}
+            ${skeletonLine("68%", "skeleton-subline")}
+          </div>
+        `).join("")}
+      </div>
+    </article>
+  `).join("");
+}
+
+function renderRankingSkeleton(count = 5) {
+  return Array.from({ length: count }).map(() => `
+    <div class="app-item skeleton-card" aria-hidden="true">
+      <div class="app-item-left">
+        ${skeletonBlock("skeleton-badge")}
+        <div class="app-item-meta skeleton-copy">
+          ${skeletonLine("150px", "skeleton-title")}
+          ${skeletonLine("210px", "skeleton-subline")}
+        </div>
+      </div>
+      ${skeletonLine("68px", "skeleton-revenue")}
+    </div>
+  `).join("");
+}
+
+function renderTableSkeleton(columns = 7, rows = 7) {
+  if (!tableHeaderRow || !tableBody) return;
+  tableHeaderRow.innerHTML = `
+    <th class="table-app-sticky-head">${skeletonLine("90px")}</th>
+    ${Array.from({ length: columns - 1 }).map(() => `<th>${skeletonLine("76px")}</th>`).join("")}
+  `;
+  tableBody.innerHTML = Array.from({ length: rows }).map(() => `
+    <tr class="skeleton-table-row" aria-hidden="true">
+      <td class="table-app-sticky-cell">
+        <div class="table-app-cell">
+          ${skeletonBlock("skeleton-logo table-app-logo")}
+          <div class="table-app-meta skeleton-copy">
+            ${skeletonLine("138px", "skeleton-title")}
+            ${skeletonLine("186px", "skeleton-subline")}
+          </div>
+        </div>
+      </td>
+      ${Array.from({ length: columns - 1 }).map(() => `<td>${skeletonLine("72px", "skeleton-cell")}</td>`).join("")}
+    </tr>
+  `).join("");
+}
+
+function renderSimpleTableSkeleton(bodyEl, columns, rows = 6) {
+  if (!bodyEl) return;
+  bodyEl.innerHTML = Array.from({ length: rows }).map(() => `
+    <tr class="skeleton-table-row" aria-hidden="true">
+      ${Array.from({ length: columns }).map((_, idx) => `
+        <td>${idx === 0 ? skeletonLine("92px") : skeletonLine(idx === 1 ? "150px" : "78px", "skeleton-cell")}</td>
+      `).join("")}
+    </tr>
+  `).join("");
+}
+
+function setChartSkeleton(isLoading) {
+  const wrapper = document.querySelector(".monthly-chart-wrapper");
+  if (!wrapper) return;
+  wrapper.classList.toggle("is-loading", isLoading);
+  let overlay = wrapper.querySelector(".chart-skeleton");
+  if (isLoading && !overlay) {
+    overlay = document.createElement("div");
+    overlay.className = "chart-skeleton";
+    overlay.setAttribute("aria-hidden", "true");
+    overlay.innerHTML = `
+      <div class="chart-skeleton-bars">
+        ${[46, 70, 38, 86, 58, 76, 50].map(height => `<span style="height:${height}%"></span>`).join("")}
+      </div>
+    `;
+    wrapper.appendChild(overlay);
+  } else if (!isLoading && overlay) {
+    overlay.remove();
+  }
+}
+
+function renderDashboardSkeleton() {
+  renderKpiSkeleton(kpiPrev2MonthLabel, kpiPrev2Month, kpiPrev2MonthVnd);
+  renderKpiSkeleton(kpiPrevMonthLabel, kpiPrevMonth, kpiPrevMonthVnd);
+  renderKpiSkeleton(kpiCurrentRtdnLabel, kpiCurrentRtdn, kpiCurrentRtdnVnd, chartKpiSubtitle);
+  if (kpiCurrentEstimateLabel) {
+    renderKpiSkeleton(kpiCurrentEstimateLabel, kpiCurrentEstimate, kpiCurrentEstimateVnd);
+  }
+  if (navExchangeRate) navExchangeRate.textContent = "Tỷ giá: đang tải...";
+  if (topAppsSyncInfo) topAppsSyncInfo.textContent = "Đang tải dữ liệu doanh thu...";
+  if (topAppsList) topAppsList.innerHTML = renderPlayRevenueSkeleton();
+  if (topPlayersList) topPlayersList.innerHTML = renderRankingSkeleton();
+  renderTableSkeleton();
+  setChartSkeleton(true);
+  renderSimpleTableSkeleton(document.getElementById("rtdn-body"), 8, 6);
+  const rtdnSubtitle = document.getElementById("rtdn-subtitle");
+  if (rtdnSubtitle) rtdnSubtitle.textContent = "Đang tải giao dịch...";
+  if (canViewLoginLogs()) {
+    loginLogCard?.classList.remove("hidden");
+    renderSimpleTableSkeleton(loginLogBody, 5, 4);
+    if (loginLogSubtitle) loginLogSubtitle.textContent = "Đang tải lịch sử đăng nhập...";
+  }
 }
 
 async function recordAdminLogin(eventType = "login") {
@@ -492,6 +631,15 @@ async function recordAdminLogin(eventType = "login") {
 // --- Data Fetching ---
 async function loadDataAndRender() {
   if (!supabaseClient) return;
+  const skeletonStartedAt = performance.now();
+  renderDashboardSkeleton();
+
+  const waitForVisibleSkeleton = async () => {
+    const elapsed = performance.now() - skeletonStartedAt;
+    if (elapsed < DASHBOARD_SKELETON_MIN_MS) {
+      await sleep(DASHBOARD_SKELETON_MIN_MS - elapsed);
+    }
+  };
 
   // Preferred path: pull everything from the shared `dashboard-summary` edge
   // function so the KPI numbers, exchange rate, and app titles match the
@@ -511,6 +659,7 @@ async function loadDataAndRender() {
         appsList = (s.apps || []).map(a => ({ ...a, title: cleanAppTitle(a.id, a.title) }));
         earningsData = mergeRtdnAddonIntoEarnings(s.earnings || [], s);
         populateAppDropdown();
+        await waitForVisibleSkeleton();
         renderDashboard();
         await populateTopPlayersMonthOptions();
         renderTopPlayers();
@@ -544,6 +693,7 @@ async function loadDataAndRender() {
     earningsData = earnings || [];
 
     populateAppDropdown();
+    await waitForVisibleSkeleton();
     renderDashboard();
     await populateTopPlayersMonthOptions();
     renderTopPlayers();
@@ -562,7 +712,8 @@ async function loadLoginLogs() {
   }
 
   loginLogCard.classList.remove("hidden");
-  loginLogBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Đang tải...</td></tr>`;
+  renderSimpleTableSkeleton(loginLogBody, 5, 4);
+  if (loginLogSubtitle) loginLogSubtitle.textContent = "Đang tải lịch sử đăng nhập...";
 
   try {
     const { data, error } = await supabaseClient
@@ -2462,7 +2613,7 @@ async function renderTopAppsCustomRange(range, appMap, rate) {
   const sourceFilter = filterSource ? filterSource.value : "all";
   const searchQuery = tableSearch ? tableSearch.value.trim().toLowerCase() : "";
   const requestId = ++topAppsRangeRequestId;
-  topAppsList.innerHTML = `<div class="loading-placeholder">Đang tải dữ liệu...</div>`;
+  topAppsList.innerHTML = renderPlayRevenueSkeleton(2);
   if (topAppsSyncInfo) {
     topAppsSyncInfo.textContent = `Dữ liệu doanh thu từ ${range.label} + giao dịch realtime chưa có trong estimate`;
   }
@@ -2532,7 +2683,7 @@ async function renderTopPlayers() {
     ? getCustomRangeWindow(topPlayersRangeStart, topPlayersRangeEnd)
     : null;
   const { start, end } = customRange || currentMonthWindowVN(selectedMonth);
-  topPlayersList.innerHTML = `<div class="loading-placeholder">Đang tải dữ liệu...</div>`;
+  topPlayersList.innerHTML = renderRankingSkeleton();
   const requestId = ++topPlayersRangeRequestId;
 
   try {
@@ -2640,6 +2791,7 @@ function renderTopApps(filtered, appMap, rate) {
 
 // Render Chart
 function renderChart(filtered, uniqueMonths, rate) {
+  setChartSkeleton(false);
   const mainCanvas = document.getElementById("revenue-chart-main");
   const mainCtx = mainCanvas ? mainCanvas.getContext("2d") : null;
   

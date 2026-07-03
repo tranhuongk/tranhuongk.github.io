@@ -465,6 +465,8 @@ input[type="date"]:focus,
 .kpi-info {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-width: 0;
 }
 
 .kpi-label {
@@ -1090,6 +1092,169 @@ input[type="date"]:focus,
   padding: 40px 0;
   color: var(--text-muted);
   font-size: 14px;
+}
+
+.skeleton-line,
+.skeleton-block {
+  display: block;
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.07) 0%,
+      rgba(111, 143, 255, 0.2) 42%,
+      rgba(255, 255, 255, 0.08) 78%
+    );
+  background-size: 240% 100%;
+  animation: skeleton-shimmer 1.35s ease-in-out infinite;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.035);
+}
+
+.skeleton-block {
+  border-radius: 8px;
+}
+
+.skeleton-label {
+  height: 13px;
+}
+
+.skeleton-value {
+  height: 42px;
+  max-width: 220px;
+  margin-top: 5px;
+}
+
+.skeleton-subline {
+  height: 12px;
+  margin-top: 8px;
+}
+
+.kpi-card .skeleton-value {
+  height: 29px;
+  margin-top: 0;
+  max-width: 160px;
+}
+
+.kpi-card .skeleton-subline {
+  height: 14px;
+  margin-top: 0;
+}
+
+.skeleton-title {
+  height: 18px;
+  max-width: 100%;
+}
+
+.skeleton-metric {
+  height: 30px;
+  margin-top: 10px;
+}
+
+.skeleton-cell {
+  height: 14px;
+  margin-left: auto;
+}
+
+.skeleton-link,
+.skeleton-revenue {
+  height: 18px;
+}
+
+.skeleton-logo {
+  flex-shrink: 0;
+}
+
+.skeleton-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  flex: 0 0 32px;
+}
+
+.skeleton-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.skeleton-card {
+  pointer-events: none;
+}
+
+.skeleton-table-row td {
+  height: 62px;
+}
+
+.skeleton-table-row:hover td,
+.skeleton-table-row:hover td:first-child {
+  background: var(--table-body-bg);
+}
+
+.monthly-chart-wrapper {
+  position: relative;
+}
+
+.chart-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: 14px;
+  background: rgba(8, 12, 28, 0.66);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: stretch;
+  padding: 26px 22px 22px;
+}
+
+.chart-skeleton-bars {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  min-height: 160px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.chart-skeleton-bars span {
+  flex: 1;
+  min-width: 18px;
+  border-radius: 8px 8px 0 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(111, 143, 255, 0.42),
+      rgba(22, 163, 190, 0.16)
+    );
+  opacity: 0.82;
+  animation: skeleton-bar-pulse 1.4s ease-in-out infinite;
+}
+
+.chart-skeleton-bars span:nth-child(2n) {
+  animation-delay: 0.18s;
+}
+
+.chart-skeleton-bars span:nth-child(3n) {
+  animation-delay: 0.34s;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
+
+@keyframes skeleton-bar-pulse {
+  0%, 100% { opacity: 0.46; transform: scaleY(0.96); }
+  50% { opacity: 0.9; transform: scaleY(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line,
+  .skeleton-block,
+  .chart-skeleton-bars span {
+    animation: none;
+  }
 }
 
 /* --- Table Card --- */
