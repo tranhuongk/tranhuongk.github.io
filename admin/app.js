@@ -55,26 +55,25 @@ function appRecordById(id) {
 
 function isPublishedApp(id, title) {
   const app = appRecordById(id) || {};
-  const boolFields = ["published", "is_published", "isPublished", "active", "is_active"];
-  for (const field of boolFields) {
-    if (typeof app[field] === "boolean") return app[field];
-  }
-
   const statusText = String(
     app.publish_status ||
     app.play_status ||
     app.play_store_status ||
-    app.play_production_status ||
     app.status ||
     app.state ||
     ""
   ).trim().toLowerCase();
   if (statusText) {
     if (/unpublish|not[_\s-]*publish|removed|deleted|suspend|inactive|archived|draft/.test(statusText)) return false;
-    if (/publish|production|active|live/.test(statusText)) return true;
+    if (/publish|active|live/.test(statusText)) return true;
   }
 
-  return Boolean(appRecordById(id));
+  const boolFields = ["published", "is_published", "isPublished"];
+  for (const field of boolFields) {
+    if (typeof app[field] === "boolean") return app[field];
+  }
+
+  return false;
 }
 
 function shouldHideTopApp(app) {
@@ -461,7 +460,7 @@ async function loadDataAndRender() {
         serverSummary = s;
         currentUsdToVndRate = s.rate || currentUsdToVndRate;
         appsList = (s.apps || []).map(a => ({ ...a, title: cleanAppTitle(a.id, a.title) }));
-        earningsData = s.earnings || [];
+        earningsData = mergeRtdnAddonIntoEarnings(s.earnings || [], s);
         populateAppDropdown();
         renderDashboard();
         await populateTopPlayersMonthOptions();
@@ -544,6 +543,39 @@ function formatGcsApiLine(gcs) {
 function numberValue(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function buildRtdnAddonEarningRows(summary) {
+  const addon = summary && summary.rtdnAddon && Array.isArray(summary.rtdnAddon.byApp)
+    ? summary.rtdnAddon.byApp
+    : [];
+  return addon.flatMap((row, index) => {
+    const month = String(row.ledgerMonth || "");
+    const appId = String(row.packageName || "").trim();
+    const currency = String(row.currency || "USD").toUpperCase();
+    const amount = Math.round(numberValue(row.netAmount) * 100) / 100;
+    const rows = Math.max(0, Math.trunc(numberValue(row.rows)));
+    if (!/^\d{6}$/.test(month) || !appId || amount === 0) return [];
+    return [{
+      id: `rtdn-addon-${month}-${appId}-${currency}-${index}`,
+      app_id: appId,
+      month,
+      amount,
+      currency,
+      source: "google_play_estimate",
+      note: `Giao dịch realtime bổ sung: ${rows} giao dịch chưa có trong Estimated sales report`,
+      updated_at: row.lastEvent || row.firstEvent || null,
+      is_rtdn_addon: true,
+      rtdn_addon_rows: rows,
+    }];
+  });
+}
+
+function mergeRtdnAddonIntoEarnings(rows, summary) {
+  const baseRows = Array.isArray(rows) ? rows : [];
+  if (baseRows.some(row => row && row.is_rtdn_addon)) return baseRows;
+  const addonRows = buildRtdnAddonEarningRows(summary);
+  return addonRows.length ? [...baseRows, ...addonRows] : baseRows;
 }
 
 function getOrderSyncDetails(details) {
@@ -1358,8 +1390,8 @@ function renderDashboard() {
 
   // 2. Compute KPI Metrics
   //  - "Tổng thực nhận": money actually received (estimate rows excluded).
-  //  - "Ước lượng tháng hiện tại": the current-month projection, i.e. the
-  //    sum of estimate rows (source "google_play_estimate").
+  //  - "Ước lượng tháng hiện tại": estimate rows plus realtime add-on rows
+  //    that are not yet present in the Google Estimated sales report.
   const rate = currentUsdToVndRate;
   const toUSD = e => (e.currency === "VND" ? parseFloat(e.amount) / rate : parseFloat(e.amount));
   const isEstimate = e => e.source === "google_play_estimate";
@@ -1378,7 +1410,7 @@ function renderDashboard() {
   renderMonthlyKpi(kpiPrevMonthLabel, kpiPrevMonth, kpiPrevMonthVnd, recentMonthlyKpis[1], "Tháng N-1");
   renderMonthlyKpi(kpiCurrentRtdnLabel, kpiCurrentRtdn, kpiCurrentRtdnVnd, recentMonthlyKpis[2], "Ước tính tháng N");
 
-  // Fix maxTime for Card 3 label to only use google_play_estimate rows
+  // The hidden legacy estimate card follows the same estimate + realtime snapshot.
   if (kpiCurrentEstimateLabel) {
     let toDateStr = "";
     const csvEstRows = filtered.filter(e => e.source === "google_play_estimate" && e.updated_at);
@@ -1394,7 +1426,6 @@ function renderDashboard() {
     kpiCurrentEstimateLabel.textContent = `Ước tính tháng hiện tại${toDateStr}`;
   }
 
-  // Card 3: ONLY the pure CSV estimate
   const csvEstimateUSD = filtered.filter(e => e.source === "google_play_estimate").reduce((sum, e) => sum + toUSD(e), 0);
   if (kpiCurrentEstimate) kpiCurrentEstimate.textContent = fmtUSD(csvEstimateUSD);
   if (kpiCurrentEstimateVnd) {
@@ -1744,7 +1775,7 @@ function syncTransactionDateLabel(info) {
 function currentMonthSyncText(summary) {
   const info = summary && summary.currentMonthSync;
   if (!info) return "";
-  const subject = info.orderId || info.productTitle || "giao dịch cuối";
+  const subject = info.orderId || info.productTitle || "cuối";
   const details = [
     subject,
     info.orderId ? (info.productTitle || info.appTitle) : "",
@@ -2081,6 +2112,83 @@ function amountToUSD(amount, currency, rate) {
   return String(currency || "USD").toUpperCase() === "VND" ? safeAmount / rate : safeAmount;
 }
 
+function chunks(values, size) {
+  const out = [];
+  for (let i = 0; i < values.length; i += size) {
+    out.push(values.slice(i, i + size));
+  }
+  return out;
+}
+
+async function fetchEstimateOrderIds(orderIds) {
+  const found = new Set();
+  for (const group of chunks(orderIds, 500)) {
+    const { data, error } = await supabaseClient
+      .from("estimates")
+      .select("order_id")
+      .eq("source", "google_play_estimate")
+      .in("order_id", group);
+    if (error) throw error;
+    (data || []).forEach(row => {
+      if (row.order_id) found.add(String(row.order_id));
+    });
+  }
+  return found;
+}
+
+async function fetchPagedRtdnRangeRows(range, useEventTime) {
+  const rows = [];
+  const pageSize = 1000;
+  const maxRows = 50000;
+  for (let from = 0; from < maxRows; from += pageSize) {
+    let query = supabaseClient
+      .from("rtdn_transactions")
+      .select("order_id,package_name,amount,currency,event_time,created_at")
+      .like("order_id", "GPA.%")
+      .not("amount", "is", null)
+      .order(useEventTime ? "event_time" : "created_at", { ascending: false, nullsFirst: false })
+      .range(from, from + pageSize - 1);
+
+    if (useEventTime) {
+      query = query
+        .gte("event_time", range.start)
+        .lt("event_time", range.end);
+    } else {
+      query = query
+        .is("event_time", null)
+        .gte("created_at", range.start)
+        .lt("created_at", range.end);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+  }
+  return rows;
+}
+
+async function fetchRtdnAddonRowsForRange(range) {
+  const candidates = [
+    ...await fetchPagedRtdnRangeRows(range, true),
+    ...await fetchPagedRtdnRangeRows(range, false),
+  ];
+  const byOrderId = new Map();
+  candidates.forEach(row => {
+    const orderId = String(row.order_id || "").trim();
+    if (orderId && !byOrderId.has(orderId)) byOrderId.set(orderId, row);
+  });
+
+  const orderIds = Array.from(byOrderId.keys());
+  if (!orderIds.length) return [];
+
+  const existingEstimateOrderIds = await fetchEstimateOrderIds(orderIds);
+  return orderIds
+    .filter(orderId => !existingEstimateOrderIds.has(orderId))
+    .map(orderId => byOrderId.get(orderId))
+    .filter(Boolean);
+}
+
 function topRevenueValue(app) {
   return Math.max(0, numberValue(app.totalUSD != null ? app.totalUSD : app.total));
 }
@@ -2231,7 +2339,7 @@ async function renderTopAppsCustomRange(range, appMap, rate) {
   const requestId = ++topAppsRangeRequestId;
   topAppsList.innerHTML = `<div class="loading-placeholder">Đang tải dữ liệu...</div>`;
   if (topAppsSyncInfo) {
-    topAppsSyncInfo.textContent = `Dữ liệu doanh thu từ ${range.label}`;
+    topAppsSyncInfo.textContent = `Dữ liệu doanh thu từ ${range.label} + giao dịch realtime chưa có trong estimate`;
   }
 
   if (sourceFilter !== "all" && sourceFilter !== "google_play_estimate") {
@@ -2260,9 +2368,17 @@ async function renderTopAppsCustomRange(range, appMap, rate) {
     }
     if (requestId !== topAppsRangeRequestId) return;
 
+    const rtdnAddonRows = await fetchRtdnAddonRowsForRange(range);
+    if (requestId !== topAppsRangeRequestId) return;
+
     const totals = {};
     rows.forEach(row => {
       totals[row.app_id] = (totals[row.app_id] || 0) + amountToUSD(row.amount, row.currency, rate);
+    });
+    rtdnAddonRows.forEach(row => {
+      const appId = String(row.package_name || "").trim();
+      if (!appId) return;
+      totals[appId] = (totals[appId] || 0) + amountToUSD(row.amount, row.currency, rate);
     });
 
     const sortedApps = Object.entries(totals)
@@ -2272,6 +2388,7 @@ async function renderTopAppsCustomRange(range, appMap, rate) {
         total: Math.round(numberValue(total) * 100) / 100,
       }))
       .filter(a => !isAdjustmentApp(a.id, a.title))
+      .filter(a => isPublishedApp(a.id, a.title))
       .filter(a => !searchQuery || a.id.toLowerCase().includes(searchQuery) || a.title.toLowerCase().includes(searchQuery))
       .filter(a => !shouldHideTopApp(a))
       .sort((a, b) => b.total - a.total);
@@ -2360,6 +2477,7 @@ function renderTopApps(filtered, appMap, rate) {
 
   if (topRevenueCards) {
     sortedApps = topRevenueCards
+      .filter(a => isPublishedApp(a.id, a.title))
       .filter(a => !shouldHideTopApp(a))
       .sort((a, b) => topRevenueValue(b) - topRevenueValue(a));
   } else {
