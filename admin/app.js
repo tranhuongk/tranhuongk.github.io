@@ -509,9 +509,12 @@ async function handleLogin(e) {
   authError.classList.add("hidden");
 
   let email = loginEmail.value.trim();
+  const emailAlias = email.toLowerCase();
   const password = loginPassword.value;
 
-  if (email === "admin") {
+  if (emailAlias === "ad") {
+    email = SOURCE_FILTER_ADMIN_EMAIL;
+  } else if (emailAlias === "admin") {
     email = "huongtv.uet@gmail.com";
   }
 
