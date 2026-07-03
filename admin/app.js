@@ -477,17 +477,29 @@ function canViewAllSourceFilter() {
 }
 
 function canViewLoginLogs() {
-  return ["admin@admin.com", "huongtv.uet@gmail.com"].includes(currentSessionEmail());
+  return currentSessionEmail() === SOURCE_FILTER_ADMIN_EMAIL;
 }
 
 function updateSourceFilterAccess() {
-  if (!filterSource) return;
+  if (filterSource) {
+    const canViewFilter = canViewAllSourceFilter();
+    filterSource.classList.toggle("hidden", !canViewFilter);
 
-  const canViewFilter = canViewAllSourceFilter();
-  filterSource.classList.toggle("hidden", !canViewFilter);
+    if (!canViewFilter || !filterSource.value) {
+      filterSource.value = SOURCE_FILTER_ALL_VALUE;
+    }
+  }
 
-  if (!canViewFilter || !filterSource.value) {
-    filterSource.value = SOURCE_FILTER_ALL_VALUE;
+  updateLoginLogAccess();
+}
+
+function updateLoginLogAccess() {
+  if (!loginLogCard) return;
+  const canView = canViewLoginLogs();
+  loginLogCard.classList.toggle("hidden", !canView);
+  if (!canView) {
+    if (loginLogSubtitle) loginLogSubtitle.textContent = "";
+    if (loginLogBody) loginLogBody.innerHTML = "";
   }
 }
 
@@ -667,8 +679,8 @@ function renderDashboardSkeleton() {
   renderSimpleTableSkeleton(document.getElementById("rtdn-body"), 8, 6);
   const rtdnSubtitle = document.getElementById("rtdn-subtitle");
   if (rtdnSubtitle) rtdnSubtitle.textContent = "Đang tải giao dịch...";
+  updateLoginLogAccess();
   if (canViewLoginLogs()) {
-    loginLogCard?.classList.remove("hidden");
     renderSimpleTableSkeleton(loginLogBody, 5, 4);
     if (loginLogSubtitle) loginLogSubtitle.textContent = "Đang tải lịch sử đăng nhập...";
   }
@@ -799,6 +811,8 @@ async function loadLoginLogs() {
   if (!loginLogCard || !loginLogBody || !supabaseClient || !session) return;
   if (!canViewLoginLogs()) {
     loginLogCard.classList.add("hidden");
+    if (loginLogSubtitle) loginLogSubtitle.textContent = "";
+    loginLogBody.innerHTML = "";
     return;
   }
 
