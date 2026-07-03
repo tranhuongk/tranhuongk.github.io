@@ -290,8 +290,7 @@ const loginLogBody = document.getElementById("login-log-body");
 
 // --- Initialization ---
 document.addEventListener("DOMContentLoaded", async () => {
-  // Fetch exchange rate
-  await fetchExchangeRate();
+  const exchangeRatePromise = fetchExchangeRate();
 
   // Load connection settings
   if (sbUrlInput) sbUrlInput.value = supabaseUrl;
@@ -455,10 +454,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     showScreen("dashboard");
     renderDashboardSkeleton();
     recordAdminLogin("reload");
+    await exchangeRatePromise.catch(() => {});
     await loadGooglePlayAccounts();
     setupRealtimeSubscriptions();
     loadDataAndRender();
   } else {
+    exchangeRatePromise.catch(() => {});
     clearRealtimeSubscriptions();
     updateSourceFilterAccess();
     showScreen("auth");
