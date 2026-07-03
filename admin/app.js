@@ -17,6 +17,8 @@ const ORDER_SYNC_MAX_RUNS = 20;
 const ORDER_SYNC_RETRY_COOLDOWN_MINUTES = 60;
 const DASHBOARD_SKELETON_MIN_MS = 450;
 const REALTIME_REFRESH_DEBOUNCE_MS = 1500;
+const REALTIME_RECONCILE_DEBOUNCE_MS = 10000;
+const REALTIME_RTDN_PAGE_SIZE = 30;
 const SYNC_PROGRESS_PHASES = [
   { key: "sync-earnings", label: "Đồng bộ finalized earnings", defaultDurationMs: 3000 },
   { key: "sync-estimates", label: "Đồng bộ Estimated sales reports", defaultDurationMs: 25000 },
@@ -30,6 +32,7 @@ let realtimeChannel = null;
 let realtimeRefreshTimer = null;
 let realtimeRefreshInFlight = false;
 let realtimeRefreshQueued = false;
+const realtimeEstimateOrderCache = new Map();
 
 function cleanAppTitle(pkg, fallback) {
   const cleanPkg = String(pkg).trim().toLowerCase();
@@ -825,7 +828,12 @@ function setupRealtimeSubscriptions() {
       schema: "public",
       table: "rtdn_transactions",
       filter: `play_account_id=eq.${accountId}`,
-    }, (payload) => scheduleRealtimeRefresh(payload))
+    }, (payload) => {
+      handleRealtimeRtdnPayload(payload).catch((err) => {
+        console.warn("Không xử lý được giao dịch realtime từ socket:", err);
+        scheduleRealtimeRefresh(payload);
+      });
+    })
     .subscribe((status, err) => {
       if (status === "SUBSCRIBED") {
         console.info(`Realtime dashboard active for Google Play account ${accountId}`);
@@ -835,13 +843,57 @@ function setupRealtimeSubscriptions() {
     });
 }
 
-function scheduleRealtimeRefresh(payload) {
+function scheduleRealtimeRefresh(payload, delayMs = REALTIME_REFRESH_DEBOUNCE_MS) {
   if (!session) return;
   if (realtimeRefreshTimer) window.clearTimeout(realtimeRefreshTimer);
   realtimeRefreshTimer = window.setTimeout(() => {
     realtimeRefreshTimer = null;
     refreshRealtimeDashboardParts(payload);
-  }, REALTIME_REFRESH_DEBOUNCE_MS);
+  }, delayMs);
+}
+
+async function handleRealtimeRtdnPayload(payload) {
+  if (!session || !serverSummary) {
+    scheduleRealtimeRefresh(payload);
+    return;
+  }
+
+  const eventType = payload && payload.eventType;
+  const normalizedNew = normalizeRealtimeRtdnRow(payload && payload.new);
+  const normalizedOld = normalizeRealtimeRtdnRow(payload && payload.old);
+  const relevantNew = normalizedNew && rtdnRowMatchesCurrentAccount(normalizedNew);
+  const relevantOld = normalizedOld && rtdnRowMatchesCurrentAccount(normalizedOld);
+  if (!relevantNew && !relevantOld) return;
+
+  applyRealtimeRtdnListChange(payload, relevantNew ? normalizedNew : null, relevantOld ? normalizedOld : null);
+  renderRtdnTransactions();
+
+  if (eventType === "UPDATE" && !relevantOld) {
+    scheduleRealtimeRefresh({ source: "reconcile-missing-old-row", payload });
+    return;
+  }
+
+  const [oldDelta, newDelta] = await Promise.all([
+    relevantOld ? realtimeRtdnAddonDelta(normalizedOld) : Promise.resolve(null),
+    relevantNew ? realtimeRtdnAddonDelta(normalizedNew) : Promise.resolve(null),
+  ]);
+
+  if ((oldDelta && oldDelta.failed) || (newDelta && newDelta.failed)) {
+    scheduleRealtimeRefresh({ source: "reconcile-after-estimate-check", payload });
+    return;
+  }
+
+  if (oldDelta) applyRealtimeKpiDelta(oldDelta, -1);
+  if (newDelta) {
+    applyRealtimeKpiDelta(newDelta, 1);
+    maybeUpdateCurrentMonthSync(newDelta.row, newDelta.month);
+  }
+
+  renderRealtimeUpdatedSections();
+  if (normalizedNew && normalizedNew.order_id) {
+    enrichRealtimeRtdnPlayerName(normalizedNew.order_id);
+  }
+  scheduleRealtimeRefresh({ source: "reconcile-after-realtime-transaction", payload }, REALTIME_RECONCILE_DEBOUNCE_MS);
 }
 
 async function refreshRealtimeDashboardParts(payload) {
@@ -1034,6 +1086,316 @@ function mergeRtdnAddonIntoEarnings(rows, summary) {
   if (baseRows.some(row => row && row.is_rtdn_addon)) return baseRows;
   const addonRows = buildRtdnAddonEarningRows(summary);
   return addonRows.length ? [...baseRows, ...addonRows] : baseRows;
+}
+
+function baseEarningsRows(summary = serverSummary) {
+  const rows = Array.isArray(summary && summary.earnings) ? summary.earnings : [];
+  return rows.filter(row => !(row && row.is_rtdn_addon));
+}
+
+function estimateMonthsForRealtime() {
+  const months = new Set();
+  const addonMonths = serverSummary && serverSummary.rtdnAddon && Array.isArray(serverSummary.rtdnAddon.months)
+    ? serverSummary.rtdnAddon.months
+    : [];
+  addonMonths.forEach(month => {
+    if (/^\d{6}$/.test(String(month))) months.add(String(month));
+  });
+  baseEarningsRows().forEach(row => {
+    if (row && row.source === "google_play_estimate" && /^\d{6}$/.test(String(row.month || ""))) {
+      months.add(String(row.month));
+    }
+  });
+  return months;
+}
+
+function monthKeyFromIsoPacific(iso) {
+  const ms = Date.parse(iso || "");
+  if (isNaN(ms)) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date(ms));
+  const year = parts.find(part => part.type === "year")?.value;
+  const month = parts.find(part => part.type === "month")?.value;
+  return year && month ? `${year}${month}` : null;
+}
+
+function rtdnEventIso(row) {
+  return row && (row.event_time || row.created_at) ? String(row.event_time || row.created_at) : null;
+}
+
+function normalizeRealtimeRtdnRow(row) {
+  if (!row || typeof row !== "object") return null;
+  const pkg = String(row.package_name || "").trim();
+  const orderId = String(row.order_id || "").trim();
+  if (!pkg || !orderId) return null;
+  const existing = rtdnByOrder[orderId] || {};
+  return {
+    ...existing,
+    ...row,
+    order_id: orderId,
+    package_name: pkg,
+    amount: numberValue(row.amount),
+    currency: String(row.currency || "USD").toUpperCase(),
+    details: row.details && typeof row.details === "object" ? row.details : (existing.details || {}),
+    title: cleanAppTitle(pkg, appRecordById(pkg)?.title || existing.title || pkg),
+    player_name: rtdnPlayerName(row) || rtdnPlayerName(existing) || null,
+  };
+}
+
+function rtdnRowMatchesCurrentAccount(row) {
+  if (!row) return false;
+  const accountId = String(row.play_account_id || DEFAULT_PLAY_ACCOUNT_ID);
+  return accountId === currentPlayAccountId();
+}
+
+function rtdnAmountUsd(row) {
+  const amount = numberValue(row && row.amount);
+  const currency = String(row && row.currency || "USD").toUpperCase();
+  return currency === "VND" ? amount / currentUsdToVndRate : amount;
+}
+
+async function isOrderInGoogleEstimate(orderId) {
+  const cleanOrderId = String(orderId || "").trim();
+  if (!cleanOrderId) return false;
+  const cacheKey = `${currentPlayAccountId()}::${cleanOrderId}`;
+  if (realtimeEstimateOrderCache.has(cacheKey)) {
+    return realtimeEstimateOrderCache.get(cacheKey);
+  }
+  if (!supabaseClient) return false;
+
+  try {
+    const { data, error } = await supabaseClient
+      .from("estimates")
+      .select("order_id")
+      .eq("play_account_id", currentPlayAccountId())
+      .eq("source", "google_play_estimate")
+      .eq("order_id", cleanOrderId)
+      .limit(1);
+    if (error) throw error;
+    const exists = Array.isArray(data) && data.length > 0;
+    realtimeEstimateOrderCache.set(cacheKey, exists);
+    return exists;
+  } catch (err) {
+    console.warn("Không kiểm tra được order trong estimate report:", err);
+    return null;
+  }
+}
+
+async function realtimeRtdnAddonDelta(row) {
+  const tx = normalizeRealtimeRtdnRow(row);
+  if (!tx || !rtdnRowMatchesCurrentAccount(tx) || !String(tx.order_id).startsWith("GPA.")) return null;
+  const month = monthKeyFromIsoPacific(rtdnEventIso(tx));
+  if (!month || !estimateMonthsForRealtime().has(month)) return null;
+
+  const isDuplicate = await isOrderInGoogleEstimate(tx.order_id);
+  if (isDuplicate === null) return { failed: true };
+  if (isDuplicate) return null;
+
+  return {
+    row: tx,
+    month,
+    currency: String(tx.currency || "USD").toUpperCase(),
+    amount: numberValue(tx.amount),
+    amountUSD: roundMoney(rtdnAmountUsd(tx)),
+  };
+}
+
+function upsertCurrencyAggregate(rows, currency, amountDelta, rowDelta) {
+  const list = Array.isArray(rows) ? rows : [];
+  const cur = String(currency || "USD").toUpperCase();
+  const current = list.find(row => String(row.currency || "USD").toUpperCase() === cur);
+  if (current) {
+    current.amount = roundMoney(numberValue(current.amount) + amountDelta);
+    current.rows = Math.max(0, Math.trunc(numberValue(current.rows) + rowDelta));
+  } else if (rowDelta > 0) {
+    list.push({ currency: cur, amount: roundMoney(amountDelta), rows: Math.max(0, rowDelta) });
+  }
+  return list
+    .filter(row => numberValue(row.amount) !== 0 || numberValue(row.rows) > 0)
+    .sort((a, b) => String(a.currency || "").localeCompare(String(b.currency || "")));
+}
+
+function upsertRtdnAddonByApp(row, month, amountDelta, rowDelta) {
+  if (!serverSummary) return;
+  if (!serverSummary.rtdnAddon) serverSummary.rtdnAddon = {};
+  const addon = serverSummary.rtdnAddon;
+  const list = Array.isArray(addon.byApp) ? addon.byApp : [];
+  const currency = String(row.currency || "USD").toUpperCase();
+  const pkg = String(row.package_name || "").trim();
+  const current = list.find(item =>
+    String(item.ledgerMonth || "") === month &&
+    String(item.packageName || "") === pkg &&
+    String(item.currency || "USD").toUpperCase() === currency
+  );
+  const eventIso = rtdnEventIso(row);
+
+  if (current) {
+    current.netAmount = roundMoney(numberValue(current.netAmount) + amountDelta);
+    current.rows = Math.max(0, Math.trunc(numberValue(current.rows) + rowDelta));
+    if (eventIso) {
+      if (!current.firstEvent || eventIso < String(current.firstEvent)) current.firstEvent = eventIso;
+      if (!current.lastEvent || eventIso > String(current.lastEvent)) current.lastEvent = eventIso;
+    }
+  } else if (pkg && rowDelta > 0) {
+    list.push({
+      ledgerMonth: month,
+      packageName: pkg,
+      currency,
+      rows: Math.max(0, rowDelta),
+      netAmount: roundMoney(amountDelta),
+      firstEvent: eventIso,
+      lastEvent: eventIso,
+    });
+  }
+
+  addon.byApp = list
+    .filter(item => numberValue(item.netAmount) !== 0 || numberValue(item.rows) > 0)
+    .sort((a, b) =>
+      String(a.ledgerMonth || "").localeCompare(String(b.ledgerMonth || "")) ||
+      numberValue(b.netAmount) - numberValue(a.netAmount) ||
+      String(a.packageName || "").localeCompare(String(b.packageName || ""))
+    );
+}
+
+function ensureRecentMonthKpi(month) {
+  if (!serverSummary) return null;
+  if (!serverSummary.kpis) serverSummary.kpis = {};
+  const recent = Array.isArray(serverSummary.kpis.recentMonths)
+    ? [...serverSummary.kpis.recentMonths]
+    : buildRecentMonthlyKpisFromEarnings(earningsData, currentUsdToVndRate);
+  let row = recent.find(item => item.month === month);
+  if (!row) {
+    row = {
+      month,
+      kind: "estimate",
+      amountUSD: 0,
+      officialUSD: 0,
+      estimateUSD: 0,
+      rtdnAddonUSD: 0,
+      rtdnAddonRows: 0,
+    };
+    recent.push(row);
+  }
+  serverSummary.kpis.recentMonths = recent
+    .sort((a, b) => String(a.month).localeCompare(String(b.month)))
+    .slice(-3);
+  return serverSummary.kpis.recentMonths.find(item => item.month === month) || null;
+}
+
+function applyRealtimeKpiDelta(delta, sign) {
+  if (!serverSummary || !delta || sign === 0) return;
+  const amountDelta = delta.amount * sign;
+  const usdDelta = delta.amountUSD * sign;
+  const rowDelta = sign;
+
+  if (!serverSummary.rtdnAddon) serverSummary.rtdnAddon = {};
+  const addon = serverSummary.rtdnAddon;
+  addon.totalByCurrency = upsertCurrencyAggregate(addon.totalByCurrency, delta.currency, amountDelta, rowDelta);
+  addon.rows = Math.max(0, Math.trunc(numberValue(addon.rows) + rowDelta));
+  addon.totalUSD = roundMoney(numberValue(addon.totalUSD) + usdDelta);
+  upsertRtdnAddonByApp(delta.row, delta.month, amountDelta, rowDelta);
+
+  const kpis = serverSummary.kpis || (serverSummary.kpis = {});
+  kpis.rtdnAddonUSD = roundMoney(numberValue(kpis.rtdnAddonUSD) + usdDelta);
+  kpis.rtdnAddonRows = Math.max(0, Math.trunc(numberValue(kpis.rtdnAddonRows) + rowDelta));
+  kpis.yourEarningsUSD = roundMoney(numberValue(kpis.yourEarningsUSD) + usdDelta);
+
+  const recent = ensureRecentMonthKpi(delta.month);
+  if (recent) {
+    recent.rtdnAddonUSD = roundMoney(numberValue(recent.rtdnAddonUSD) + usdDelta);
+    recent.rtdnAddonRows = Math.max(0, Math.trunc(numberValue(recent.rtdnAddonRows) + rowDelta));
+    if (recent.kind !== "final") {
+      recent.amountUSD = roundMoney(numberValue(recent.amountUSD) + usdDelta);
+    }
+  }
+
+  if (serverSummary.currentMonth === delta.month) {
+    kpis.estimateUSD = roundMoney(numberValue(kpis.estimateUSD) + usdDelta);
+  }
+
+  serverSummary.earnings = mergeRtdnAddonIntoEarnings(baseEarningsRows(), serverSummary);
+  earningsData = serverSummary.earnings;
+}
+
+function compareRtdnRowsDesc(a, b) {
+  const aMs = Date.parse(rtdnEventIso(a) || "") || 0;
+  const bMs = Date.parse(rtdnEventIso(b) || "") || 0;
+  if (aMs !== bMs) return bMs - aMs;
+  return String(b.order_id || "").localeCompare(String(a.order_id || ""));
+}
+
+function applyRealtimeRtdnListChange(payload, normalizedNew, normalizedOld) {
+  if (!serverSummary) return;
+  const currentRows = Array.isArray(serverSummary.rtdnTransactions)
+    ? [...serverSummary.rtdnTransactions]
+    : [];
+  const eventType = payload && payload.eventType;
+  const newOrderId = normalizedNew && normalizedNew.order_id;
+  const oldOrderId = normalizedOld && normalizedOld.order_id;
+  const targetOrderId = newOrderId || oldOrderId;
+  if (!targetOrderId) return;
+
+  const existingIndex = currentRows.findIndex(row => row.order_id === targetOrderId);
+  if (eventType === "DELETE") {
+    if (existingIndex >= 0) currentRows.splice(existingIndex, 1);
+    serverSummary.rtdnTotalCount = Math.max(0, numberValue(serverSummary.rtdnTotalCount) - 1);
+  } else if (normalizedNew) {
+    if (existingIndex >= 0) {
+      currentRows[existingIndex] = { ...currentRows[existingIndex], ...normalizedNew };
+    } else {
+      currentRows.push(normalizedNew);
+      if (eventType === "INSERT") {
+        serverSummary.rtdnTotalCount = numberValue(serverSummary.rtdnTotalCount) + 1;
+      }
+    }
+  }
+
+  serverSummary.rtdnTransactions = currentRows
+    .sort(compareRtdnRowsDesc)
+    .slice(0, REALTIME_RTDN_PAGE_SIZE);
+}
+
+function realtimeSyncInfoFromRow(row) {
+  if (!row) return null;
+  const details = row.details || {};
+  const pkg = String(row.package_name || "").trim();
+  return {
+    source: "realtime_addon",
+    transactionAt: rtdnEventIso(row),
+    transactionDate: null,
+    orderId: row.order_id || null,
+    appId: pkg || null,
+    appTitle: pkg ? cleanAppTitle(pkg, appRecordById(pkg)?.title || row.title) : null,
+    productTitle: details.productTitle || row.sku || null,
+    amount: row.amount,
+    currency: row.currency || "USD",
+  };
+}
+
+function maybeUpdateCurrentMonthSync(row, month) {
+  if (!serverSummary || !row || month !== serverSummary.currentMonth) return;
+  const nextIso = rtdnEventIso(row);
+  if (!nextIso) return;
+  const currentIso = serverSummary.currentMonthSync && serverSummary.currentMonthSync.transactionAt;
+  if (!currentIso || Date.parse(nextIso) >= Date.parse(currentIso)) {
+    serverSummary.currentMonthSync = realtimeSyncInfoFromRow(row);
+  }
+}
+
+async function enrichRealtimeRtdnPlayerName(orderId) {
+  if (!orderId || !serverSummary || !Array.isArray(serverSummary.rtdnTransactions)) return;
+  const current = serverSummary.rtdnTransactions.find(row => row.order_id === orderId);
+  if (!current || rtdnPlayerName(current)) return;
+  const enriched = await attachPlayerNamesToRtdnRows([current]);
+  const next = enriched && enriched[0];
+  if (!next || !rtdnPlayerName(next)) return;
+  serverSummary.rtdnTransactions = serverSummary.rtdnTransactions.map(row =>
+    row.order_id === orderId ? { ...row, player_name: next.player_name } : row
+  );
+  renderRtdnTransactions();
 }
 
 function getOrderSyncDetails(details) {
