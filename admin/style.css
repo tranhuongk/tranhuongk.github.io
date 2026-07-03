@@ -221,6 +221,14 @@ input[type="date"]:focus,
   color: #64748b;
 }
 
+.glass-select.compact {
+  min-width: 190px;
+  height: 44px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+  font-size: 13px;
+}
+
 .accordion-toggle {
   display: flex;
   justify-content: space-between;
@@ -371,22 +379,97 @@ input[type="date"]:focus,
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 20px;
   font-weight: 700;
-  background: linear-gradient(135deg, #fff, var(--text-muted));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
 }
 
 .logo i {
   color: var(--primary-glow);
-  -webkit-text-fill-color: initial;
   filter: drop-shadow(0 0 8px var(--primary-glow));
+}
+
+.nav-exchange-rate {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-left: 8px;
+  padding-left: 16px;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
 }
 
 .nav-right {
   display: flex;
+  align-items: center;
   gap: 12px;
+}
+
+.play-account-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 238px;
+}
+
+.play-account-switcher i {
+  color: var(--primary-glow);
+  flex: 0 0 auto;
+}
+
+.play-account-switcher.is-hidden {
+  display: none;
+}
+
+.brand-account-switcher {
+  min-width: 230px;
+}
+
+.brand-account-select {
+  min-width: 230px;
+  height: 48px;
+  padding: 10px 44px 10px 18px;
+  border-color: rgba(108, 140, 255, 0.42);
+  background-color: rgba(255, 255, 255, 0.07);
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 10px 28px rgba(25, 35, 85, 0.2);
+  -webkit-text-fill-color: var(--text-primary);
+}
+
+.brand-account-select:hover {
+  background-color: rgba(108, 140, 255, 0.12);
+  border-color: var(--primary-glow);
+}
+
+@media (max-width: 760px) {
+  .navbar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .logo {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .brand-account-switcher,
+  .brand-account-select {
+    min-width: min(280px, calc(100vw - 104px));
+  }
+
+  .nav-exchange-rate {
+    width: 100%;
+    margin-left: 0;
+    padding-left: 0;
+    border-left: none;
+  }
+
+  .nav-right {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 
 .kpi-grid {
@@ -880,6 +963,14 @@ input[type="date"]:focus,
   line-height: 1.1;
   font-weight: 800;
   overflow-wrap: anywhere;
+}
+
+.play-metric-source {
+  display: block;
+  margin-top: 7px;
+  color: rgba(166, 178, 224, 0.86);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .play-metric.is-revenue strong {

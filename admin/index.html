@@ -19,7 +19,7 @@
   <!-- Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/umd/supabase.js"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=20260703h">
+  <link rel="stylesheet" href="style.css?v=20260703j">
   <style>
     /* Realtime order table (clones Play Console "Order management") */
     .rtdn-app-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; display: block; }
@@ -99,8 +99,12 @@
       <div class="nav-left">
         <div class="logo">
           <i class="fa-solid fa-chart-line"></i>
-          <span>Galax Admin</span>
-          <span id="nav-exchange-rate" style="font-size: 13px; color: var(--text-muted); margin-left: 12px; padding-left: 12px; border-left: 1px solid rgba(255, 255, 255, 0.1);">Tỷ giá: đang tải...</span>
+          <div class="play-account-switcher brand-account-switcher" id="play-account-switcher">
+            <select id="google-play-account-select" class="glass-select compact brand-account-select" title="Chọn tài khoản Google Play">
+              <option value="default">Galaxy VN Team</option>
+            </select>
+          </div>
+          <span id="nav-exchange-rate" class="nav-exchange-rate">Tỷ giá: đang tải...</span>
         </div>
       </div>
       <div class="nav-right">
@@ -432,6 +436,6 @@
   </div>
 
   <!-- Script logic -->
-  <script src="app.js?v=20260703o"></script>
+  <script src="app.js?v=20260703t"></script>
 </body>
 </html>

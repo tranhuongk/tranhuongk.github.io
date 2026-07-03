@@ -9,6 +9,8 @@ const SYNC_PROGRESS_STORAGE_KEY = "galax_admin_sync_progress_durations_v1";
 const CUSTOM_RANGE_VALUE = "__custom__";
 const SOURCE_FILTER_ALL_VALUE = "all";
 const SOURCE_FILTER_ADMIN_EMAIL = "admin@admin.com";
+const PLAY_ACCOUNT_STORAGE_KEY = "galax_admin_google_play_account_id_v1";
+const DEFAULT_PLAY_ACCOUNT_ID = "default";
 const ORDER_SYNC_BATCH_LIMIT = 500;
 const ORDER_SYNC_SCAN_LIMIT = 5000;
 const ORDER_SYNC_MAX_RUNS = 20;
@@ -98,9 +100,74 @@ let topAppsRangePopupOpen = false;
 let topPlayersRangePopupOpen = false;
 let topAppsRangeRequestId = 0;
 let topPlayersRangeRequestId = 0;
+let googlePlayAccounts = [];
+let selectedPlayAccountId = localStorage.getItem(PLAY_ACCOUNT_STORAGE_KEY) || DEFAULT_PLAY_ACCOUNT_ID;
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function currentPlayAccountId() {
+  return selectedPlayAccountId || DEFAULT_PLAY_ACCOUNT_ID;
+}
+
+function googlePlayAccountPayload() {
+  return { playAccountId: currentPlayAccountId() };
+}
+
+function activeAccountAppIds() {
+  return appsList
+    .filter(app => !isAdjustmentApp(app.id, app.title))
+    .map(app => String(app.id || "").trim())
+    .filter(Boolean);
+}
+
+function updatePlayAccountSelect() {
+  if (!playAccountSelect || !playAccountSwitcher) return;
+  const accounts = googlePlayAccounts.length
+    ? googlePlayAccounts
+    : [{ id: DEFAULT_PLAY_ACCOUNT_ID, label: "Galaxy VN Team", isDefault: true }];
+  if (!accounts.some(account => account.id === selectedPlayAccountId)) {
+    const fallback = accounts.find(account => account.isDefault) || accounts[0];
+    selectedPlayAccountId = fallback.id || DEFAULT_PLAY_ACCOUNT_ID;
+    localStorage.setItem(PLAY_ACCOUNT_STORAGE_KEY, selectedPlayAccountId);
+  }
+  playAccountSelect.innerHTML = accounts
+    .map(account => `<option value="${escapeHtml(account.id)}">${escapeHtml(account.label || account.id)}</option>`)
+    .join("") + (accounts.length <= 1 ? `<option value="__no_other_accounts__" disabled>Google chưa trả thêm developer account khác</option>` : "");
+  playAccountSelect.value = selectedPlayAccountId;
+  playAccountSelect.disabled = false;
+  const activeAccount = accounts.find(account => account.id === selectedPlayAccountId) || accounts[0];
+  const note = activeAccount?.discoveryNote ? ` ${activeAccount.discoveryNote}` : "";
+  playAccountSelect.title = accounts.length <= 1
+    ? `Google hiện chỉ trả 1 nhóm account qua API.${note}`
+    : "Chọn tài khoản Google Play";
+  playAccountSelect.classList.toggle("is-single-option", accounts.length <= 1);
+  playAccountSwitcher.classList.toggle("is-hidden", accounts.length === 0);
+}
+
+async function loadGooglePlayAccounts() {
+  if (!session) {
+    googlePlayAccounts = [];
+    updatePlayAccountSelect();
+    return;
+  }
+
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/google-play-accounts`, {
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+    const body = await readJsonResponse(res);
+    if (!res.ok) throw new Error(body.error || `google-play-accounts ${res.status}`);
+    googlePlayAccounts = Array.isArray(body.accounts) ? body.accounts : [];
+  } catch (err) {
+    console.warn("Không tải được danh sách account Google Play:", err);
+    googlePlayAccounts = [{ id: DEFAULT_PLAY_ACCOUNT_ID, label: "Galaxy VN Team", isDefault: true }];
+  }
+  updatePlayAccountSelect();
 }
 
 // Fetch exchange rate dynamically
@@ -146,6 +213,8 @@ const authError = document.getElementById("auth-error");
 
 const btnLogout = document.getElementById("btn-logout");
 const btnSync = document.getElementById("btn-sync");
+const playAccountSwitcher = document.getElementById("play-account-switcher");
+const playAccountSelect = document.getElementById("google-play-account-select");
 const navExchangeRate = document.getElementById("nav-exchange-rate");
 const btnCloseSyncOverlay = document.getElementById("btn-close-sync-overlay");
 
@@ -235,6 +304,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   loginForm.addEventListener("submit", handleLogin);
   btnLogout.addEventListener("click", handleLogout);
   btnSync.addEventListener("click", triggerSync);
+  if (playAccountSelect) {
+    playAccountSelect.addEventListener("change", () => {
+      selectedPlayAccountId = playAccountSelect.value || DEFAULT_PLAY_ACCOUNT_ID;
+      localStorage.setItem(PLAY_ACCOUNT_STORAGE_KEY, selectedPlayAccountId);
+      serverSummary = null;
+      topAppsSelectedMonth = null;
+      topPlayersSelectedMonth = null;
+      topAppsFilterMode = "month";
+      topPlayersFilterMode = "month";
+      closeRangePopups();
+      loadDataAndRender();
+    });
+  }
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       closeRangePopups();
@@ -364,6 +446,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     showScreen("dashboard");
     renderDashboardSkeleton();
     recordAdminLogin("reload");
+    await loadGooglePlayAccounts();
     loadDataAndRender();
   } else {
     updateSourceFilterAccess();
@@ -433,6 +516,7 @@ async function handleLogin(e) {
     showScreen("dashboard");
     renderDashboardSkeleton();
     recordAdminLogin("login");
+    await loadGooglePlayAccounts();
     loadDataAndRender();
   } catch (err) {
     showError(err.message || "Đăng nhập thất bại. Kiểm tra lại thông tin đăng nhập.");
@@ -447,6 +531,8 @@ async function handleLogout() {
     await supabaseClient.auth.signOut();
   }
   session = null;
+  googlePlayAccounts = [];
+  updatePlayAccountSelect();
   updateSourceFilterAccess();
   showScreen("auth");
 }
@@ -646,10 +732,13 @@ async function loadDataAndRender() {
   // Telegram bot exactly (same computation, same rate snapshot).
   try {
     const res = await fetch(`${supabaseUrl}/functions/v1/dashboard-summary`, {
+      method: "POST",
       headers: {
+        "Content-Type": "application/json",
         apikey: supabaseAnonKey,
         Authorization: `Bearer ${session ? session.access_token : supabaseAnonKey}`,
       },
+      body: JSON.stringify(googlePlayAccountPayload()),
     });
     if (res.ok) {
       const s = await res.json();
@@ -678,6 +767,7 @@ async function loadDataAndRender() {
     const { data: apps, error: appsErr } = await supabaseClient
       .from("apps")
       .select("*")
+      .eq("play_account_id", currentPlayAccountId())
       .order("title");
     if (appsErr) throw appsErr;
     appsList = (apps || []).map(a => ({
@@ -688,6 +778,7 @@ async function loadDataAndRender() {
     const { data: earnings, error: earnErr } = await supabaseClient
       .from("earnings")
       .select("*")
+      .eq("play_account_id", currentPlayAccountId())
       .order("month", { ascending: false });
     if (earnErr) throw earnErr;
     earningsData = earnings || [];
@@ -1234,10 +1325,12 @@ async function runAdminOrdersSyncLoop({ source, estimateMonths }) {
   const startedAt = performance.now();
   const aggregate = createOrderSyncAggregate(`${source}:sync-orders`);
   let lastStatus = 200;
+  const accountPayload = googlePlayAccountPayload();
 
   for (let run = 1; run <= ORDER_SYNC_MAX_RUNS; run++) {
     addLog(`Orders API enrichment: lượt ${run}/${ORDER_SYNC_MAX_RUNS}, tối đa ${formatCount(ORDER_SYNC_BATCH_LIMIT)} transactions`, "blue");
     const step = await invokeAdminSyncStep("sync-orders", {
+      ...accountPayload,
       days: 3,
       rtdnLimit: ORDER_SYNC_BATCH_LIMIT,
       estimateLimit: ORDER_SYNC_BATCH_LIMIT,
@@ -1288,12 +1381,14 @@ async function runAdminSyncWithActualProgress() {
   const startedAt = performance.now();
   const source = "admin-dashboard";
   const forceIconSync = false;
+  const accountPayload = googlePlayAccountPayload();
 
   syncProgressPlan = buildSyncProgressPlan();
 
   addLog(`Finalized earnings: dự kiến ${formatElapsed(syncProgressPlan.phases["sync-earnings"].durationMs)}`, "blue");
   startSyncProgressPhase("sync-earnings");
   const earningsStep = await invokeAdminSyncStep("sync-earnings", {
+    ...accountPayload,
     source: `${source}:sync-earnings`,
     syncIcons: forceIconSync,
   });
@@ -1303,6 +1398,7 @@ async function runAdminSyncWithActualProgress() {
   addLog(`Estimated sales reports: dự kiến ${formatElapsed(syncProgressPlan.phases["sync-estimates"].durationMs)}`, "blue");
   startSyncProgressPhase("sync-estimates");
   const estimatesStep = await invokeAdminSyncStep("sync-estimates", {
+    ...accountPayload,
     source: `${source}:sync-estimates`,
     syncIcons: forceIconSync,
   });
@@ -1342,6 +1438,8 @@ async function triggerSync() {
   if (syncSubtitle) syncSubtitle.textContent = "Đang tải tệp báo cáo từ Google Cloud Storage và tổng hợp dữ liệu doanh thu...";
 
   addLog("Bắt đầu gọi API đồng bộ...", "blue");
+  const selectedAccount = googlePlayAccounts.find(account => account.id === currentPlayAccountId());
+  addLog(`Account Google Play: ${selectedAccount?.label || currentPlayAccountId()}`, "muted");
   addLog("Timeout chờ phản hồi mỗi bước: 30 phút.", "muted");
   addLog("Tiến độ % tính theo thời gian thực tế/dự kiến từng task; row count sẽ cập nhật khi API trả metadata.", "muted");
   
@@ -1513,12 +1611,16 @@ async function handleSaveNewApp() {
   try {
     const { error } = await supabaseClient
       .from("apps")
-      .insert([{ id, title }]);
+      .insert([{ id, title, play_account_id: currentPlayAccountId() }]);
       
     if (error) throw error;
     
     // Refresh apps list
-    const { data: apps } = await supabaseClient.from("apps").select("*").order("title");
+    const { data: apps } = await supabaseClient
+      .from("apps")
+      .select("*")
+      .eq("play_account_id", currentPlayAccountId())
+      .order("title");
     appsList = apps || [];
     populateAppDropdown();
     
@@ -1539,6 +1641,7 @@ async function handleIncomeSubmit(e) {
   
   const id = editEarningId.value;
   const payload = {
+    play_account_id: currentPlayAccountId(),
     app_id: incomeAppSelect.value,
     month: incomeMonth.value.trim(),
     amount: parseFloat(incomeAmount.value),
@@ -1558,10 +1661,10 @@ async function handleIncomeSubmit(e) {
         .eq("id", id);
       error = err;
     } else {
-      // Create/Upsert (source + app + month must be unique)
+      // Create/Upsert (account + source + app + month must be unique)
       const { error: err } = await supabaseClient
         .from("earnings")
-        .upsert([payload], { onConflict: "app_id,month,source" });
+        .upsert([payload], { onConflict: "play_account_id,app_id,month,source" });
       error = err;
     }
 
@@ -1914,6 +2017,7 @@ window.loadMoreRtdn = async () => {
     const { data, error } = await supabaseClient
       .from("rtdn_transactions")
       .select("*")
+      .eq("play_account_id", currentPlayAccountId())
       .order("event_time", { ascending: false })
       .range(rtdnOffset, rtdnOffset + 29);
     if (error) throw error;
@@ -2271,10 +2375,13 @@ async function populateTopPlayersMonthOptions() {
   try {
     const pageSize = 1000;
     const maxRows = 10000;
+    const appIds = activeAccountAppIds();
+    if (!appIds.length) throw new Error("Không có app cho account đang chọn");
     for (let from = 0; from < maxRows; from += pageSize) {
       const { data, error } = await supabaseClient
         .from("client_purchase_logs")
         .select("created_at")
+        .in("package_name", appIds)
         .order("created_at", { ascending: false, nullsFirst: false })
         .range(from, from + pageSize - 1);
       if (error) throw error;
@@ -2402,6 +2509,7 @@ async function fetchEstimateOrderIds(orderIds) {
     const { data, error } = await supabaseClient
       .from("estimates")
       .select("order_id")
+      .eq("play_account_id", currentPlayAccountId())
       .eq("source", "google_play_estimate")
       .in("order_id", group);
     if (error) throw error;
@@ -2420,6 +2528,7 @@ async function fetchPagedRtdnRangeRows(range, useEventTime) {
     let query = supabaseClient
       .from("rtdn_transactions")
       .select("order_id,package_name,amount,currency,event_time,created_at")
+      .eq("play_account_id", currentPlayAccountId())
       .like("order_id", "GPA.%")
       .not("amount", "is", null)
       .order(useEventTime ? "event_time" : "created_at", { ascending: false, nullsFirst: false })
@@ -2514,11 +2623,17 @@ function playDeltaHtml(value) {
   return `<span class="play-delta ${cls}"><i class="fa-solid ${icon}"></i> ${trimNumber(Math.abs(n), 1)}% so với 30 ngày trước</span>`;
 }
 
-function playMetricHtml(label, value, tooltip, deltaHtml, extraClass = "") {
+function playMetricSourceHtml(sourceDate) {
+  const formatted = formatPlayDate(sourceDate);
+  return formatted ? `<span class="play-metric-source">Dữ liệu tới ${escapeHtml(formatted)}</span>` : "";
+}
+
+function playMetricHtml(label, value, tooltip, deltaHtml, extraClass = "", sourceDate = "") {
   return `
     <div class="play-metric ${extraClass}">
       <span class="play-metric-label" data-tooltip="${escapeHtml(tooltip)}">${escapeHtml(label)}</span>
       <strong>${value}</strong>
+      ${playMetricSourceHtml(sourceDate)}
       ${deltaHtml || ""}
     </div>
   `;
@@ -2534,11 +2649,15 @@ function normalizeTopRevenueCards(sortedApps) {
     playStoreStatus: app.playStoreStatus || app.play_store_status || "published",
     productionStatus: app.productionStatus || app.play_production_status || "Production",
     lastUpdatedAt: app.lastUpdatedAt || app.play_last_updated_at || app.play_stats_source_date || "",
+    statsSourceDate: app.statsSourceDate || app.play_stats_source_date || "",
     installedAudience: app.installedAudience ?? app.installed_audience ?? null,
+    installedAudienceSourceDate: app.installedAudienceSourceDate || app.installed_audience_source_date || app.statsSourceDate || app.play_stats_source_date || "",
     installedAudienceDeltaPct: app.installedAudienceDeltaPct ?? app.installed_audience_delta_pct ?? null,
     userAcquisition: app.userAcquisition ?? app.user_acquisition ?? null,
+    userAcquisitionSourceDate: app.userAcquisitionSourceDate || app.user_acquisition_source_date || app.statsSourceDate || app.play_stats_source_date || "",
     userAcquisitionDeltaPct: app.userAcquisitionDeltaPct ?? app.user_acquisition_delta_pct ?? null,
     googlePlayRating: app.googlePlayRating ?? app.google_play_rating ?? null,
+    googlePlayRatingSourceDate: app.googlePlayRatingSourceDate || app.google_play_rating_source_date || app.statsSourceDate || app.play_stats_source_date || "",
   }));
 }
 
@@ -2551,11 +2670,9 @@ function renderTopAppsList(sortedApps, emptyText) {
   const cards = normalizeTopRevenueCards(sortedApps);
   topAppsList.innerHTML = cards.map((a) => {
     const icon = appIconHtml(a.id, a.title, "play-app-logo", "play-app-fallback", a.iconUrl);
-    const updated = formatPlayDate(a.lastUpdatedAt);
     const status = playProductionLabel(a.productionStatus || a.playStoreStatus);
     const meta = [
       a.id,
-      updated ? `Cập nhật ${updated}` : "",
       status,
     ].filter(Boolean);
     return `
@@ -2578,18 +2695,24 @@ function renderTopAppsList(sortedApps, emptyText) {
           formatPlayMetricNumber(a.installedAudience),
           "Số thiết bị đang hoạt động có cài ứng dụng theo ngày mới nhất trong báo cáo Google Play.",
           playDeltaHtml(a.installedAudienceDeltaPct),
+          "",
+          a.installedAudienceSourceDate,
         )}
         ${playMetricHtml(
           "Người dùng mới",
           formatPlayMetricNumber(a.userAcquisition),
           "Số người dùng cài ứng dụng và trước đó không cài trên bất kỳ thiết bị nào. Bao gồm người dùng kích hoạt thiết bị mới hoặc kích hoạt lại thiết bị không hoạt động có cài app.",
           playDeltaHtml(a.userAcquisitionDeltaPct),
+          "",
+          a.userAcquisitionSourceDate,
         )}
         ${playMetricHtml(
           "Đánh giá Google Play",
           formatPlayRating(a.googlePlayRating),
           "Điểm đánh giá trung bình hiện có của ứng dụng trên Google Play.",
           "",
+          "",
+          a.googlePlayRatingSourceDate,
         )}
         ${playMetricHtml(
           "Ước tính (USD)",
@@ -2631,6 +2754,7 @@ async function renderTopAppsCustomRange(range, appMap, rate) {
       const { data, error } = await supabaseClient
         .from("estimates")
         .select("app_id,amount,currency,transaction_at")
+        .eq("play_account_id", currentPlayAccountId())
         .eq("included_in_estimate", true)
         .eq("source", "google_play_estimate")
         .not("amount", "is", null)
@@ -2700,10 +2824,16 @@ async function renderTopPlayers() {
     const rows = [];
     const pageSize = 1000;
     const maxRows = 10000;
+    const appIds = activeAccountAppIds();
+    if (!appIds.length) {
+      renderTopPlayersList([], customRange ? `Chưa có log nạp trong khoảng ${customRange.label}` : "Chưa có log nạp trong tháng này");
+      return;
+    }
     for (let from = 0; from < maxRows; from += pageSize) {
       const { data, error } = await supabaseClient
         .from("client_purchase_logs")
         .select("player_name,amount,currency,app_name,package_name,event_time,created_at")
+        .in("package_name", appIds)
         .gte("created_at", start)
         .lt("created_at", end)
         .order("created_at", { ascending: false })
