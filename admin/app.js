@@ -34,6 +34,8 @@ let realtimeChannel = null;
 let realtimeRefreshTimer = null;
 let realtimeRefreshInFlight = false;
 let realtimeRefreshQueued = false;
+let realtimeUiUpdatePending = false;
+let realtimeRefreshPendingUntilVisible = false;
 const realtimeEstimateOrderCache = new Map();
 
 function cleanAppTitle(pkg, fallback) {
@@ -331,6 +333,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (e.key === "Escape") {
       closeRangePopups();
     }
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (isTabVisible()) flushDeferredRealtimeUi();
   });
   
   document.querySelectorAll(".btn-close-modal").forEach(btn => {
@@ -769,6 +774,31 @@ function applyDashboardSummary(summary) {
   earningsData = mergeRtdnAddonIntoEarnings(summary.earnings || [], summary);
 }
 
+function isTabVisible() {
+  return !document.hidden && document.visibilityState === "visible";
+}
+
+function deferRealtimeUiUpdate({ needsRefresh = false } = {}) {
+  realtimeUiUpdatePending = true;
+  if (needsRefresh) realtimeRefreshPendingUntilVisible = true;
+}
+
+async function flushDeferredRealtimeUi() {
+  if (!session || !isTabVisible()) return;
+  if (!realtimeUiUpdatePending && !realtimeRefreshPendingUntilVisible) return;
+
+  const needsRefresh = realtimeRefreshPendingUntilVisible;
+  realtimeUiUpdatePending = false;
+  realtimeRefreshPendingUntilVisible = false;
+
+  if (needsRefresh) {
+    await refreshRealtimeDashboardParts({ source: "tab-visible-realtime-pending" }, { animateKpi: true });
+    return;
+  }
+
+  renderRealtimeUpdatedSections({ animateKpi: true });
+}
+
 function renderRealtimeUpdatedSections({ animateKpi = true } = {}) {
   const recent = serverSummary && serverSummary.kpis && Array.isArray(serverSummary.kpis.recentMonths)
     ? serverSummary.kpis.recentMonths
@@ -803,6 +833,8 @@ function clearRealtimeSubscriptions() {
   }
   realtimeRefreshQueued = false;
   realtimeRefreshInFlight = false;
+  realtimeUiUpdatePending = false;
+  realtimeRefreshPendingUntilVisible = false;
   if (realtimeChannel && supabaseClient) {
     supabaseClient.removeChannel(realtimeChannel).catch((err) => {
       console.warn("Không gỡ được realtime channel:", err);
@@ -851,6 +883,11 @@ function setupRealtimeSubscriptions() {
 function scheduleRealtimeRefresh(payload, delayMs = REALTIME_REFRESH_DEBOUNCE_MS) {
   if (!session) return;
   if (realtimeRefreshTimer) window.clearTimeout(realtimeRefreshTimer);
+  if (!isTabVisible()) {
+    realtimeRefreshTimer = null;
+    deferRealtimeUiUpdate({ needsRefresh: true });
+    return;
+  }
   realtimeRefreshTimer = window.setTimeout(() => {
     realtimeRefreshTimer = null;
     refreshRealtimeDashboardParts(payload);
@@ -869,6 +906,11 @@ async function handleRealtimeRtdnPayload(payload) {
   const relevantNew = normalizedNew && rtdnRowMatchesCurrentAccount(normalizedNew);
   const relevantOld = normalizedOld && rtdnRowMatchesCurrentAccount(normalizedOld);
   if (!relevantNew && !relevantOld) return;
+
+  if (!isTabVisible()) {
+    deferRealtimeUiUpdate({ needsRefresh: true });
+    return;
+  }
 
   applyRealtimeRtdnListChange(payload, relevantNew ? normalizedNew : null, relevantOld ? normalizedOld : null);
   renderRtdnTransactions();
@@ -901,8 +943,12 @@ async function handleRealtimeRtdnPayload(payload) {
   scheduleRealtimeRefresh({ source: "reconcile-after-realtime-transaction", payload }, REALTIME_RECONCILE_DEBOUNCE_MS);
 }
 
-async function refreshRealtimeDashboardParts(payload) {
+async function refreshRealtimeDashboardParts(payload, { animateKpi = true } = {}) {
   if (!session) return;
+  if (!isTabVisible()) {
+    deferRealtimeUiUpdate({ needsRefresh: true });
+    return;
+  }
   if (realtimeRefreshInFlight) {
     realtimeRefreshQueued = true;
     return;
@@ -915,7 +961,11 @@ async function refreshRealtimeDashboardParts(payload) {
     if (accountId !== currentPlayAccountId()) return;
     applyDashboardSummary(summary);
     populateAppDropdown();
-    renderRealtimeUpdatedSections();
+    if (!isTabVisible()) {
+      deferRealtimeUiUpdate();
+      return;
+    }
+    renderRealtimeUpdatedSections({ animateKpi });
   } catch (err) {
     console.warn("Không refresh được dữ liệu realtime:", err, payload || "");
   } finally {
