@@ -19,7 +19,7 @@
   <!-- Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/umd/supabase.js"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=20260703d">
+  <link rel="stylesheet" href="style.css?v=20260703e">
   <style>
     /* Realtime order table (clones Play Console "Order management") */
     .rtdn-app-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; display: block; }
@@ -288,6 +288,32 @@
           <button id="rtdn-load-more" class="glass-button" onclick="loadMoreRtdn()">Tải thêm</button>
         </div>
       </div>
+
+      <!-- LOGIN AUDIT -->
+      <div class="glass-panel table-card hidden" id="login-log-card">
+        <div class="panel-header table-actions">
+          <div class="table-title">
+            <h4><i class="fa-solid fa-shield-halved"></i> Lịch sử đăng nhập</h4>
+            <span class="subtitle" id="login-log-subtitle">Ghi nhận IP các lần đăng nhập web admin</span>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table id="login-log-table">
+            <thead>
+              <tr>
+                <th>Thời gian</th>
+                <th>Email</th>
+                <th>IP</th>
+                <th>Thiết bị</th>
+                <th>Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody id="login-log-body">
+              <tr><td colspan="5" style="text-align:center;">Đang tải...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>
   </div>
 
@@ -406,6 +432,6 @@
   </div>
 
   <!-- Script logic -->
-  <script src="app.js?v=20260703i"></script>
+  <script src="app.js?v=20260703l"></script>
 </body>
 </html>

@@ -202,6 +202,9 @@ const syncTitle = document.getElementById("sync-title");
 const syncSubtitle = document.getElementById("sync-subtitle");
 const syncProgressValue = document.getElementById("sync-progress-value");
 const syncProgressFill = document.getElementById("sync-progress-fill");
+const loginLogCard = document.getElementById("login-log-card");
+const loginLogSubtitle = document.getElementById("login-log-subtitle");
+const loginLogBody = document.getElementById("login-log-body");
 
 // --- Initialization ---
 document.addEventListener("DOMContentLoaded", async () => {
@@ -352,6 +355,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const { data } = await supabaseClient.auth.getSession();
   if (data && data.session) {
     session = data.session;
+    await recordAdminLogin("reload");
     updateSourceFilterAccess();
     showScreen("dashboard");
     loadDataAndRender();
@@ -381,6 +385,10 @@ function currentSessionEmail() {
 
 function canViewAllSourceFilter() {
   return currentSessionEmail() === SOURCE_FILTER_ADMIN_EMAIL;
+}
+
+function canViewLoginLogs() {
+  return ["admin@admin.com", "huongtv.uet@gmail.com"].includes(currentSessionEmail());
 }
 
 function updateSourceFilterAccess() {
@@ -415,6 +423,7 @@ async function handleLogin(e) {
     if (error) throw error;
     
     session = data.session;
+    await recordAdminLogin("login");
     updateSourceFilterAccess();
     showScreen("dashboard");
     loadDataAndRender();
@@ -438,6 +447,46 @@ async function handleLogout() {
 function showError(msg) {
   authError.textContent = msg;
   authError.classList.remove("hidden");
+}
+
+async function recordAdminLogin(eventType = "login") {
+  if (!session || !session.access_token) return;
+  try {
+    const screenSize = window.screen
+      ? `${window.screen.width || 0}x${window.screen.height || 0}`
+      : "";
+    const payload = {
+      event: eventType,
+      page: window.location.href,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+      language: navigator.language || "",
+      platform: navigator.platform || "",
+      screen: screenSize,
+      referrer: document.referrer || "",
+    };
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+    let response;
+    try {
+      response = await fetch(`${supabaseUrl}/functions/v1/admin-login-log`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+    if (!response.ok) {
+      console.warn("Không ghi được lịch sử đăng nhập:", await response.text());
+    }
+  } catch (err) {
+    console.warn("Không ghi được lịch sử đăng nhập:", err);
+  }
 }
 
 // --- Data Fetching ---
@@ -465,6 +514,7 @@ async function loadDataAndRender() {
         renderDashboard();
         await populateTopPlayersMonthOptions();
         renderTopPlayers();
+        await loadLoginLogs();
         return;
       }
     }
@@ -497,9 +547,34 @@ async function loadDataAndRender() {
     renderDashboard();
     await populateTopPlayersMonthOptions();
     renderTopPlayers();
+    await loadLoginLogs();
   } catch (err) {
     console.error("Lỗi khi tải dữ liệu:", err);
     alert("Không thể tải dữ liệu từ Supabase: " + err.message);
+  }
+}
+
+async function loadLoginLogs() {
+  if (!loginLogCard || !loginLogBody || !supabaseClient || !session) return;
+  if (!canViewLoginLogs()) {
+    loginLogCard.classList.add("hidden");
+    return;
+  }
+
+  loginLogCard.classList.remove("hidden");
+  loginLogBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Đang tải...</td></tr>`;
+
+  try {
+    const { data, error } = await supabaseClient
+      .from("admin_login_logs")
+      .select("email,ip_address,user_agent,login_at,metadata")
+      .order("login_at", { ascending: false })
+      .limit(30);
+    if (error) throw error;
+    renderLoginLogs(data || []);
+  } catch (err) {
+    console.warn("Không tải được lịch sử đăng nhập:", err);
+    loginLogBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--danger);">Không tải được lịch sử đăng nhập</td></tr>`;
   }
 }
 
@@ -1491,6 +1566,56 @@ function escapeHtml(value) {
     '"': "&quot;",
     "'": "&#39;",
   }[ch]));
+}
+
+function loginDeviceLabel(userAgent) {
+  const ua = String(userAgent || "");
+  if (!ua) return "—";
+  const browser = /Edg\//.test(ua) ? "Edge"
+    : /Chrome\//.test(ua) ? "Chrome"
+    : /Safari\//.test(ua) ? "Safari"
+    : /Firefox\//.test(ua) ? "Firefox"
+    : "Browser";
+  const os = /Mac OS X|Macintosh/.test(ua) ? "macOS"
+    : /Windows/.test(ua) ? "Windows"
+    : /Android/.test(ua) ? "Android"
+    : /iPhone|iPad|iOS/.test(ua) ? "iOS"
+    : "Unknown";
+  return `${browser} · ${os}`;
+}
+
+function loginLogStatusLabel(row) {
+  const event = String(row && row.metadata && row.metadata.event || "").trim().toLowerCase();
+  if (event === "reload") return { icon: "fa-rotate", label: "Reload web" };
+  return { icon: "fa-circle-check", label: "Đăng nhập" };
+}
+
+function renderLoginLogs(rows) {
+  if (!loginLogBody) return;
+  if (loginLogSubtitle) {
+    loginLogSubtitle.textContent = rows.length
+      ? `${rows.length} lần đăng nhập gần nhất`
+      : "Chưa có lịch sử đăng nhập";
+  }
+
+  if (!rows.length) {
+    loginLogBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Chưa có lịch sử đăng nhập</td></tr>`;
+    return;
+  }
+
+  loginLogBody.innerHTML = rows.map((row) => {
+    const time = vnDateParts(row.login_at);
+    const status = loginLogStatusLabel(row);
+    return `
+      <tr>
+        <td><div class="login-log-time">${escapeHtml(time.date)}</div><div class="login-log-sub">${escapeHtml(time.time)}</div></td>
+        <td>${escapeHtml(row.email || "—")}</td>
+        <td><code class="login-log-ip">${escapeHtml(row.ip_address || "—")}</code></td>
+        <td><span class="login-log-device" title="${escapeHtml(row.user_agent || "")}">${escapeHtml(loginDeviceLabel(row.user_agent))}</span></td>
+        <td><span class="login-log-status"><i class="fa-solid ${status.icon}"></i> ${escapeHtml(status.label)}</span></td>
+      </tr>
+    `;
+  }).join("");
 }
 
 function appIconUrl(pkg) {
