@@ -24,31 +24,12 @@ let syncProgressTimer = null;
 let syncProgressPlan = null;
 let syncProgressPhase = null;
 
-// --- App package mappings ---
-const PACKAGE_MAP = {
-  "com.galaxteam.treasurequest": "Treasure Quest",
-  "com.galaxteam.braingems": "Brain Gems",
-  "com.luckyspin.game": "Lucky Spin",
-  "com.galaxteam.wordchain": "Word Chain",
-  "com.galaxteam.vocabquest": "Vocab Quest",
-  "com.galaxteam.viet_riddles": "Viet Riddles",
-  "com.galaxteam.pixel_realms": "Pixel Realms",
-  "com.galaxteam.galaxarcade": "Galax Arcade",
-  "com.galaxteam.bloombounce": "Orbiloop",
-};
-
 function cleanAppTitle(pkg, fallback) {
   const cleanPkg = String(pkg).trim().toLowerCase();
   if (cleanPkg === "__adjustments__" || cleanPkg === "adjustments") return "Khác";
-  for (const [k, v] of Object.entries(PACKAGE_MAP)) {
-    if (k.toLowerCase() === cleanPkg) return v;
-  }
   if (fallback) {
     const cleanFallback = String(fallback).trim().toLowerCase();
     if (cleanFallback === "__adjustments__" || cleanFallback === "adjustments") return "Khác";
-    for (const [k, v] of Object.entries(PACKAGE_MAP)) {
-      if (k.toLowerCase() === cleanFallback) return v;
-    }
     return fallback;
   }
   if (pkg && pkg.includes(".")) {
@@ -92,8 +73,7 @@ function isPublishedApp(id, title) {
     if (/publish|production|active|live/.test(statusText)) return true;
   }
 
-  return Object.prototype.hasOwnProperty.call(PACKAGE_MAP, String(id || "").trim().toLowerCase()) ||
-    Object.values(PACKAGE_MAP).some(name => String(name).toLowerCase() === String(title || "").trim().toLowerCase());
+  return Boolean(appRecordById(id));
 }
 
 function shouldHideTopApp(app) {
@@ -1697,7 +1677,10 @@ window.loadMoreRtdn = async () => {
       .order("event_time", { ascending: false })
       .range(rtdnOffset, rtdnOffset + 29);
     if (error) throw error;
-    const rows = await attachPlayerNamesToRtdnRows((data || []).map(t => ({ ...t, title: cleanAppTitle(t.package_name) })));
+    const rows = await attachPlayerNamesToRtdnRows((data || []).map(t => ({
+      ...t,
+      title: cleanAppTitle(t.package_name, appRecordById(t.package_name)?.title)
+    })));
     rows.forEach(t => { rtdnByOrder[t.order_id] = t; });
     const body = document.getElementById("rtdn-body");
     if (body) body.insertAdjacentHTML("beforeend", rows.map(rtdnRowHtml).join(""));
@@ -2039,7 +2022,7 @@ function groupTopPlayersFromRows(rows) {
     const player = String(row.player_name || "Ẩn danh").trim() || "Ẩn danh";
     const playerKey = player.toLocaleLowerCase("vi-VN");
     const packageName = row.package_name || "";
-    const appTitle = cleanAppTitle(packageName, row.app_name || packageName || "Unknown");
+    const appTitle = appRecordById(packageName)?.title || cleanAppTitle(packageName, row.app_name || packageName || "Unknown");
     const appKey = packageName || appTitle;
     const current = grouped.get(playerKey) || {
       player,
