@@ -43,6 +43,10 @@ let realtimeRefreshPendingUntilVisible = false;
 let adminAliveTimer = null;
 let adminAliveInFlight = false;
 let forceLogoutInFlight = false;
+let loginLogRefreshTimer = null;
+let loginLogRefreshInFlight = false;
+let loginLogRefreshQueued = false;
+let loginLogRefreshPendingUntilVisible = false;
 const realtimeEstimateOrderCache = new Map();
 
 function cleanAppTitle(pkg, fallback) {
@@ -948,18 +952,24 @@ function deferRealtimeUiUpdate({ needsRefresh = false } = {}) {
 
 async function flushDeferredRealtimeUi() {
   if (!session || !isTabVisible()) return;
-  if (!realtimeUiUpdatePending && !realtimeRefreshPendingUntilVisible) return;
+  const hasDashboardUpdate = realtimeUiUpdatePending || realtimeRefreshPendingUntilVisible;
+  const hasLoginLogUpdate = loginLogRefreshPendingUntilVisible;
+  if (!hasDashboardUpdate && !hasLoginLogUpdate) return;
 
   const needsRefresh = realtimeRefreshPendingUntilVisible;
   realtimeUiUpdatePending = false;
   realtimeRefreshPendingUntilVisible = false;
+  loginLogRefreshPendingUntilVisible = false;
 
   if (needsRefresh) {
     await refreshRealtimeDashboardParts({ source: "tab-visible-realtime-pending" }, { animateKpi: true });
-    return;
+  } else if (hasDashboardUpdate) {
+    renderRealtimeUpdatedSections({ animateKpi: true });
   }
 
-  renderRealtimeUpdatedSections({ animateKpi: true });
+  if (hasLoginLogUpdate) {
+    await refreshLoginLogsFromRealtime({ source: "tab-visible-login-log-pending" });
+  }
 }
 
 function renderRealtimeUpdatedSections({ animateKpi = true } = {}) {
@@ -994,10 +1004,17 @@ function clearRealtimeSubscriptions() {
     window.clearTimeout(realtimeRefreshTimer);
     realtimeRefreshTimer = null;
   }
+  if (loginLogRefreshTimer) {
+    window.clearTimeout(loginLogRefreshTimer);
+    loginLogRefreshTimer = null;
+  }
   realtimeRefreshQueued = false;
   realtimeRefreshInFlight = false;
   realtimeUiUpdatePending = false;
   realtimeRefreshPendingUntilVisible = false;
+  loginLogRefreshInFlight = false;
+  loginLogRefreshQueued = false;
+  loginLogRefreshPendingUntilVisible = false;
   if (realtimeChannel && supabaseClient) {
     supabaseClient.removeChannel(realtimeChannel).catch((err) => {
       console.warn("Không gỡ được realtime channel:", err);
@@ -1015,7 +1032,7 @@ function setupRealtimeSubscriptions() {
   }
 
   const accountId = currentPlayAccountId();
-  realtimeChannel = supabaseClient
+  let channel = supabaseClient
     .channel(`admin-dashboard-${accountId}-${session.user?.id || "user"}`)
     .on("postgres_changes", {
       event: "*",
@@ -1033,7 +1050,17 @@ function setupRealtimeSubscriptions() {
         console.warn("Không xử lý được giao dịch realtime từ socket:", err);
         scheduleRealtimeRefresh(payload);
       });
-    })
+    });
+
+  if (canViewLoginLogs()) {
+    channel = channel.on("postgres_changes", {
+      event: "*",
+      schema: "public",
+      table: "admin_login_logs",
+    }, (payload) => scheduleLoginLogRefresh(payload));
+  }
+
+  realtimeChannel = channel
     .subscribe((status, err) => {
       if (status === "SUBSCRIBED") {
         console.info(`Realtime dashboard active for Google Play account ${accountId}`);
@@ -1041,6 +1068,45 @@ function setupRealtimeSubscriptions() {
         console.warn("Realtime dashboard channel status:", status, err || "");
       }
     });
+}
+
+function scheduleLoginLogRefresh(payload, delayMs = 500) {
+  if (!session || !canViewLoginLogs()) return;
+  if (loginLogRefreshTimer) window.clearTimeout(loginLogRefreshTimer);
+  if (!isTabVisible()) {
+    loginLogRefreshTimer = null;
+    loginLogRefreshPendingUntilVisible = true;
+    return;
+  }
+  loginLogRefreshTimer = window.setTimeout(() => {
+    loginLogRefreshTimer = null;
+    refreshLoginLogsFromRealtime(payload);
+  }, delayMs);
+}
+
+async function refreshLoginLogsFromRealtime(payload) {
+  if (!session || !canViewLoginLogs()) return;
+  if (!isTabVisible()) {
+    loginLogRefreshPendingUntilVisible = true;
+    return;
+  }
+  if (loginLogRefreshInFlight) {
+    loginLogRefreshQueued = true;
+    return;
+  }
+
+  loginLogRefreshInFlight = true;
+  try {
+    await loadLoginLogs({ showSkeleton: false });
+  } catch (err) {
+    console.warn("Không refresh được lịch sử đăng nhập realtime:", err, payload || "");
+  } finally {
+    loginLogRefreshInFlight = false;
+    if (loginLogRefreshQueued) {
+      loginLogRefreshQueued = false;
+      scheduleLoginLogRefresh({ source: "login-log-queued" });
+    }
+  }
 }
 
 function scheduleRealtimeRefresh(payload, delayMs = REALTIME_REFRESH_DEBOUNCE_MS) {
@@ -1204,7 +1270,7 @@ async function loadDataAndRender() {
   }
 }
 
-async function loadLoginLogs() {
+async function loadLoginLogs({ showSkeleton = true } = {}) {
   if (!loginLogCard || !loginLogBody || !supabaseClient || !session) return;
   if (!canViewLoginLogs()) {
     loginLogCard.classList.add("hidden");
@@ -1214,8 +1280,10 @@ async function loadLoginLogs() {
   }
 
   loginLogCard.classList.remove("hidden");
-  renderSimpleTableSkeleton(loginLogBody, 5, 4);
-  if (loginLogSubtitle) loginLogSubtitle.textContent = "Đang tải lịch sử đăng nhập...";
+  if (showSkeleton) {
+    renderSimpleTableSkeleton(loginLogBody, 5, 4);
+    if (loginLogSubtitle) loginLogSubtitle.textContent = "Đang tải lịch sử đăng nhập...";
+  }
 
   try {
     const { data, error } = await supabaseClient
@@ -1227,7 +1295,9 @@ async function loadLoginLogs() {
     renderLoginLogs(data || []);
   } catch (err) {
     console.warn("Không tải được lịch sử đăng nhập:", err);
-    loginLogBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--danger);">Không tải được lịch sử đăng nhập</td></tr>`;
+    if (showSkeleton) {
+      loginLogBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--danger);">Không tải được lịch sử đăng nhập</td></tr>`;
+    }
   }
 }
 
