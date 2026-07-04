@@ -507,8 +507,28 @@ function currentSessionEmail() {
   return String(session && session.user && session.user.email || "").trim().toLowerCase();
 }
 
-async function validateCurrentSession() {
-  if (!supabaseClient || !session || !session.access_token) return false;
+function sessionExpiresSoon(bufferSeconds = 60) {
+  const expiresAt = Number(session && session.expires_at || 0);
+  return Boolean(expiresAt && Date.now() / 1000 >= expiresAt - bufferSeconds);
+}
+
+async function refreshCurrentSession() {
+  if (!supabaseClient) return false;
+  try {
+    const { data, error } = await supabaseClient.auth.refreshSession();
+    if (error || !data || !data.session) return false;
+    session = data.session;
+    if (supabaseClient.realtime && typeof supabaseClient.realtime.setAuth === "function") {
+      supabaseClient.realtime.setAuth(session.access_token);
+    }
+    return true;
+  } catch (err) {
+    console.warn("Không refresh được phiên đăng nhập:", err);
+    return false;
+  }
+}
+
+async function fetchCurrentAuthUser() {
   let response;
   try {
     response = await fetch(`${supabaseUrl}/auth/v1/user`, {
@@ -519,16 +539,34 @@ async function validateCurrentSession() {
     });
   } catch (err) {
     console.warn("Không kiểm tra được phiên đăng nhập:", err);
-    return true;
+    return { ok: true, user: session.user || null, networkError: true };
   }
   const user = await readJsonResponse(response);
-  if (!response.ok || !user || !user.id) {
+  return {
+    ok: response.ok && user && user.id,
+    user,
+    status: response.status,
+  };
+}
+
+async function validateCurrentSession() {
+  if (!supabaseClient || !session || !session.access_token) return false;
+  if (sessionExpiresSoon()) {
+    await refreshCurrentSession();
+  }
+
+  let result = await fetchCurrentAuthUser();
+  if (!result.ok && result.status === 401 && await refreshCurrentSession()) {
+    result = await fetchCurrentAuthUser();
+  }
+
+  if (!result.ok) {
     await forceLogout();
     return false;
   }
   session = {
     ...session,
-    user,
+    user: result.user,
   };
   return true;
 }
@@ -677,6 +715,25 @@ async function recordAdminAlive() {
     await recordAdminLogin("alive");
   } finally {
     adminAliveInFlight = false;
+  }
+}
+
+async function postAdminLoginLog(payload) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+  try {
+    return await fetch(`${supabaseUrl}/functions/v1/admin-login-log`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 }
 
@@ -840,22 +897,9 @@ async function recordAdminLogin(eventType = "login") {
       screen: screenSize,
       referrer: document.referrer || "",
     };
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
-    let response;
-    try {
-      response = await fetch(`${supabaseUrl}/functions/v1/admin-login-log`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: supabaseAnonKey,
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-    } finally {
-      window.clearTimeout(timeoutId);
+    let response = await postAdminLoginLog(payload);
+    if (response.status === 401 && await refreshCurrentSession()) {
+      response = await postAdminLoginLog(payload);
     }
     if (response.status === 401) {
       await forceLogout();
