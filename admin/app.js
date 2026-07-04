@@ -47,6 +47,10 @@ let loginLogRefreshTimer = null;
 let loginLogRefreshInFlight = false;
 let loginLogRefreshQueued = false;
 let loginLogRefreshPendingUntilVisible = false;
+let telegramLogRefreshTimer = null;
+let telegramLogRefreshInFlight = false;
+let telegramLogRefreshQueued = false;
+let telegramLogRefreshPendingUntilVisible = false;
 const realtimeEstimateOrderCache = new Map();
 
 function cleanAppTitle(pkg, fallback) {
@@ -302,6 +306,9 @@ const syncProgressFill = document.getElementById("sync-progress-fill");
 const loginLogCard = document.getElementById("login-log-card");
 const loginLogSubtitle = document.getElementById("login-log-subtitle");
 const loginLogBody = document.getElementById("login-log-body");
+const telegramLogCard = document.getElementById("telegram-log-card");
+const telegramLogSubtitle = document.getElementById("telegram-log-subtitle");
+const telegramLogBody = document.getElementById("telegram-log-body");
 
 // --- Initialization ---
 document.addEventListener("DOMContentLoaded", async () => {
@@ -616,6 +623,10 @@ function canViewLoginLogs() {
   return currentSessionEmail() === SOURCE_FILTER_ADMIN_EMAIL;
 }
 
+function canViewTelegramLogs() {
+  return canViewLoginLogs();
+}
+
 function updateSourceFilterAccess() {
   if (filterSource) {
     const canViewFilter = canViewAllSourceFilter();
@@ -627,6 +638,7 @@ function updateSourceFilterAccess() {
   }
 
   updateLoginLogAccess();
+  updateTelegramLogAccess();
 }
 
 function updateLoginLogAccess() {
@@ -636,6 +648,16 @@ function updateLoginLogAccess() {
   if (!canView) {
     if (loginLogSubtitle) loginLogSubtitle.textContent = "";
     if (loginLogBody) loginLogBody.innerHTML = "";
+  }
+}
+
+function updateTelegramLogAccess() {
+  if (!telegramLogCard) return;
+  const canView = canViewTelegramLogs();
+  telegramLogCard.classList.toggle("hidden", !canView);
+  if (!canView) {
+    if (telegramLogSubtitle) telegramLogSubtitle.textContent = "";
+    if (telegramLogBody) telegramLogBody.innerHTML = "";
   }
 }
 
@@ -884,6 +906,11 @@ function renderDashboardSkeleton() {
     renderSimpleTableSkeleton(loginLogBody, 5, 4);
     if (loginLogSubtitle) loginLogSubtitle.textContent = "Đang tải lịch sử đăng nhập...";
   }
+  updateTelegramLogAccess();
+  if (canViewTelegramLogs()) {
+    renderSimpleTableSkeleton(telegramLogBody, 5, 4);
+    if (telegramLogSubtitle) telegramLogSubtitle.textContent = "Đang tải lịch sử Telegram...";
+  }
 }
 
 async function recordAdminLogin(eventType = "login") {
@@ -954,12 +981,14 @@ async function flushDeferredRealtimeUi() {
   if (!session || !isTabVisible()) return;
   const hasDashboardUpdate = realtimeUiUpdatePending || realtimeRefreshPendingUntilVisible;
   const hasLoginLogUpdate = loginLogRefreshPendingUntilVisible;
-  if (!hasDashboardUpdate && !hasLoginLogUpdate) return;
+  const hasTelegramLogUpdate = telegramLogRefreshPendingUntilVisible;
+  if (!hasDashboardUpdate && !hasLoginLogUpdate && !hasTelegramLogUpdate) return;
 
   const needsRefresh = realtimeRefreshPendingUntilVisible;
   realtimeUiUpdatePending = false;
   realtimeRefreshPendingUntilVisible = false;
   loginLogRefreshPendingUntilVisible = false;
+  telegramLogRefreshPendingUntilVisible = false;
 
   if (needsRefresh) {
     await refreshRealtimeDashboardParts({ source: "tab-visible-realtime-pending" }, { animateKpi: true });
@@ -969,6 +998,9 @@ async function flushDeferredRealtimeUi() {
 
   if (hasLoginLogUpdate) {
     await refreshLoginLogsFromRealtime({ source: "tab-visible-login-log-pending" });
+  }
+  if (hasTelegramLogUpdate) {
+    await refreshTelegramLogsFromRealtime({ source: "tab-visible-telegram-log-pending" });
   }
 }
 
@@ -1008,6 +1040,10 @@ function clearRealtimeSubscriptions() {
     window.clearTimeout(loginLogRefreshTimer);
     loginLogRefreshTimer = null;
   }
+  if (telegramLogRefreshTimer) {
+    window.clearTimeout(telegramLogRefreshTimer);
+    telegramLogRefreshTimer = null;
+  }
   realtimeRefreshQueued = false;
   realtimeRefreshInFlight = false;
   realtimeUiUpdatePending = false;
@@ -1015,6 +1051,9 @@ function clearRealtimeSubscriptions() {
   loginLogRefreshInFlight = false;
   loginLogRefreshQueued = false;
   loginLogRefreshPendingUntilVisible = false;
+  telegramLogRefreshInFlight = false;
+  telegramLogRefreshQueued = false;
+  telegramLogRefreshPendingUntilVisible = false;
   if (realtimeChannel && supabaseClient) {
     supabaseClient.removeChannel(realtimeChannel).catch((err) => {
       console.warn("Không gỡ được realtime channel:", err);
@@ -1058,6 +1097,14 @@ function setupRealtimeSubscriptions() {
       schema: "public",
       table: "admin_login_logs",
     }, (payload) => scheduleLoginLogRefresh(payload));
+  }
+
+  if (canViewTelegramLogs()) {
+    channel = channel.on("postgres_changes", {
+      event: "*",
+      schema: "public",
+      table: "telegram_bot_usage_logs",
+    }, (payload) => scheduleTelegramLogRefresh(payload));
   }
 
   realtimeChannel = channel
@@ -1105,6 +1152,45 @@ async function refreshLoginLogsFromRealtime(payload) {
     if (loginLogRefreshQueued) {
       loginLogRefreshQueued = false;
       scheduleLoginLogRefresh({ source: "login-log-queued" });
+    }
+  }
+}
+
+function scheduleTelegramLogRefresh(payload, delayMs = 500) {
+  if (!session || !canViewTelegramLogs()) return;
+  if (telegramLogRefreshTimer) window.clearTimeout(telegramLogRefreshTimer);
+  if (!isTabVisible()) {
+    telegramLogRefreshTimer = null;
+    telegramLogRefreshPendingUntilVisible = true;
+    return;
+  }
+  telegramLogRefreshTimer = window.setTimeout(() => {
+    telegramLogRefreshTimer = null;
+    refreshTelegramLogsFromRealtime(payload);
+  }, delayMs);
+}
+
+async function refreshTelegramLogsFromRealtime(payload) {
+  if (!session || !canViewTelegramLogs()) return;
+  if (!isTabVisible()) {
+    telegramLogRefreshPendingUntilVisible = true;
+    return;
+  }
+  if (telegramLogRefreshInFlight) {
+    telegramLogRefreshQueued = true;
+    return;
+  }
+
+  telegramLogRefreshInFlight = true;
+  try {
+    await loadTelegramLogs({ showSkeleton: false });
+  } catch (err) {
+    console.warn("Không refresh được lịch sử Telegram realtime:", err, payload || "");
+  } finally {
+    telegramLogRefreshInFlight = false;
+    if (telegramLogRefreshQueued) {
+      telegramLogRefreshQueued = false;
+      scheduleTelegramLogRefresh({ source: "telegram-log-queued" });
     }
   }
 }
@@ -1231,6 +1317,7 @@ async function loadDataAndRender() {
     await populateTopPlayersMonthOptions();
     renderTopPlayers();
     await loadLoginLogs();
+    await loadTelegramLogs();
     return;
   } catch (err) {
     console.warn("dashboard-summary fetch failed, falling back:", err);
@@ -1264,6 +1351,7 @@ async function loadDataAndRender() {
     await populateTopPlayersMonthOptions();
     renderTopPlayers();
     await loadLoginLogs();
+    await loadTelegramLogs();
   } catch (err) {
     console.error("Lỗi khi tải dữ liệu:", err);
     alert("Không thể tải dữ liệu từ Supabase: " + err.message);
@@ -1297,6 +1385,37 @@ async function loadLoginLogs({ showSkeleton = true } = {}) {
     console.warn("Không tải được lịch sử đăng nhập:", err);
     if (showSkeleton) {
       loginLogBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--danger);">Không tải được lịch sử đăng nhập</td></tr>`;
+    }
+  }
+}
+
+async function loadTelegramLogs({ showSkeleton = true } = {}) {
+  if (!telegramLogCard || !telegramLogBody || !supabaseClient || !session) return;
+  if (!canViewTelegramLogs()) {
+    telegramLogCard.classList.add("hidden");
+    if (telegramLogSubtitle) telegramLogSubtitle.textContent = "";
+    telegramLogBody.innerHTML = "";
+    return;
+  }
+
+  telegramLogCard.classList.remove("hidden");
+  if (showSkeleton) {
+    renderSimpleTableSkeleton(telegramLogBody, 5, 4);
+    if (telegramLogSubtitle) telegramLogSubtitle.textContent = "Đang tải lịch sử Telegram...";
+  }
+
+  try {
+    const { data, error } = await supabaseClient
+      .from("telegram_bot_usage_logs")
+      .select("telegram_user_id,chat_id,username,first_name,last_name,language_code,chat_type,command,message_text,logged_at,metadata")
+      .order("logged_at", { ascending: false })
+      .limit(30);
+    if (error) throw error;
+    renderTelegramLogs(data || []);
+  } catch (err) {
+    console.warn("Không tải được lịch sử Telegram:", err);
+    if (showSkeleton) {
+      telegramLogBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--danger);">Không tải được lịch sử Telegram</td></tr>`;
     }
   }
 }
@@ -2672,6 +2791,52 @@ function renderLoginLogs(rows) {
         <td><code class="login-log-ip">${escapeHtml(row.ip_address || "—")}</code></td>
         <td><span class="login-log-device" title="${escapeHtml(row.user_agent || "")}">${escapeHtml(loginDeviceLabel(row.user_agent))}</span></td>
         <td><span class="login-log-status is-${escapeHtml(status.tone)}"><i class="fa-solid ${status.icon}"></i> ${escapeHtml(status.label)}</span></td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function telegramUserLabel(row) {
+  const name = [row.first_name, row.last_name].map(v => String(v || "").trim()).filter(Boolean).join(" ");
+  return name || row.telegram_user_id || "—";
+}
+
+function telegramMessageLabel(row) {
+  const command = String(row.command || "").trim();
+  const text = String(row.message_text || "").trim();
+  if (command) {
+    const message = text ? ` <span class="telegram-log-message">${escapeHtml(text)}</span>` : "";
+    return `<span class="telegram-log-command">/${escapeHtml(command)}</span>${message}`;
+  }
+  return `<span class="telegram-log-message">${escapeHtml(text || "—")}</span>`;
+}
+
+function renderTelegramLogs(rows) {
+  if (!telegramLogBody) return;
+  if (telegramLogSubtitle) {
+    const userCount = new Set(rows.map(row => row.telegram_user_id || row.username || row.chat_id).filter(Boolean)).size;
+    telegramLogSubtitle.textContent = rows.length
+      ? `${rows.length} lượt gần nhất · ${userCount} user`
+      : "Chưa có lịch sử Telegram";
+  }
+
+  if (!rows.length) {
+    telegramLogBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Chưa có lịch sử Telegram</td></tr>`;
+    return;
+  }
+
+  telegramLogBody.innerHTML = rows.map((row) => {
+    const time = vnDateParts(row.logged_at);
+    const userId = row.telegram_user_id ? `ID ${row.telegram_user_id}` : "";
+    const username = row.username ? `@${row.username}` : "—";
+    const chat = [row.chat_type, row.chat_id].map(v => String(v || "").trim()).filter(Boolean).join(" · ") || "—";
+    return `
+      <tr>
+        <td><div class="login-log-time">${escapeHtml(time.date)}</div><div class="login-log-sub">${escapeHtml(time.time)}</div></td>
+        <td><div class="telegram-log-user">${escapeHtml(telegramUserLabel(row))}</div><div class="telegram-log-sub">${escapeHtml(userId)}</div></td>
+        <td><code class="login-log-ip">${escapeHtml(username)}</code></td>
+        <td><span class="telegram-log-chat">${escapeHtml(chat)}</span></td>
+        <td>${telegramMessageLabel(row)}</td>
       </tr>
     `;
   }).join("");
