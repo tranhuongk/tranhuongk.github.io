@@ -1,6 +1,7 @@
 // Supabase Client variables
 const supabaseUrl = "https://lnazpyhoojqotnanrvqf.supabase.co";
 const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxuYXpweWhvb2pxb3RuYW5ydnFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1NzAyNjcsImV4cCI6MjA5ODE0NjI2N30.uc4WAXKm_UDKoLEm260mu0RHyHaL4HGtPI3sG-TbJSg";
+const SUPABASE_AUTH_STORAGE_KEY = "sb-lnazpyhoojqotnanrvqf-auth-token";
 let supabaseClient = null;
 let session = null;
 let chartMain = null;
@@ -41,6 +42,7 @@ let realtimeUiUpdatePending = false;
 let realtimeRefreshPendingUntilVisible = false;
 let adminAliveTimer = null;
 let adminAliveInFlight = false;
+let forceLogoutInFlight = false;
 const realtimeEstimateOrderCache = new Map();
 
 function cleanAppTitle(pkg, fallback) {
@@ -465,6 +467,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const { data } = await supabaseClient.auth.getSession();
   if (data && data.session) {
     session = data.session;
+    if (!(await validateCurrentSession())) {
+      exchangeRatePromise.catch(() => {});
+      return;
+    }
     updateSourceFilterAccess();
     showScreen("dashboard");
     renderDashboardSkeleton();
@@ -499,6 +505,65 @@ function showScreen(screen) {
 
 function currentSessionEmail() {
   return String(session && session.user && session.user.email || "").trim().toLowerCase();
+}
+
+async function validateCurrentSession() {
+  if (!supabaseClient || !session || !session.access_token) return false;
+  let response;
+  try {
+    response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+  } catch (err) {
+    console.warn("Không kiểm tra được phiên đăng nhập:", err);
+    return true;
+  }
+  const user = await readJsonResponse(response);
+  if (!response.ok || !user || !user.id) {
+    await forceLogout();
+    return false;
+  }
+  session = {
+    ...session,
+    user,
+  };
+  return true;
+}
+
+function clearSupabaseAuthStorage() {
+  [localStorage, sessionStorage].forEach(storage => {
+    storage.removeItem(SUPABASE_AUTH_STORAGE_KEY);
+  });
+}
+
+async function forceLogout(message = "Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.") {
+  if (forceLogoutInFlight) return;
+  forceLogoutInFlight = true;
+  try {
+    stopAdminAliveHeartbeat();
+    clearRealtimeSubscriptions();
+    session = null;
+    googlePlayAccounts = [];
+    updatePlayAccountSelect();
+    updateSourceFilterAccess();
+
+    if (supabaseClient) {
+      try {
+        await supabaseClient.auth.signOut({ scope: "local" });
+      } catch (_) {
+        clearSupabaseAuthStorage();
+      }
+    }
+    clearSupabaseAuthStorage();
+
+    showScreen("auth");
+    showError(message);
+  } finally {
+    forceLogoutInFlight = false;
+  }
 }
 
 function canViewAllSourceFilter() {
@@ -556,6 +621,7 @@ async function handleLogin(e) {
     if (error) throw error;
     
     session = data.session;
+    if (!(await validateCurrentSession())) return;
     updateSourceFilterAccess();
     showScreen("dashboard");
     renderDashboardSkeleton();
@@ -790,6 +856,10 @@ async function recordAdminLogin(eventType = "login") {
       });
     } finally {
       window.clearTimeout(timeoutId);
+    }
+    if (response.status === 401) {
+      await forceLogout();
+      return;
     }
     if (!response.ok) {
       console.warn("Không ghi được lịch sử đăng nhập:", await response.text());
