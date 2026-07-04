@@ -9,6 +9,7 @@ const SYNC_PROGRESS_STORAGE_KEY = "galax_admin_sync_progress_durations_v1";
 const CUSTOM_RANGE_VALUE = "__custom__";
 const SOURCE_FILTER_ALL_VALUE = "all";
 const SOURCE_FILTER_ADMIN_EMAIL = "admin@admin.com";
+const CUSTOMER_ADMIN_EMAIL = "customer@customer.com";
 const PLAY_ACCOUNT_STORAGE_KEY = "galax_admin_google_play_account_id_v1";
 const DEFAULT_PLAY_ACCOUNT_ID = "default";
 const DEFAULT_PLAY_ACCOUNT_LABEL = "Galax VN Team";
@@ -21,6 +22,8 @@ const REALTIME_REFRESH_DEBOUNCE_MS = 1500;
 const REALTIME_RECONCILE_DEBOUNCE_MS = 10000;
 const REALTIME_RTDN_PAGE_SIZE = 30;
 const KPI_COUNT_ANIMATION_MS = 720;
+const ADMIN_ALIVE_INTERVAL_MS = 30 * 1000;
+const ADMIN_ALIVE_STALE_MS = ADMIN_ALIVE_INTERVAL_MS * 3;
 const SYNC_PROGRESS_PHASES = [
   { key: "sync-earnings", label: "Đồng bộ finalized earnings", defaultDurationMs: 3000 },
   { key: "sync-estimates", label: "Đồng bộ Estimated sales reports", defaultDurationMs: 25000 },
@@ -36,6 +39,8 @@ let realtimeRefreshInFlight = false;
 let realtimeRefreshQueued = false;
 let realtimeUiUpdatePending = false;
 let realtimeRefreshPendingUntilVisible = false;
+let adminAliveTimer = null;
+let adminAliveInFlight = false;
 const realtimeEstimateOrderCache = new Map();
 
 function cleanAppTitle(pkg, fallback) {
@@ -335,7 +340,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
   document.addEventListener("visibilitychange", () => {
-    if (isTabVisible()) flushDeferredRealtimeUi();
+    if (isTabVisible()) {
+      flushDeferredRealtimeUi();
+      recordAdminAlive();
+    }
   });
   
   document.querySelectorAll(".btn-close-modal").forEach(btn => {
@@ -461,12 +469,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     showScreen("dashboard");
     renderDashboardSkeleton();
     recordAdminLogin("reload");
+    startAdminAliveHeartbeat();
     await exchangeRatePromise.catch(() => {});
     await loadGooglePlayAccounts();
     setupRealtimeSubscriptions();
     loadDataAndRender();
   } else {
     exchangeRatePromise.catch(() => {});
+    stopAdminAliveHeartbeat();
     clearRealtimeSubscriptions();
     updateSourceFilterAccess();
     showScreen("auth");
@@ -534,7 +544,7 @@ async function handleLogin(e) {
   if (emailAlias === "ad") {
     email = SOURCE_FILTER_ADMIN_EMAIL;
   } else if (emailAlias === "admin") {
-    email = "huongtv.uet@gmail.com";
+    email = CUSTOMER_ADMIN_EMAIL;
   }
 
   const btn = loginForm.querySelector("button[type='submit']");
@@ -550,6 +560,7 @@ async function handleLogin(e) {
     showScreen("dashboard");
     renderDashboardSkeleton();
     recordAdminLogin("login");
+    startAdminAliveHeartbeat();
     await loadGooglePlayAccounts();
     setupRealtimeSubscriptions();
     loadDataAndRender();
@@ -567,6 +578,7 @@ async function handleLogout() {
   }
   session = null;
   googlePlayAccounts = [];
+  stopAdminAliveHeartbeat();
   clearRealtimeSubscriptions();
   updatePlayAccountSelect();
   updateSourceFilterAccess();
@@ -576,6 +588,30 @@ async function handleLogout() {
 function showError(msg) {
   authError.textContent = msg;
   authError.classList.remove("hidden");
+}
+
+function startAdminAliveHeartbeat() {
+  stopAdminAliveHeartbeat();
+  if (!session || !session.access_token) return;
+  adminAliveTimer = window.setInterval(recordAdminAlive, ADMIN_ALIVE_INTERVAL_MS);
+}
+
+function stopAdminAliveHeartbeat() {
+  if (adminAliveTimer) {
+    window.clearInterval(adminAliveTimer);
+    adminAliveTimer = null;
+  }
+  adminAliveInFlight = false;
+}
+
+async function recordAdminAlive() {
+  if (!session || !session.access_token || adminAliveInFlight) return;
+  adminAliveInFlight = true;
+  try {
+    await recordAdminLogin("alive");
+  } finally {
+    adminAliveInFlight = false;
+  }
 }
 
 function skeletonLine(width = "100%", extraClass = "") {
@@ -2414,15 +2450,26 @@ function loginDeviceLabel(userAgent) {
 
 function loginLogStatusLabel(row) {
   const event = String(row && row.metadata && row.metadata.event || "").trim().toLowerCase();
+  if (event === "alive") {
+    return isRecentLoginLog(row)
+      ? { icon: "fa-signal", label: "Đang online" }
+      : { icon: "fa-clock", label: "Vừa online" };
+  }
   if (event === "reload") return { icon: "fa-rotate", label: "Reload web" };
   return { icon: "fa-circle-check", label: "Đăng nhập" };
+}
+
+function isRecentLoginLog(row, windowMs = ADMIN_ALIVE_STALE_MS) {
+  const timestamp = Date.parse(row && row.login_at || "");
+  return Number.isFinite(timestamp) && Date.now() - timestamp <= windowMs;
 }
 
 function renderLoginLogs(rows) {
   if (!loginLogBody) return;
   if (loginLogSubtitle) {
+    const onlineCount = rows.filter(row => isRecentLoginLog(row)).length;
     loginLogSubtitle.textContent = rows.length
-      ? `${rows.length} lần đăng nhập gần nhất`
+      ? `${rows.length} client/IP gần nhất · ${onlineCount} đang online`
       : "Chưa có lịch sử đăng nhập";
   }
 
