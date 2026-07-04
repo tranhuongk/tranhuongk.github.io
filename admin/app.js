@@ -2522,11 +2522,11 @@ function loginLogStatusLabel(row) {
   const event = String(row && row.metadata && row.metadata.event || "").trim().toLowerCase();
   if (event === "alive") {
     return isRecentLoginLog(row)
-      ? { icon: "fa-signal", label: "Đang online" }
-      : { icon: "fa-clock", label: "Vừa online" };
+      ? { icon: "fa-signal", label: "Đang online", tone: "online" }
+      : { icon: "fa-clock", label: "Vừa online", tone: "recent" };
   }
-  if (event === "reload") return { icon: "fa-rotate", label: "Reload web" };
-  return { icon: "fa-circle-check", label: "Đăng nhập" };
+  if (event === "reload") return { icon: "fa-rotate", label: "Reload web", tone: "reload" };
+  return { icon: "fa-circle-check", label: "Đăng nhập", tone: "login" };
 }
 
 function isRecentLoginLog(row, windowMs = ADMIN_ALIVE_STALE_MS) {
@@ -2557,7 +2557,7 @@ function renderLoginLogs(rows) {
         <td>${escapeHtml(row.email || "—")}</td>
         <td><code class="login-log-ip">${escapeHtml(row.ip_address || "—")}</code></td>
         <td><span class="login-log-device" title="${escapeHtml(row.user_agent || "")}">${escapeHtml(loginDeviceLabel(row.user_agent))}</span></td>
-        <td><span class="login-log-status"><i class="fa-solid ${status.icon}"></i> ${escapeHtml(status.label)}</span></td>
+        <td><span class="login-log-status is-${escapeHtml(status.tone)}"><i class="fa-solid ${status.icon}"></i> ${escapeHtml(status.label)}</span></td>
       </tr>
     `;
   }).join("");

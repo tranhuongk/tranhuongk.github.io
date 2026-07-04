@@ -1551,9 +1551,45 @@ tr:hover td {
 .login-log-status {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  color: var(--success);
+  justify-content: center;
+  min-width: 118px;
+  gap: 7px;
+  color: var(--text-main);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 7px 10px;
   font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.login-log-status i {
+  font-size: 12px;
+}
+
+.login-log-status.is-online {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(52, 211, 153, 0.35);
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.08), 0 0 18px rgba(16, 185, 129, 0.08);
+}
+
+.login-log-status.is-login {
+  color: #7dd3fc;
+  background: rgba(14, 165, 233, 0.13);
+  border-color: rgba(125, 211, 252, 0.32);
+}
+
+.login-log-status.is-reload {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(251, 191, 36, 0.34);
+}
+
+.login-log-status.is-recent {
+  color: #c4b5fd;
+  background: rgba(139, 92, 246, 0.13);
+  border-color: rgba(196, 181, 253, 0.3);
 }
 
 tr:hover td:first-child {
