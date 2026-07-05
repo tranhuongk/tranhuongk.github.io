@@ -15,6 +15,8 @@ const PLAY_ACCOUNT_STORAGE_KEY = "galax_admin_google_play_account_id_v1";
 const ADMIN_TRAFFIC_SESSION_STORAGE_KEY = "galax_admin_traffic_session_id_v1";
 const ADMIN_TRAFFIC_DASHBOARD_LIMIT = 5;
 const ADMIN_TRAFFIC_DETAIL_LIMIT = 50;
+const ADMIN_LOGIN_DASHBOARD_LIMIT = 5;
+const ADMIN_LOGIN_DETAIL_LIMIT = 50;
 const DEFAULT_PLAY_ACCOUNT_ID = "default";
 const DEFAULT_PLAY_ACCOUNT_LABEL = "Galax VN Team";
 const ORDER_SYNC_BATCH_LIMIT = 500;
@@ -65,12 +67,29 @@ function isTrafficDetailPage() {
   return Boolean((document.body && document.body.dataset.page === "traffic") || path.endsWith("/admin/traffic"));
 }
 
+function isLoginHistoryDetailPage() {
+  const path = window.location.pathname.replace(/\/index\.html$/i, "").replace(/\/+$/g, "");
+  return Boolean((document.body && document.body.dataset.page === "login-history") || path.endsWith("/admin/login-history"));
+}
+
+function isAuditDetailPage() {
+  return isTrafficDetailPage() || isLoginHistoryDetailPage();
+}
+
 function currentTrafficLimit() {
   return isTrafficDetailPage() ? ADMIN_TRAFFIC_DETAIL_LIMIT : ADMIN_TRAFFIC_DASHBOARD_LIMIT;
 }
 
+function currentLoginLogLimit() {
+  return isLoginHistoryDetailPage() ? ADMIN_LOGIN_DETAIL_LIMIT : ADMIN_LOGIN_DASHBOARD_LIMIT;
+}
+
 function trafficDetailUrl() {
   return "traffic/";
+}
+
+function loginHistoryDetailUrl() {
+  return "login-history/";
 }
 
 function cleanAppTitle(pkg, fallback) {
@@ -337,6 +356,7 @@ const syncProgressFill = document.getElementById("sync-progress-fill");
 const loginLogCard = document.getElementById("login-log-card");
 const loginLogSubtitle = document.getElementById("login-log-subtitle");
 const loginLogBody = document.getElementById("login-log-body");
+const loginLogShowMore = document.getElementById("login-log-show-more");
 const trafficCard = document.getElementById("traffic-card");
 const trafficSubtitle = document.getElementById("traffic-subtitle");
 const trafficSummary = document.getElementById("traffic-summary");
@@ -517,6 +537,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       window.location.href = trafficDetailUrl();
     });
   }
+  if (loginLogShowMore) {
+    loginLogShowMore.addEventListener("click", () => {
+      window.location.href = loginHistoryDetailUrl();
+    });
+  }
 
   // Try to initialize Supabase
   initSupabase();
@@ -531,6 +556,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     showScreen("dashboard");
     if (isTrafficDetailPage()) {
       renderTrafficPageSkeleton();
+    } else if (isLoginHistoryDetailPage()) {
+      renderLoginHistoryPageSkeleton();
     } else {
       renderDashboardSkeleton();
     }
@@ -704,6 +731,7 @@ function updateLoginLogAccess() {
     if (loginLogSubtitle) loginLogSubtitle.textContent = "";
     if (loginLogBody) loginLogBody.innerHTML = "";
   }
+  updateLoginLogMoreButton();
 }
 
 function updateTrafficAccess() {
@@ -757,6 +785,8 @@ async function handleLogin(e) {
     showScreen("dashboard");
     if (isTrafficDetailPage()) {
       renderTrafficPageSkeleton();
+    } else if (isLoginHistoryDetailPage()) {
+      renderLoginHistoryPageSkeleton();
     } else {
       renderDashboardSkeleton();
     }
@@ -981,6 +1011,10 @@ function renderDashboardSkeleton() {
     renderTrafficPageSkeleton();
     return;
   }
+  if (isLoginHistoryDetailPage()) {
+    renderLoginHistoryPageSkeleton();
+    return;
+  }
   renderKpiSkeleton(kpiPrev2MonthLabel, kpiPrev2Month, kpiPrev2MonthVnd);
   renderKpiSkeleton(kpiPrevMonthLabel, kpiPrevMonth, kpiPrevMonthVnd);
   renderKpiSkeleton(kpiCurrentRtdnLabel, kpiCurrentRtdn, kpiCurrentRtdnVnd, chartKpiSubtitle);
@@ -1005,9 +1039,10 @@ function renderDashboardSkeleton() {
   updateTrafficMoreButton();
   updateLoginLogAccess();
   if (canViewLoginLogs()) {
-    renderSimpleTableSkeleton(loginLogBody, 5, 4);
+    renderSimpleTableSkeleton(loginLogBody, 5, ADMIN_LOGIN_DASHBOARD_LIMIT);
     if (loginLogSubtitle) loginLogSubtitle.textContent = "Đang tải lịch sử đăng nhập...";
   }
+  updateLoginLogMoreButton();
   updateTelegramLogAccess();
   if (canViewTelegramLogs()) {
     renderSimpleTableSkeleton(telegramLogBody, 5, 4);
@@ -1025,6 +1060,17 @@ function renderTrafficPageSkeleton() {
   renderSimpleTableSkeleton(trafficBody, 5, Math.min(5, currentTrafficLimit()));
   if (trafficSubtitle) trafficSubtitle.textContent = "Đang tải traffic web admin...";
   updateTrafficMoreButton();
+}
+
+function renderLoginHistoryPageSkeleton() {
+  document.title = "Lịch sử đăng nhập - Galax Admin";
+  if (navExchangeRate) navExchangeRate.textContent = `Tỷ giá: ${fmtVND(currentUsdToVndRate)} / USD`;
+  updateLoginLogAccess();
+  if (!canViewLoginLogs()) return;
+  if (loginLogCard) loginLogCard.classList.remove("hidden");
+  renderSimpleTableSkeleton(loginLogBody, 5, Math.min(5, currentLoginLogLimit()));
+  if (loginLogSubtitle) loginLogSubtitle.textContent = "Đang tải lịch sử đăng nhập...";
+  updateLoginLogMoreButton();
 }
 
 async function recordAdminLogin(eventType = "login") {
@@ -1234,7 +1280,7 @@ function setupRealtimeSubscriptions() {
 
   const accountId = currentPlayAccountId();
   let channel = supabaseClient.channel(`admin-dashboard-${accountId}-${session.user?.id || "user"}`);
-  if (!isTrafficDetailPage()) {
+  if (!isAuditDetailPage()) {
     channel = channel.on("postgres_changes", {
       event: "*",
       schema: "public",
@@ -1254,7 +1300,7 @@ function setupRealtimeSubscriptions() {
     });
   }
 
-  if (canViewLoginLogs()) {
+  if (canViewLoginLogs() && (!isAuditDetailPage() || isLoginHistoryDetailPage())) {
     channel = channel.on("postgres_changes", {
       event: "*",
       schema: "public",
@@ -1262,7 +1308,7 @@ function setupRealtimeSubscriptions() {
     }, (payload) => scheduleLoginLogRefresh(payload));
   }
 
-  if (canViewTrafficLogs()) {
+  if (canViewTrafficLogs() && (!isAuditDetailPage() || isTrafficDetailPage())) {
     channel = channel.on("postgres_changes", {
       event: "*",
       schema: "public",
@@ -1270,7 +1316,7 @@ function setupRealtimeSubscriptions() {
     }, (payload) => scheduleTrafficRefresh(payload));
   }
 
-  if (canViewTelegramLogs()) {
+  if (canViewTelegramLogs() && !isAuditDetailPage()) {
     channel = channel.on("postgres_changes", {
       event: "*",
       schema: "public",
@@ -1510,6 +1556,11 @@ async function loadDataAndRender() {
     await loadTrafficLogs();
     return;
   }
+  if (isLoginHistoryDetailPage()) {
+    renderLoginHistoryPageSkeleton();
+    await loadLoginLogs();
+    return;
+  }
 
   const skeletonStartedAt = performance.now();
   renderDashboardSkeleton();
@@ -1642,7 +1693,7 @@ async function loadTrafficLogs({ showSkeleton = true, limit = currentTrafficLimi
   }
 }
 
-async function loadLoginLogs({ showSkeleton = true } = {}) {
+async function loadLoginLogs({ showSkeleton = true, limit = currentLoginLogLimit() } = {}) {
   if (!loginLogCard || !loginLogBody || !supabaseClient || !session) return;
   if (!canViewLoginLogs()) {
     loginLogCard.classList.add("hidden");
@@ -1653,7 +1704,7 @@ async function loadLoginLogs({ showSkeleton = true } = {}) {
 
   loginLogCard.classList.remove("hidden");
   if (showSkeleton) {
-    renderSimpleTableSkeleton(loginLogBody, 5, 4);
+    renderSimpleTableSkeleton(loginLogBody, 5, Math.min(5, limit));
     if (loginLogSubtitle) loginLogSubtitle.textContent = "Đang tải lịch sử đăng nhập...";
   }
 
@@ -1662,7 +1713,7 @@ async function loadLoginLogs({ showSkeleton = true } = {}) {
       .from("admin_login_logs")
       .select("email,ip_address,user_agent,login_at,metadata")
       .order("login_at", { ascending: false })
-      .limit(30);
+      .limit(limit);
     if (error) throw error;
     renderLoginLogs(data || []);
   } catch (err) {
@@ -3144,14 +3195,24 @@ function renderTrafficLogs(rows, stats) {
   }).join("");
 }
 
+function updateLoginLogMoreButton() {
+  if (!loginLogShowMore) return;
+  const canShow = canViewLoginLogs() && !isLoginHistoryDetailPage();
+  loginLogShowMore.classList.toggle("hidden", !canShow);
+}
+
 function renderLoginLogs(rows) {
   if (!loginLogBody) return;
   if (loginLogSubtitle) {
     const onlineCount = rows.filter(row => isRecentLoginLog(row)).length;
+    const prefix = isLoginHistoryDetailPage()
+      ? `${formatCount(rows.length)} lượt mới nhất`
+      : `${formatCount(rows.length)} lượt mới`;
     loginLogSubtitle.textContent = rows.length
-      ? `${rows.length} client/IP gần nhất · ${onlineCount} đang online`
+      ? `${prefix} · ${onlineCount} đang online`
       : "Chưa có lịch sử đăng nhập";
   }
+  updateLoginLogMoreButton();
 
   if (!rows.length) {
     loginLogBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Chưa có lịch sử đăng nhập</td></tr>`;

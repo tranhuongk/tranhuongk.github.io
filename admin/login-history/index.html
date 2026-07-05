@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Traffic web admin - Galax Admin</title>
+  <title>Lịch sử đăng nhập - Galax Admin</title>
   <link rel="icon" type="image/png" sizes="32x32" href="../assets/admin-favicon-32.png?v=20260703a">
   <link rel="icon" type="image/png" sizes="512x512" href="../assets/admin-favicon-512.png?v=20260703a">
   <link rel="apple-touch-icon" sizes="180x180" href="../assets/admin-favicon-180.png?v=20260703a">
@@ -16,7 +16,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/umd/supabase.js"></script>
   <link rel="stylesheet" href="../style.css?v=20260705a">
 </head>
-<body class="traffic-detail-page" data-page="traffic">
+<body class="login-history-detail-page" data-page="login-history">
   <div class="bg-blob blob-1"></div>
   <div class="bg-blob blob-2"></div>
   <div class="bg-blob blob-3"></div>
@@ -87,36 +87,30 @@
       </div>
     </header>
 
-    <section class="data-section traffic-detail-section">
-      <div class="glass-panel table-card hidden" id="traffic-card">
+    <section class="data-section audit-detail-section">
+      <div class="glass-panel table-card hidden" id="login-log-card">
         <div class="panel-header table-actions">
           <div class="table-title">
-            <h4><i class="fa-solid fa-chart-line"></i> Traffic web admin</h4>
-            <span class="subtitle" id="traffic-subtitle">Lượt truy cập web admin theo user/IP</span>
+            <h4><i class="fa-solid fa-shield-halved"></i> Lịch sử đăng nhập</h4>
+            <span class="subtitle" id="login-log-subtitle">Ghi nhận IP các lần đăng nhập web admin</span>
           </div>
-          <button id="traffic-show-more" class="glass-button secondary traffic-show-more hidden" type="button">
+          <button id="login-log-show-more" class="glass-button secondary login-log-show-more hidden" type="button">
             <i class="fa-solid fa-arrow-up-right-from-square"></i>
             <span>Xem thêm</span>
           </button>
         </div>
-        <div class="traffic-summary-grid" id="traffic-summary">
-          <div class="traffic-metric"><span>Hôm nay</span><strong>—</strong></div>
-          <div class="traffic-metric"><span>24h</span><strong>—</strong></div>
-          <div class="traffic-metric"><span>Unique IP</span><strong>—</strong></div>
-          <div class="traffic-metric"><span>User</span><strong>—</strong></div>
-        </div>
         <div class="table-wrapper">
-          <table id="traffic-table">
+          <table id="login-log-table">
             <thead>
               <tr>
                 <th>Thời gian</th>
                 <th>Email</th>
                 <th>IP</th>
-                <th>Trang</th>
-                <th>Referrer</th>
+                <th>Thiết bị</th>
+                <th>Trạng thái</th>
               </tr>
             </thead>
-            <tbody id="traffic-body">
+            <tbody id="login-log-body">
               <tr><td colspan="5" style="text-align:center;">Đang tải...</td></tr>
             </tbody>
           </table>

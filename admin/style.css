@@ -1599,7 +1599,8 @@ tr:hover td {
   margin: 12px 0 18px;
 }
 
-.traffic-show-more {
+.traffic-show-more,
+.login-log-show-more {
   min-width: 132px;
   justify-content: center;
 }
@@ -1651,15 +1652,18 @@ tr:hover td {
   color: var(--text-muted);
 }
 
-body.traffic-detail-page .dashboard-container {
+body.traffic-detail-page .dashboard-container,
+body.login-history-detail-page .dashboard-container {
   padding-bottom: 44px;
 }
 
-body.traffic-detail-page .traffic-detail-section {
+body.traffic-detail-page .traffic-detail-section,
+body.login-history-detail-page .audit-detail-section {
   margin-top: 28px;
 }
 
-body.traffic-detail-page #traffic-card {
+body.traffic-detail-page #traffic-card,
+body.login-history-detail-page #login-log-card {
   min-height: calc(100vh - 180px);
 }
 
