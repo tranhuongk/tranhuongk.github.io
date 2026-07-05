@@ -4416,6 +4416,7 @@ function renderTopAppsList(sortedApps, emptyText) {
     const icon = appIconHtml(a.id, a.title, "play-app-logo", "play-app-fallback", a.iconUrl);
     const status = playProductionLabel(a.productionStatus || a.playStoreStatus);
     const countriesLabel = formatPlaySupportedCountries(a.supportedCountriesCount);
+    const titleText = countriesLabel ? `${a.title} • ${countriesLabel}` : a.title;
     const meta = [
       a.id,
       status,
@@ -4426,10 +4427,7 @@ function renderTopAppsList(sortedApps, emptyText) {
         <div class="play-app-identity">
           ${icon}
           <div class="play-app-title-wrap">
-            <h5>
-              <span>${escapeHtml(a.title)}</span>
-              ${countriesLabel ? `<span class="play-country-count">${escapeHtml(countriesLabel)}</span>` : ""}
-            </h5>
+            <h5>${escapeHtml(titleText)}</h5>
             <p>${meta.map(escapeHtml).join(" · ")}</p>
           </div>
         </div>
