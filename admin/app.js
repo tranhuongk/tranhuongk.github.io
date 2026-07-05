@@ -22,7 +22,7 @@ const ORDER_SYNC_RETRY_COOLDOWN_MINUTES = 60;
 const DASHBOARD_SKELETON_MIN_MS = 450;
 const REALTIME_REFRESH_DEBOUNCE_MS = 1500;
 const REALTIME_RECONCILE_DEBOUNCE_MS = 10000;
-const REALTIME_RTDN_PAGE_SIZE = 30;
+const REALTIME_RTDN_PAGE_SIZE = 10;
 const KPI_COUNT_ANIMATION_MS = 720;
 const ADMIN_ALIVE_INTERVAL_MS = 30 * 1000;
 const ADMIN_ALIVE_STALE_MS = ADMIN_ALIVE_INTERVAL_MS * 3;
@@ -3296,7 +3296,7 @@ window.loadMoreRtdn = async () => {
       .select("*")
       .eq("play_account_id", currentPlayAccountId())
       .order("event_time", { ascending: false })
-      .range(rtdnOffset, rtdnOffset + 29);
+      .range(rtdnOffset, rtdnOffset + REALTIME_RTDN_PAGE_SIZE - 1);
     if (error) throw error;
     const rows = await attachPlayerNamesToRtdnRows((data || []).map(t => ({
       ...t,
