@@ -904,6 +904,25 @@ input[type="date"]:focus,
   font-size: 18px;
   line-height: 1.2;
   color: var(--text-main);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.play-country-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border: 1px solid rgba(105, 132, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(105, 132, 255, 0.12);
+  color: var(--primary-glow);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .play-app-title-wrap p {
@@ -932,7 +951,7 @@ input[type="date"]:focus,
 
 .play-metrics-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(130px, 1fr));
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
   border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
@@ -1086,6 +1105,12 @@ input[type="date"]:focus,
   .play-app-title-wrap h5 {
     margin-top: 1px;
     font-size: 16px;
+  }
+
+  .play-country-count {
+    min-height: 20px;
+    padding: 3px 7px;
+    font-size: 11px;
   }
 
   .play-app-title-wrap p {

@@ -986,7 +986,7 @@ function renderPlayRevenueSkeleton(count = 3) {
         ${skeletonLine("72px", "skeleton-link")}
       </div>
       <div class="play-metrics-grid">
-        ${Array.from({ length: 5 }).map(() => `
+        ${Array.from({ length: 4 }).map(() => `
           <div class="play-metric">
             ${skeletonLine("74%", "skeleton-subline")}
             ${skeletonLine("58%", "skeleton-metric")}
@@ -4323,11 +4323,11 @@ function formatPlayRating(value) {
   return `${n.toFixed(3)}★`;
 }
 
-function formatPlaySupportedCountries(count, restOfWorld = false) {
-  if (count === null || count === undefined || count === "") return "—";
+function formatPlaySupportedCountries(count) {
+  if (count === null || count === undefined || count === "") return "";
   const n = numberValue(count, NaN);
-  if (!Number.isFinite(n) || n < 0) return "—";
-  return `${formatCommaNumber(n)}${restOfWorld ? "+" : ""}`;
+  if (!Number.isFinite(n) || n < 0) return "";
+  return `${formatCommaNumber(n)} quốc gia`;
 }
 
 function formatPlayRevenue(value) {
@@ -4351,7 +4351,7 @@ function playProductionLabel(value) {
   const raw = String(value || "").trim();
   const normalized = raw.toLowerCase();
   if (!raw || normalized === "published" || normalized === "completed" || normalized === "inprogress") {
-    return "Production";
+    return "Đang phát hành";
   }
   return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
@@ -4415,6 +4415,7 @@ function renderTopAppsList(sortedApps, emptyText) {
   topAppsList.innerHTML = cards.map((a) => {
     const icon = appIconHtml(a.id, a.title, "play-app-logo", "play-app-fallback", a.iconUrl);
     const status = playProductionLabel(a.productionStatus || a.playStoreStatus);
+    const countriesLabel = formatPlaySupportedCountries(a.supportedCountriesCount);
     const meta = [
       a.id,
       status,
@@ -4425,7 +4426,10 @@ function renderTopAppsList(sortedApps, emptyText) {
         <div class="play-app-identity">
           ${icon}
           <div class="play-app-title-wrap">
-            <h5>${escapeHtml(a.title)}</h5>
+            <h5>
+              <span>${escapeHtml(a.title)}</span>
+              ${countriesLabel ? `<span class="play-country-count">${escapeHtml(countriesLabel)}</span>` : ""}
+            </h5>
             <p>${meta.map(escapeHtml).join(" · ")}</p>
           </div>
         </div>
@@ -4457,14 +4461,6 @@ function renderTopAppsList(sortedApps, emptyText) {
           "",
           "",
           a.googlePlayRatingSourceDate,
-        )}
-        ${playMetricHtml(
-          "Countries support",
-          formatPlaySupportedCountries(a.supportedCountriesCount, a.supportedCountriesRestOfWorld),
-          "Số quốc gia/khu vực mà production track của app đang hỗ trợ trên Google Play.",
-          "",
-          "",
-          a.supportedCountriesSourceDate,
         )}
         ${playMetricHtml(
           "Ước tính (USD)",
