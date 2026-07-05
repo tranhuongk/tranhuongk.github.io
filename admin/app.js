@@ -4350,10 +4350,17 @@ function formatPlayDate(value) {
 function playProductionLabel(value) {
   const raw = String(value || "").trim();
   const normalized = raw.toLowerCase();
-  if (!raw || normalized === "published" || normalized === "completed" || normalized === "inprogress") {
+  const compact = normalized.replace(/[\s_-]/g, "");
+  if (compact.includes("review")) return "Đang review";
+  if (!raw || compact === "published" || compact === "completed" || compact === "inprogress") {
     return "Đang phát hành";
   }
   return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+function playReleaseDateLabel(value) {
+  const formatted = formatPlayDate(value);
+  return formatted ? `Phát hành ${formatted}` : "";
 }
 
 function playDeltaHtml(value) {
@@ -4389,6 +4396,7 @@ function normalizeTopRevenueCards(sortedApps) {
     playStoreUrl: app.playStoreUrl || app.play_store_url || `https://play.google.com/store/apps/details?id=${encodeURIComponent(app.id)}`,
     playStoreStatus: app.playStoreStatus || app.play_store_status || "published",
     productionStatus: app.productionStatus || app.play_production_status || "Production",
+    releaseDateAt: app.releaseDateAt || app.release_date_at || app.play_last_updated_at || "",
     lastUpdatedAt: app.lastUpdatedAt || app.play_last_updated_at || app.play_stats_source_date || "",
     statsSourceDate: app.statsSourceDate || app.play_stats_source_date || "",
     installedAudience: app.installedAudience ?? app.installed_audience ?? null,
@@ -4415,9 +4423,11 @@ function renderTopAppsList(sortedApps, emptyText) {
   topAppsList.innerHTML = cards.map((a) => {
     const icon = appIconHtml(a.id, a.title, "play-app-logo", "play-app-fallback", a.iconUrl);
     const status = playProductionLabel(a.productionStatus || a.playStoreStatus);
+    const releaseLabel = playReleaseDateLabel(a.releaseDateAt);
     const countriesLabel = formatPlaySupportedCountries(a.supportedCountriesCount);
     const meta = [
       a.id,
+      releaseLabel,
       status,
     ].filter(Boolean);
     return `
@@ -4530,11 +4540,15 @@ async function renderTopAppsCustomRange(range, appMap, rate) {
     });
 
     const sortedApps = Object.entries(totals)
-      .map(([id, total]) => ({
-        id,
-        title: appMap[id] || cleanAppTitle(id),
-        total: Math.round(numberValue(total) * 100) / 100,
-      }))
+      .map(([id, total]) => {
+        const app = appRecordById(id) || {};
+        return {
+          ...app,
+          id,
+          title: appMap[id] || app.title || cleanAppTitle(id),
+          total: Math.round(numberValue(total) * 100) / 100,
+        };
+      })
       .filter(a => !isAdjustmentApp(a.id, a.title))
       .filter(a => isPublishedApp(a.id, a.title))
       .filter(a => !searchQuery || a.id.toLowerCase().includes(searchQuery) || a.title.toLowerCase().includes(searchQuery))
