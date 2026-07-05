@@ -932,7 +932,7 @@ input[type="date"]:focus,
 
 .play-metrics-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  grid-template-columns: repeat(5, minmax(130px, 1fr));
   border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 

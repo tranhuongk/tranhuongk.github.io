@@ -986,7 +986,7 @@ function renderPlayRevenueSkeleton(count = 3) {
         ${skeletonLine("72px", "skeleton-link")}
       </div>
       <div class="play-metrics-grid">
-        ${Array.from({ length: 4 }).map(() => `
+        ${Array.from({ length: 5 }).map(() => `
           <div class="play-metric">
             ${skeletonLine("74%", "skeleton-subline")}
             ${skeletonLine("58%", "skeleton-metric")}
@@ -4323,6 +4323,13 @@ function formatPlayRating(value) {
   return `${n.toFixed(3)}★`;
 }
 
+function formatPlaySupportedCountries(count, restOfWorld = false) {
+  if (count === null || count === undefined || count === "") return "—";
+  const n = numberValue(count, NaN);
+  if (!Number.isFinite(n) || n < 0) return "—";
+  return `${formatCommaNumber(n)}${restOfWorld ? "+" : ""}`;
+}
+
 function formatPlayRevenue(value) {
   const n = Math.max(0, numberValue(value));
   return n >= 1000 ? `$${formatCompactNumber(n, 2)}` : fmtUSD(n);
@@ -4392,6 +4399,9 @@ function normalizeTopRevenueCards(sortedApps) {
     userAcquisitionDeltaPct: app.userAcquisitionDeltaPct ?? app.user_acquisition_delta_pct ?? null,
     googlePlayRating: app.googlePlayRating ?? app.google_play_rating ?? null,
     googlePlayRatingSourceDate: app.googlePlayRatingSourceDate || app.google_play_rating_source_date || app.statsSourceDate || app.play_stats_source_date || "",
+    supportedCountriesCount: app.supportedCountriesCount ?? app.supported_countries_count ?? null,
+    supportedCountriesRestOfWorld: Boolean(app.supportedCountriesRestOfWorld ?? app.supported_countries_rest_of_world),
+    supportedCountriesSourceDate: app.supportedCountriesSourceDate || app.supported_countries_source_date || "",
   }));
 }
 
@@ -4447,6 +4457,14 @@ function renderTopAppsList(sortedApps, emptyText) {
           "",
           "",
           a.googlePlayRatingSourceDate,
+        )}
+        ${playMetricHtml(
+          "Countries support",
+          formatPlaySupportedCountries(a.supportedCountriesCount, a.supportedCountriesRestOfWorld),
+          "Số quốc gia/khu vực mà production track của app đang hỗ trợ trên Google Play.",
+          "",
+          "",
+          a.supportedCountriesSourceDate,
         )}
         ${playMetricHtml(
           "Ước tính (USD)",
