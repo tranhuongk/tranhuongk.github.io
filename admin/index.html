@@ -19,7 +19,7 @@
   <!-- Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/umd/supabase.js"></script>
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css?v=20260705a">
+  <link rel="stylesheet" href="style.css?v=20260705b">
   <style>
     /* Realtime order table (clones Play Console "Order management") */
     .rtdn-app-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; display: block; }
@@ -108,6 +108,10 @@
         </div>
       </div>
       <div class="nav-right">
+        <button id="btn-play-console-ui-sync" class="glass-button secondary hidden" title="Đồng bộ số liệu cài đặt từ UI Play Console">
+          <i class="fa-solid fa-display"></i>
+          <span>Sync UI Play Console</span>
+        </button>
         <button id="btn-sync" class="glass-button secondary">
           <i class="fa-solid fa-rotate"></i>
           <span>Đồng bộ Google Play</span>
@@ -506,6 +510,6 @@
   </div>
 
   <!-- Script logic -->
-  <script src="app.js?v=20260705j"></script>
+  <script src="app.js?v=20260705k"></script>
 </body>
 </html>
