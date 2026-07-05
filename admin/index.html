@@ -293,6 +293,38 @@
         </div>
       </div>
 
+      <!-- ADMIN TRAFFIC -->
+      <div class="glass-panel table-card hidden" id="traffic-card">
+        <div class="panel-header table-actions">
+          <div class="table-title">
+            <h4><i class="fa-solid fa-chart-line"></i> Traffic web admin</h4>
+            <span class="subtitle" id="traffic-subtitle">Lượt truy cập web admin theo user/IP</span>
+          </div>
+        </div>
+        <div class="traffic-summary-grid" id="traffic-summary">
+          <div class="traffic-metric"><span>Hôm nay</span><strong>—</strong></div>
+          <div class="traffic-metric"><span>24h</span><strong>—</strong></div>
+          <div class="traffic-metric"><span>Unique IP</span><strong>—</strong></div>
+          <div class="traffic-metric"><span>User</span><strong>—</strong></div>
+        </div>
+        <div class="table-wrapper">
+          <table id="traffic-table">
+            <thead>
+              <tr>
+                <th>Thời gian</th>
+                <th>Email</th>
+                <th>IP</th>
+                <th>Trang</th>
+                <th>Referrer</th>
+              </tr>
+            </thead>
+            <tbody id="traffic-body">
+              <tr><td colspan="5" style="text-align:center;">Đang tải...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- LOGIN AUDIT -->
       <div class="glass-panel table-card hidden" id="login-log-card">
         <div class="panel-header table-actions">
@@ -462,6 +494,6 @@
   </div>
 
   <!-- Script logic -->
-  <script src="app.js?v=20260705d"></script>
+  <script src="app.js?v=20260705e"></script>
 </body>
 </html>

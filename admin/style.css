@@ -1592,6 +1592,60 @@ tr:hover td {
   border-color: rgba(196, 181, 253, 0.3);
 }
 
+.traffic-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 10px;
+  margin: 12px 0 18px;
+}
+
+.traffic-metric {
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.traffic-metric span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.traffic-metric strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-main);
+  font-size: 22px;
+}
+
+.traffic-email {
+  font-weight: 600;
+}
+
+.traffic-event {
+  margin-top: 2px;
+  color: #7dd3fc;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.traffic-page,
+.traffic-referrer {
+  display: inline-block;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.traffic-referrer {
+  color: var(--text-muted);
+}
+
 .telegram-log-user {
   font-weight: 600;
 }

@@ -12,6 +12,7 @@ const SOURCE_FILTER_ALL_VALUE = "all";
 const SOURCE_FILTER_ADMIN_EMAIL = "admin@admin.com";
 const CUSTOMER_ADMIN_EMAIL = "customer@customer.com";
 const PLAY_ACCOUNT_STORAGE_KEY = "galax_admin_google_play_account_id_v1";
+const ADMIN_TRAFFIC_SESSION_STORAGE_KEY = "galax_admin_traffic_session_id_v1";
 const DEFAULT_PLAY_ACCOUNT_ID = "default";
 const DEFAULT_PLAY_ACCOUNT_LABEL = "Galax VN Team";
 const ORDER_SYNC_BATCH_LIMIT = 500;
@@ -51,6 +52,10 @@ let telegramLogRefreshTimer = null;
 let telegramLogRefreshInFlight = false;
 let telegramLogRefreshQueued = false;
 let telegramLogRefreshPendingUntilVisible = false;
+let trafficRefreshTimer = null;
+let trafficRefreshInFlight = false;
+let trafficRefreshQueued = false;
+let trafficRefreshPendingUntilVisible = false;
 const realtimeEstimateOrderCache = new Map();
 
 function cleanAppTitle(pkg, fallback) {
@@ -140,6 +145,17 @@ function currentPlayAccountId() {
 
 function googlePlayAccountPayload(accountId = currentPlayAccountId()) {
   return { playAccountId: accountId };
+}
+
+function adminTrafficSessionId() {
+  let sessionId = sessionStorage.getItem(ADMIN_TRAFFIC_SESSION_STORAGE_KEY);
+  if (sessionId) return sessionId;
+  const randomPart = window.crypto && window.crypto.randomUUID
+    ? window.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  sessionId = `admin-${randomPart}`;
+  sessionStorage.setItem(ADMIN_TRAFFIC_SESSION_STORAGE_KEY, sessionId);
+  return sessionId;
 }
 
 function activeAccountAppIds() {
@@ -306,6 +322,10 @@ const syncProgressFill = document.getElementById("sync-progress-fill");
 const loginLogCard = document.getElementById("login-log-card");
 const loginLogSubtitle = document.getElementById("login-log-subtitle");
 const loginLogBody = document.getElementById("login-log-body");
+const trafficCard = document.getElementById("traffic-card");
+const trafficSubtitle = document.getElementById("traffic-subtitle");
+const trafficSummary = document.getElementById("traffic-summary");
+const trafficBody = document.getElementById("traffic-body");
 const telegramLogCard = document.getElementById("telegram-log-card");
 const telegramLogSubtitle = document.getElementById("telegram-log-subtitle");
 const telegramLogBody = document.getElementById("telegram-log-body");
@@ -486,6 +506,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     showScreen("dashboard");
     renderDashboardSkeleton();
     recordAdminLogin("reload");
+    recordAdminTraffic("reload");
     startAdminAliveHeartbeat();
     await exchangeRatePromise.catch(() => {});
     await loadGooglePlayAccounts();
@@ -623,6 +644,10 @@ function canViewLoginLogs() {
   return currentSessionEmail() === SOURCE_FILTER_ADMIN_EMAIL;
 }
 
+function canViewTrafficLogs() {
+  return canViewLoginLogs();
+}
+
 function canViewTelegramLogs() {
   return canViewLoginLogs();
 }
@@ -638,6 +663,7 @@ function updateSourceFilterAccess() {
   }
 
   updateLoginLogAccess();
+  updateTrafficAccess();
   updateTelegramLogAccess();
 }
 
@@ -648,6 +674,17 @@ function updateLoginLogAccess() {
   if (!canView) {
     if (loginLogSubtitle) loginLogSubtitle.textContent = "";
     if (loginLogBody) loginLogBody.innerHTML = "";
+  }
+}
+
+function updateTrafficAccess() {
+  if (!trafficCard) return;
+  const canView = canViewTrafficLogs();
+  trafficCard.classList.toggle("hidden", !canView);
+  if (!canView) {
+    if (trafficSubtitle) trafficSubtitle.textContent = "";
+    if (trafficSummary) trafficSummary.innerHTML = "";
+    if (trafficBody) trafficBody.innerHTML = "";
   }
 }
 
@@ -690,6 +727,7 @@ async function handleLogin(e) {
     showScreen("dashboard");
     renderDashboardSkeleton();
     recordAdminLogin("login");
+    recordAdminTraffic("page_view");
     startAdminAliveHeartbeat();
     await loadGooglePlayAccounts();
     setupRealtimeSubscriptions();
@@ -749,6 +787,25 @@ async function postAdminLoginLog(payload) {
   const timeoutId = window.setTimeout(() => controller.abort(), 8000);
   try {
     return await fetch(`${supabaseUrl}/functions/v1/admin-login-log`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+async function postAdminTrafficLog(payload) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+  try {
+    return await fetch(`${supabaseUrl}/functions/v1/admin-traffic-log`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -901,6 +958,12 @@ function renderDashboardSkeleton() {
   renderSimpleTableSkeleton(document.getElementById("rtdn-body"), 8, 6);
   const rtdnSubtitle = document.getElementById("rtdn-subtitle");
   if (rtdnSubtitle) rtdnSubtitle.textContent = "Đang tải giao dịch...";
+  updateTrafficAccess();
+  if (canViewTrafficLogs()) {
+    renderTrafficSummarySkeleton();
+    renderSimpleTableSkeleton(trafficBody, 5, 4);
+    if (trafficSubtitle) trafficSubtitle.textContent = "Đang tải traffic web admin...";
+  }
   updateLoginLogAccess();
   if (canViewLoginLogs()) {
     renderSimpleTableSkeleton(loginLogBody, 5, 4);
@@ -944,6 +1007,42 @@ async function recordAdminLogin(eventType = "login") {
   }
 }
 
+async function recordAdminTraffic(eventType = "page_view") {
+  if (!session || !session.access_token) return;
+  try {
+    const screenSize = window.screen
+      ? `${window.screen.width || 0}x${window.screen.height || 0}`
+      : "";
+    const viewportSize = `${window.innerWidth || 0}x${window.innerHeight || 0}`;
+    const payload = {
+      event: eventType,
+      url: window.location.href,
+      path: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+      title: document.title || "",
+      referrer: document.referrer || "",
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+      language: navigator.language || "",
+      platform: navigator.platform || "",
+      screen: screenSize,
+      viewport: viewportSize,
+      sessionId: adminTrafficSessionId(),
+    };
+    let response = await postAdminTrafficLog(payload);
+    if (response.status === 401 && await refreshCurrentSession()) {
+      response = await postAdminTrafficLog(payload);
+    }
+    if (response.status === 401) {
+      await forceLogout();
+      return;
+    }
+    if (!response.ok) {
+      console.warn("Không ghi được traffic web admin:", await response.text());
+    }
+  } catch (err) {
+    console.warn("Không ghi được traffic web admin:", err);
+  }
+}
+
 async function fetchDashboardSummary(accountId = currentPlayAccountId()) {
   const res = await fetch(`${supabaseUrl}/functions/v1/dashboard-summary`, {
     method: "POST",
@@ -982,13 +1081,15 @@ async function flushDeferredRealtimeUi() {
   const hasDashboardUpdate = realtimeUiUpdatePending || realtimeRefreshPendingUntilVisible;
   const hasLoginLogUpdate = loginLogRefreshPendingUntilVisible;
   const hasTelegramLogUpdate = telegramLogRefreshPendingUntilVisible;
-  if (!hasDashboardUpdate && !hasLoginLogUpdate && !hasTelegramLogUpdate) return;
+  const hasTrafficUpdate = trafficRefreshPendingUntilVisible;
+  if (!hasDashboardUpdate && !hasLoginLogUpdate && !hasTelegramLogUpdate && !hasTrafficUpdate) return;
 
   const needsRefresh = realtimeRefreshPendingUntilVisible;
   realtimeUiUpdatePending = false;
   realtimeRefreshPendingUntilVisible = false;
   loginLogRefreshPendingUntilVisible = false;
   telegramLogRefreshPendingUntilVisible = false;
+  trafficRefreshPendingUntilVisible = false;
 
   if (needsRefresh) {
     await refreshRealtimeDashboardParts({ source: "tab-visible-realtime-pending" }, { animateKpi: true });
@@ -998,6 +1099,9 @@ async function flushDeferredRealtimeUi() {
 
   if (hasLoginLogUpdate) {
     await refreshLoginLogsFromRealtime({ source: "tab-visible-login-log-pending" });
+  }
+  if (hasTrafficUpdate) {
+    await refreshTrafficFromRealtime({ source: "tab-visible-traffic-pending" });
   }
   if (hasTelegramLogUpdate) {
     await refreshTelegramLogsFromRealtime({ source: "tab-visible-telegram-log-pending" });
@@ -1044,6 +1148,10 @@ function clearRealtimeSubscriptions() {
     window.clearTimeout(telegramLogRefreshTimer);
     telegramLogRefreshTimer = null;
   }
+  if (trafficRefreshTimer) {
+    window.clearTimeout(trafficRefreshTimer);
+    trafficRefreshTimer = null;
+  }
   realtimeRefreshQueued = false;
   realtimeRefreshInFlight = false;
   realtimeUiUpdatePending = false;
@@ -1054,6 +1162,9 @@ function clearRealtimeSubscriptions() {
   telegramLogRefreshInFlight = false;
   telegramLogRefreshQueued = false;
   telegramLogRefreshPendingUntilVisible = false;
+  trafficRefreshInFlight = false;
+  trafficRefreshQueued = false;
+  trafficRefreshPendingUntilVisible = false;
   if (realtimeChannel && supabaseClient) {
     supabaseClient.removeChannel(realtimeChannel).catch((err) => {
       console.warn("Không gỡ được realtime channel:", err);
@@ -1097,6 +1208,14 @@ function setupRealtimeSubscriptions() {
       schema: "public",
       table: "admin_login_logs",
     }, (payload) => scheduleLoginLogRefresh(payload));
+  }
+
+  if (canViewTrafficLogs()) {
+    channel = channel.on("postgres_changes", {
+      event: "*",
+      schema: "public",
+      table: "admin_traffic_logs",
+    }, (payload) => scheduleTrafficRefresh(payload));
   }
 
   if (canViewTelegramLogs()) {
@@ -1152,6 +1271,45 @@ async function refreshLoginLogsFromRealtime(payload) {
     if (loginLogRefreshQueued) {
       loginLogRefreshQueued = false;
       scheduleLoginLogRefresh({ source: "login-log-queued" });
+    }
+  }
+}
+
+function scheduleTrafficRefresh(payload, delayMs = 500) {
+  if (!session || !canViewTrafficLogs()) return;
+  if (trafficRefreshTimer) window.clearTimeout(trafficRefreshTimer);
+  if (!isTabVisible()) {
+    trafficRefreshTimer = null;
+    trafficRefreshPendingUntilVisible = true;
+    return;
+  }
+  trafficRefreshTimer = window.setTimeout(() => {
+    trafficRefreshTimer = null;
+    refreshTrafficFromRealtime(payload);
+  }, delayMs);
+}
+
+async function refreshTrafficFromRealtime(payload) {
+  if (!session || !canViewTrafficLogs()) return;
+  if (!isTabVisible()) {
+    trafficRefreshPendingUntilVisible = true;
+    return;
+  }
+  if (trafficRefreshInFlight) {
+    trafficRefreshQueued = true;
+    return;
+  }
+
+  trafficRefreshInFlight = true;
+  try {
+    await loadTrafficLogs({ showSkeleton: false });
+  } catch (err) {
+    console.warn("Không refresh được traffic realtime:", err, payload || "");
+  } finally {
+    trafficRefreshInFlight = false;
+    if (trafficRefreshQueued) {
+      trafficRefreshQueued = false;
+      scheduleTrafficRefresh({ source: "traffic-queued" });
     }
   }
 }
@@ -1316,6 +1474,7 @@ async function loadDataAndRender() {
     renderDashboard({ animateLatestKpi: true });
     await populateTopPlayersMonthOptions();
     renderTopPlayers();
+    await loadTrafficLogs();
     await loadLoginLogs();
     await loadTelegramLogs();
     return;
@@ -1350,11 +1509,77 @@ async function loadDataAndRender() {
     renderDashboard({ animateLatestKpi: true });
     await populateTopPlayersMonthOptions();
     renderTopPlayers();
+    await loadTrafficLogs();
     await loadLoginLogs();
     await loadTelegramLogs();
   } catch (err) {
     console.error("Lỗi khi tải dữ liệu:", err);
     alert("Không thể tải dữ liệu từ Supabase: " + err.message);
+  }
+}
+
+function localDayStartIso() {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  return start.toISOString();
+}
+
+async function loadTrafficLogs({ showSkeleton = true } = {}) {
+  if (!trafficCard || !trafficBody || !supabaseClient || !session) return;
+  if (!canViewTrafficLogs()) {
+    trafficCard.classList.add("hidden");
+    if (trafficSubtitle) trafficSubtitle.textContent = "";
+    if (trafficSummary) trafficSummary.innerHTML = "";
+    trafficBody.innerHTML = "";
+    return;
+  }
+
+  trafficCard.classList.remove("hidden");
+  if (showSkeleton) {
+    renderTrafficSummarySkeleton();
+    renderSimpleTableSkeleton(trafficBody, 5, 4);
+    if (trafficSubtitle) trafficSubtitle.textContent = "Đang tải traffic web admin...";
+  }
+
+  try {
+    const todayStart = localDayStartIso();
+    const last24Start = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const [recentRes, todayRes, last24Res] = await Promise.all([
+      supabaseClient
+        .from("admin_traffic_logs")
+        .select("email,ip_address,user_agent,event,url,path,title,referrer,client_session_id,occurred_at,metadata")
+        .order("occurred_at", { ascending: false })
+        .limit(50),
+      supabaseClient
+        .from("admin_traffic_logs")
+        .select("email,ip_address,client_session_id", { count: "exact" })
+        .gte("occurred_at", todayStart)
+        .limit(1000),
+      supabaseClient
+        .from("admin_traffic_logs")
+        .select("id", { count: "exact", head: true })
+        .gte("occurred_at", last24Start),
+    ]);
+    if (recentRes.error) throw recentRes.error;
+    if (todayRes.error) throw todayRes.error;
+    if (last24Res.error) throw last24Res.error;
+
+    const todayRows = todayRes.data || [];
+    const stats = {
+      todayViews: todayRes.count ?? todayRows.length,
+      last24Views: last24Res.count ?? 0,
+      uniqueIps: new Set(todayRows.map(row => row.ip_address).filter(Boolean)).size,
+      uniqueUsers: new Set(todayRows.map(row => row.email).filter(Boolean)).size,
+      uniqueSessions: new Set(todayRows.map(row => row.client_session_id).filter(Boolean)).size,
+      sampledRows: todayRows.length,
+    };
+    renderTrafficLogs(recentRes.data || [], stats);
+  } catch (err) {
+    console.warn("Không tải được traffic web admin:", err);
+    if (showSkeleton) {
+      if (trafficSummary) trafficSummary.innerHTML = "";
+      trafficBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--danger);">Không tải được traffic web admin</td></tr>`;
+    }
   }
 }
 
@@ -2765,6 +2990,88 @@ function loginLogStatusLabel(row) {
 function isRecentLoginLog(row, windowMs = ADMIN_ALIVE_STALE_MS) {
   const timestamp = Date.parse(row && row.login_at || "");
   return Number.isFinite(timestamp) && Date.now() - timestamp <= windowMs;
+}
+
+function renderTrafficSummarySkeleton() {
+  if (!trafficSummary) return;
+  trafficSummary.innerHTML = ["Hôm nay", "24h", "Unique IP", "User"].map(label => `
+    <div class="traffic-metric">
+      <span>${escapeHtml(label)}</span>
+      <strong>${skeletonLine("54px", "skeleton-cell")}</strong>
+    </div>
+  `).join("");
+}
+
+function renderTrafficSummary(stats) {
+  if (!trafficSummary) return;
+  const items = [
+    { label: "Hôm nay", value: formatCount(stats.todayViews || 0) },
+    { label: "24h", value: formatCount(stats.last24Views || 0) },
+    { label: "Unique IP", value: formatCount(stats.uniqueIps || 0) },
+    { label: "User", value: formatCount(stats.uniqueUsers || 0) },
+    { label: "Session", value: formatCount(stats.uniqueSessions || 0) },
+  ];
+  trafficSummary.innerHTML = items.map(item => `
+    <div class="traffic-metric">
+      <span>${escapeHtml(item.label)}</span>
+      <strong>${escapeHtml(item.value)}</strong>
+    </div>
+  `).join("");
+}
+
+function trafficPageLabel(row) {
+  const path = String(row.path || "").trim();
+  if (path) return path;
+  const url = String(row.url || "").trim();
+  if (!url) return "—";
+  try {
+    const parsed = new URL(url);
+    return `${parsed.pathname}${parsed.search}${parsed.hash}` || parsed.href;
+  } catch (_) {
+    return url;
+  }
+}
+
+function trafficReferrerLabel(referrer) {
+  const value = String(referrer || "").trim();
+  if (!value) return "—";
+  try {
+    const parsed = new URL(value);
+    return parsed.host || parsed.href;
+  } catch (_) {
+    return value.length > 80 ? `${value.slice(0, 80)}...` : value;
+  }
+}
+
+function renderTrafficLogs(rows, stats) {
+  if (!trafficBody) return;
+  renderTrafficSummary(stats || {});
+  if (trafficSubtitle) {
+    const sampleNote = stats && stats.sampledRows >= 1000 ? " · unique tính trên 1000 dòng mới nhất hôm nay" : "";
+    trafficSubtitle.textContent = rows.length
+      ? `${formatCount(stats.todayViews || 0)} pageview hôm nay · ${formatCount(stats.last24Views || 0)} trong 24h${sampleNote}`
+      : "Chưa có traffic web admin";
+  }
+
+  if (!rows.length) {
+    trafficBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Chưa có traffic web admin</td></tr>`;
+    return;
+  }
+
+  trafficBody.innerHTML = rows.map((row) => {
+    const time = vnDateParts(row.occurred_at);
+    const page = trafficPageLabel(row);
+    const referrer = trafficReferrerLabel(row.referrer);
+    return `
+      <tr>
+        <td><div class="login-log-time">${escapeHtml(time.date)}</div><div class="login-log-sub">${escapeHtml(time.time)}</div></td>
+        <td><div class="traffic-email">${escapeHtml(row.email || "—")}</div><div class="traffic-event">${escapeHtml(row.event || "page_view")}</div></td>
+        <td><code class="login-log-ip">${escapeHtml(row.ip_address || "—")}</code></td>
+        <td><span class="traffic-page" title="${escapeHtml(row.url || page)}">${escapeHtml(page)}</span></td>
+        <td><span class="traffic-referrer" title="${escapeHtml(row.referrer || "")}">${escapeHtml(referrer)}</span></td>
+      </tr>
+    `;
+  }).join("");
 }
 
 function renderLoginLogs(rows) {
