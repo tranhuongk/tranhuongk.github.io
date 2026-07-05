@@ -13,6 +13,8 @@ const SOURCE_FILTER_ADMIN_EMAIL = "admin@admin.com";
 const CUSTOMER_ADMIN_EMAIL = "customer@customer.com";
 const PLAY_ACCOUNT_STORAGE_KEY = "galax_admin_google_play_account_id_v1";
 const ADMIN_TRAFFIC_SESSION_STORAGE_KEY = "galax_admin_traffic_session_id_v1";
+const ADMIN_TRAFFIC_DASHBOARD_LIMIT = 5;
+const ADMIN_TRAFFIC_DETAIL_LIMIT = 50;
 const DEFAULT_PLAY_ACCOUNT_ID = "default";
 const DEFAULT_PLAY_ACCOUNT_LABEL = "Galax VN Team";
 const ORDER_SYNC_BATCH_LIMIT = 500;
@@ -57,6 +59,19 @@ let trafficRefreshInFlight = false;
 let trafficRefreshQueued = false;
 let trafficRefreshPendingUntilVisible = false;
 const realtimeEstimateOrderCache = new Map();
+
+function isTrafficDetailPage() {
+  const path = window.location.pathname.replace(/\/index\.html$/i, "").replace(/\/+$/g, "");
+  return Boolean((document.body && document.body.dataset.page === "traffic") || path.endsWith("/admin/traffic"));
+}
+
+function currentTrafficLimit() {
+  return isTrafficDetailPage() ? ADMIN_TRAFFIC_DETAIL_LIMIT : ADMIN_TRAFFIC_DASHBOARD_LIMIT;
+}
+
+function trafficDetailUrl() {
+  return "traffic/";
+}
 
 function cleanAppTitle(pkg, fallback) {
   const cleanPkg = String(pkg).trim().toLowerCase();
@@ -326,6 +341,7 @@ const trafficCard = document.getElementById("traffic-card");
 const trafficSubtitle = document.getElementById("traffic-subtitle");
 const trafficSummary = document.getElementById("traffic-summary");
 const trafficBody = document.getElementById("traffic-body");
+const trafficShowMore = document.getElementById("traffic-show-more");
 const telegramLogCard = document.getElementById("telegram-log-card");
 const telegramLogSubtitle = document.getElementById("telegram-log-subtitle");
 const telegramLogBody = document.getElementById("telegram-log-body");
@@ -350,9 +366,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  loginForm.addEventListener("submit", handleLogin);
-  btnLogout.addEventListener("click", handleLogout);
-  btnSync.addEventListener("click", triggerSync);
+  if (loginForm) loginForm.addEventListener("submit", handleLogin);
+  if (btnLogout) btnLogout.addEventListener("click", handleLogout);
+  if (btnSync) btnSync.addEventListener("click", triggerSync);
   if (playAccountSelect) {
     playAccountSelect.addEventListener("change", () => {
       selectedPlayAccountId = playAccountSelect.value || DEFAULT_PLAY_ACCOUNT_ID;
@@ -394,20 +410,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  incomeForm.addEventListener("submit", handleIncomeSubmit);
+  if (incomeForm) incomeForm.addEventListener("submit", handleIncomeSubmit);
   
   // App Creation Subform
-  btnNewApp.addEventListener("click", () => newAppForm.classList.remove("hidden"));
-  btnCancelNewApp.addEventListener("click", () => {
-    newAppForm.classList.add("hidden");
-    newAppId.value = "";
-    newAppTitle.value = "";
-  });
-  btnSaveNewApp.addEventListener("click", handleSaveNewApp);
+  if (btnNewApp && newAppForm) btnNewApp.addEventListener("click", () => newAppForm.classList.remove("hidden"));
+  if (btnCancelNewApp && newAppForm) {
+    btnCancelNewApp.addEventListener("click", () => {
+      newAppForm.classList.add("hidden");
+      if (newAppId) newAppId.value = "";
+      if (newAppTitle) newAppTitle.value = "";
+    });
+  }
+  if (btnSaveNewApp) btnSaveNewApp.addEventListener("click", handleSaveNewApp);
 
   // Filters
-  filterSource.addEventListener("change", renderDashboard);
-  tableSearch.addEventListener("input", renderDashboard);
+  if (filterSource) filterSource.addEventListener("change", renderDashboard);
+  if (tableSearch) tableSearch.addEventListener("input", renderDashboard);
   if (topAppsMonthSelect) {
     topAppsMonthSelect.addEventListener("change", () => {
       topAppsFilterMode = "month";
@@ -488,10 +506,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     closeRangePopups();
   });
   
-  btnCloseSyncOverlay.addEventListener("click", () => {
-    syncOverlay.classList.add("hidden");
-    loadDataAndRender();
-  });
+  if (btnCloseSyncOverlay && syncOverlay) {
+    btnCloseSyncOverlay.addEventListener("click", () => {
+      syncOverlay.classList.add("hidden");
+      loadDataAndRender();
+    });
+  }
+  if (trafficShowMore) {
+    trafficShowMore.addEventListener("click", () => {
+      window.location.href = trafficDetailUrl();
+    });
+  }
 
   // Try to initialize Supabase
   initSupabase();
@@ -504,7 +529,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     updateSourceFilterAccess();
     showScreen("dashboard");
-    renderDashboardSkeleton();
+    if (isTrafficDetailPage()) {
+      renderTrafficPageSkeleton();
+    } else {
+      renderDashboardSkeleton();
+    }
     recordAdminLogin("reload");
     recordAdminTraffic("reload");
     startAdminAliveHeartbeat();
@@ -686,6 +715,7 @@ function updateTrafficAccess() {
     if (trafficSummary) trafficSummary.innerHTML = "";
     if (trafficBody) trafficBody.innerHTML = "";
   }
+  updateTrafficMoreButton();
 }
 
 function updateTelegramLogAccess() {
@@ -725,7 +755,11 @@ async function handleLogin(e) {
     if (!(await validateCurrentSession())) return;
     updateSourceFilterAccess();
     showScreen("dashboard");
-    renderDashboardSkeleton();
+    if (isTrafficDetailPage()) {
+      renderTrafficPageSkeleton();
+    } else {
+      renderDashboardSkeleton();
+    }
     recordAdminLogin("login");
     recordAdminTraffic("page_view");
     startAdminAliveHeartbeat();
@@ -943,6 +977,10 @@ function setChartSkeleton(isLoading) {
 }
 
 function renderDashboardSkeleton() {
+  if (isTrafficDetailPage()) {
+    renderTrafficPageSkeleton();
+    return;
+  }
   renderKpiSkeleton(kpiPrev2MonthLabel, kpiPrev2Month, kpiPrev2MonthVnd);
   renderKpiSkeleton(kpiPrevMonthLabel, kpiPrevMonth, kpiPrevMonthVnd);
   renderKpiSkeleton(kpiCurrentRtdnLabel, kpiCurrentRtdn, kpiCurrentRtdnVnd, chartKpiSubtitle);
@@ -961,9 +999,10 @@ function renderDashboardSkeleton() {
   updateTrafficAccess();
   if (canViewTrafficLogs()) {
     renderTrafficSummarySkeleton();
-    renderSimpleTableSkeleton(trafficBody, 5, 4);
+    renderSimpleTableSkeleton(trafficBody, 5, ADMIN_TRAFFIC_DASHBOARD_LIMIT);
     if (trafficSubtitle) trafficSubtitle.textContent = "Đang tải traffic web admin...";
   }
+  updateTrafficMoreButton();
   updateLoginLogAccess();
   if (canViewLoginLogs()) {
     renderSimpleTableSkeleton(loginLogBody, 5, 4);
@@ -974,6 +1013,18 @@ function renderDashboardSkeleton() {
     renderSimpleTableSkeleton(telegramLogBody, 5, 4);
     if (telegramLogSubtitle) telegramLogSubtitle.textContent = "Đang tải lịch sử Telegram...";
   }
+}
+
+function renderTrafficPageSkeleton() {
+  document.title = "Traffic web admin - Galax Admin";
+  if (navExchangeRate) navExchangeRate.textContent = `Tỷ giá: ${fmtVND(currentUsdToVndRate)} / USD`;
+  updateTrafficAccess();
+  if (!canViewTrafficLogs()) return;
+  if (trafficCard) trafficCard.classList.remove("hidden");
+  renderTrafficSummarySkeleton();
+  renderSimpleTableSkeleton(trafficBody, 5, Math.min(5, currentTrafficLimit()));
+  if (trafficSubtitle) trafficSubtitle.textContent = "Đang tải traffic web admin...";
+  updateTrafficMoreButton();
 }
 
 async function recordAdminLogin(eventType = "login") {
@@ -1182,9 +1233,9 @@ function setupRealtimeSubscriptions() {
   }
 
   const accountId = currentPlayAccountId();
-  let channel = supabaseClient
-    .channel(`admin-dashboard-${accountId}-${session.user?.id || "user"}`)
-    .on("postgres_changes", {
+  let channel = supabaseClient.channel(`admin-dashboard-${accountId}-${session.user?.id || "user"}`);
+  if (!isTrafficDetailPage()) {
+    channel = channel.on("postgres_changes", {
       event: "*",
       schema: "public",
       table: "earnings",
@@ -1201,6 +1252,7 @@ function setupRealtimeSubscriptions() {
         scheduleRealtimeRefresh(payload);
       });
     });
+  }
 
   if (canViewLoginLogs()) {
     channel = channel.on("postgres_changes", {
@@ -1453,6 +1505,12 @@ async function refreshRealtimeDashboardParts(payload, { animateKpi = true } = {}
 // --- Data Fetching ---
 async function loadDataAndRender() {
   if (!supabaseClient) return;
+  if (isTrafficDetailPage()) {
+    renderTrafficPageSkeleton();
+    await loadTrafficLogs();
+    return;
+  }
+
   const skeletonStartedAt = performance.now();
   renderDashboardSkeleton();
 
@@ -1524,7 +1582,7 @@ function localDayStartIso() {
   return start.toISOString();
 }
 
-async function loadTrafficLogs({ showSkeleton = true } = {}) {
+async function loadTrafficLogs({ showSkeleton = true, limit = currentTrafficLimit() } = {}) {
   if (!trafficCard || !trafficBody || !supabaseClient || !session) return;
   if (!canViewTrafficLogs()) {
     trafficCard.classList.add("hidden");
@@ -1537,7 +1595,7 @@ async function loadTrafficLogs({ showSkeleton = true } = {}) {
   trafficCard.classList.remove("hidden");
   if (showSkeleton) {
     renderTrafficSummarySkeleton();
-    renderSimpleTableSkeleton(trafficBody, 5, 4);
+    renderSimpleTableSkeleton(trafficBody, 5, Math.min(5, limit));
     if (trafficSubtitle) trafficSubtitle.textContent = "Đang tải traffic web admin...";
   }
 
@@ -1549,7 +1607,7 @@ async function loadTrafficLogs({ showSkeleton = true } = {}) {
         .from("admin_traffic_logs")
         .select("email,ip_address,user_agent,event,url,path,title,referrer,client_session_id,occurred_at,metadata")
         .order("occurred_at", { ascending: false })
-        .limit(50),
+        .limit(limit),
       supabaseClient
         .from("admin_traffic_logs")
         .select("email,ip_address,client_session_id", { count: "exact" })
@@ -1572,6 +1630,7 @@ async function loadTrafficLogs({ showSkeleton = true } = {}) {
       uniqueUsers: new Set(todayRows.map(row => row.email).filter(Boolean)).size,
       uniqueSessions: new Set(todayRows.map(row => row.client_session_id).filter(Boolean)).size,
       sampledRows: todayRows.length,
+      recentLimit: limit,
     };
     renderTrafficLogs(recentRes.data || [], stats);
   } catch (err) {
@@ -3043,13 +3102,24 @@ function trafficReferrerLabel(referrer) {
   }
 }
 
+function updateTrafficMoreButton() {
+  if (!trafficShowMore) return;
+  const canShow = canViewTrafficLogs() && !isTrafficDetailPage();
+  trafficShowMore.classList.toggle("hidden", !canShow);
+}
+
 function renderTrafficLogs(rows, stats) {
   if (!trafficBody) return;
-  renderTrafficSummary(stats || {});
+  const safeStats = stats || {};
+  renderTrafficSummary(safeStats);
+  updateTrafficMoreButton();
   if (trafficSubtitle) {
-    const sampleNote = stats && stats.sampledRows >= 1000 ? " · unique tính trên 1000 dòng mới nhất hôm nay" : "";
+    const sampleNote = safeStats.sampledRows >= 1000 ? " · unique tính trên 1000 dòng mới nhất hôm nay" : "";
+    const prefix = isTrafficDetailPage()
+      ? `${formatCount(rows.length)} lượt mới nhất`
+      : `${formatCount(rows.length)} lượt mới`;
     trafficSubtitle.textContent = rows.length
-      ? `${formatCount(stats.todayViews || 0)} pageview hôm nay · ${formatCount(stats.last24Views || 0)} trong 24h${sampleNote}`
+      ? `${prefix} · ${formatCount(safeStats.todayViews || 0)} pageview hôm nay · ${formatCount(safeStats.last24Views || 0)} trong 24h${sampleNote}`
       : "Chưa có traffic web admin";
   }
 

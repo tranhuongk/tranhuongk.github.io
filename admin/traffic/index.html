@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Traffic web admin - Galax Admin</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/admin-favicon-32.png?v=20260703a">
+  <link rel="icon" type="image/png" sizes="512x512" href="../assets/admin-favicon-512.png?v=20260703a">
+  <link rel="apple-touch-icon" sizes="180x180" href="../assets/admin-favicon-180.png?v=20260703a">
+  <link rel="shortcut icon" type="image/png" href="../assets/admin-favicon-32.png?v=20260703a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/umd/supabase.js"></script>
+  <link rel="stylesheet" href="../style.css?v=20260705a">
+</head>
+<body class="traffic-detail-page" data-page="traffic">
+  <div class="bg-blob blob-1"></div>
+  <div class="bg-blob blob-2"></div>
+  <div class="bg-blob blob-3"></div>
+
+  <div id="auth-screen" class="auth-container hidden">
+    <div class="glass-panel auth-card">
+      <div class="auth-header">
+        <div class="logo-glow">
+          <i class="fa-solid fa-wallet"></i>
+        </div>
+        <h2>Đăng nhập Admin</h2>
+        <p>Quản lý thu nhập các ứng dụng & dịch vụ</p>
+      </div>
+
+      <form id="login-form">
+        <div class="form-group">
+          <label for="login-email"><i class="fa-regular fa-envelope"></i> Email / Username</label>
+          <input type="text" id="login-email" required placeholder="admin@example.com">
+        </div>
+        <div class="form-group">
+          <label for="login-password"><i class="fa-solid fa-lock"></i> Mật khẩu</label>
+          <input type="password" id="login-password" required placeholder="••••••••">
+        </div>
+        <div class="accordion-toggle" id="config-toggle" style="display: none;">
+          <span><i class="fa-solid fa-gear"></i> Cấu hình kết nối Supabase</span>
+          <i class="fa-solid fa-chevron-down"></i>
+        </div>
+        <div class="config-fields hidden" id="config-fields" style="display: none;">
+          <div class="form-group">
+            <label for="supabase-url">Supabase URL</label>
+            <input type="url" id="supabase-url" value="https://lnazpyhoojqotnanrvqf.supabase.co">
+          </div>
+          <div class="form-group">
+            <label for="supabase-anon-key">Supabase Anon Key</label>
+            <input type="password" id="supabase-anon-key" placeholder="Dán Anon Key của dự án vào đây">
+          </div>
+        </div>
+        <div id="auth-error" class="error-message hidden"></div>
+        <button type="submit" class="glow-button btn-primary">
+          <span>Đăng nhập</span>
+          <i class="fa-solid fa-arrow-right-to-bracket"></i>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div id="dashboard-screen" class="dashboard-container hidden">
+    <header class="glass-panel navbar">
+      <div class="nav-left">
+        <div class="logo">
+          <i class="fa-solid fa-chart-line"></i>
+          <div class="play-account-switcher brand-account-switcher" id="play-account-switcher">
+            <select id="google-play-account-select" class="glass-select compact brand-account-select" title="Chọn tài khoản Google Play">
+              <option value="default">Đang tải tài khoản...</option>
+            </select>
+          </div>
+          <span id="nav-exchange-rate" class="nav-exchange-rate">Tỷ giá: đang tải...</span>
+        </div>
+      </div>
+      <div class="nav-right">
+        <a class="glass-button secondary" href="../">
+          <i class="fa-solid fa-arrow-left"></i>
+          <span>Dashboard</span>
+        </a>
+        <button id="btn-logout" class="glass-button danger" title="Đăng xuất">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </div>
+    </header>
+
+    <section class="data-section traffic-detail-section">
+      <div class="glass-panel table-card hidden" id="traffic-card">
+        <div class="panel-header table-actions">
+          <div class="table-title">
+            <h4><i class="fa-solid fa-chart-line"></i> Traffic web admin</h4>
+            <span class="subtitle" id="traffic-subtitle">Lượt truy cập web admin theo user/IP</span>
+          </div>
+          <button id="traffic-show-more" class="glass-button secondary traffic-show-more hidden" type="button">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+            <span>Xem thêm</span>
+          </button>
+        </div>
+        <div class="traffic-summary-grid" id="traffic-summary">
+          <div class="traffic-metric"><span>Hôm nay</span><strong>—</strong></div>
+          <div class="traffic-metric"><span>24h</span><strong>—</strong></div>
+          <div class="traffic-metric"><span>Unique IP</span><strong>—</strong></div>
+          <div class="traffic-metric"><span>User</span><strong>—</strong></div>
+        </div>
+        <div class="table-wrapper">
+          <table id="traffic-table">
+            <thead>
+              <tr>
+                <th>Thời gian</th>
+                <th>Email</th>
+                <th>IP</th>
+                <th>Trang</th>
+                <th>Referrer</th>
+              </tr>
+            </thead>
+            <tbody id="traffic-body">
+              <tr><td colspan="5" style="text-align:center;">Đang tải...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="../app.js?v=20260705g"></script>
+</body>
+</html>

@@ -1599,6 +1599,11 @@ tr:hover td {
   margin: 12px 0 18px;
 }
 
+.traffic-show-more {
+  min-width: 132px;
+  justify-content: center;
+}
+
 .traffic-metric {
   border: 1px solid var(--border-light);
   border-radius: 8px;
@@ -1644,6 +1649,23 @@ tr:hover td {
 
 .traffic-referrer {
   color: var(--text-muted);
+}
+
+body.traffic-detail-page .dashboard-container {
+  padding-bottom: 44px;
+}
+
+body.traffic-detail-page .traffic-detail-section {
+  margin-top: 28px;
+}
+
+body.traffic-detail-page #traffic-card {
+  min-height: calc(100vh - 180px);
+}
+
+body.traffic-detail-page .traffic-page,
+body.traffic-detail-page .traffic-referrer {
+  max-width: 420px;
 }
 
 .telegram-log-user {
