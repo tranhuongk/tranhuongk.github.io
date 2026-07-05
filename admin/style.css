@@ -1586,6 +1586,12 @@ tr:hover td {
   border-color: rgba(251, 191, 36, 0.34);
 }
 
+.login-log-status.is-refresh-token {
+  color: #38bdf8;
+  background: rgba(14, 165, 233, 0.14);
+  border-color: rgba(56, 189, 248, 0.34);
+}
+
 .login-log-status.is-recent {
   color: #c4b5fd;
   background: rgba(139, 92, 246, 0.13);

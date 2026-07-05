@@ -47,6 +47,7 @@ let realtimeUiUpdatePending = false;
 let realtimeRefreshPendingUntilVisible = false;
 let adminAliveTimer = null;
 let adminAliveInFlight = false;
+let adminRefreshTokenLogAt = 0;
 let forceLogoutInFlight = false;
 let loginLogRefreshTimer = null;
 let loginLogRefreshInFlight = false;
@@ -579,6 +580,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 function initSupabase() {
   supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+  supabaseClient.auth.onAuthStateChange((event, nextSession) => {
+    if (event !== "TOKEN_REFRESHED" || !nextSession) return;
+    session = nextSession;
+    if (supabaseClient.realtime && typeof supabaseClient.realtime.setAuth === "function") {
+      supabaseClient.realtime.setAuth(session.access_token);
+    }
+    recordAdminRefreshToken();
+  });
 }
 
 function showScreen(screen) {
@@ -609,11 +618,20 @@ async function refreshCurrentSession() {
     if (supabaseClient.realtime && typeof supabaseClient.realtime.setAuth === "function") {
       supabaseClient.realtime.setAuth(session.access_token);
     }
+    recordAdminRefreshToken();
     return true;
   } catch (err) {
     console.warn("Không refresh được phiên đăng nhập:", err);
     return false;
   }
+}
+
+function recordAdminRefreshToken() {
+  if (!session || !session.access_token) return;
+  const now = Date.now();
+  if (now - adminRefreshTokenLogAt < 5000) return;
+  adminRefreshTokenLogAt = now;
+  recordAdminLogin("refresh_token", { retryOnUnauthorized: false });
 }
 
 async function fetchCurrentAuthUser() {
@@ -1073,7 +1091,7 @@ function renderLoginHistoryPageSkeleton() {
   updateLoginLogMoreButton();
 }
 
-async function recordAdminLogin(eventType = "login") {
+async function recordAdminLogin(eventType = "login", { retryOnUnauthorized = true } = {}) {
   if (!session || !session.access_token) return;
   try {
     const screenSize = window.screen
@@ -1089,7 +1107,7 @@ async function recordAdminLogin(eventType = "login") {
       referrer: document.referrer || "",
     };
     let response = await postAdminLoginLog(payload);
-    if (response.status === 401 && await refreshCurrentSession()) {
+    if (response.status === 401 && retryOnUnauthorized && await refreshCurrentSession()) {
       response = await postAdminLoginLog(payload);
     }
     if (response.status === 401) {
@@ -3094,6 +3112,7 @@ function loginLogStatusLabel(row) {
       : { icon: "fa-clock", label: "Vừa online", tone: "recent" };
   }
   if (event === "reload") return { icon: "fa-rotate", label: "Reload web", tone: "reload" };
+  if (event === "refresh_token") return { icon: "fa-key", label: "Refresh token", tone: "refresh-token" };
   return { icon: "fa-circle-check", label: "Đăng nhập", tone: "login" };
 }
 
