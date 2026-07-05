@@ -1814,12 +1814,13 @@ async function triggerPlayConsoleUiSync() {
     syncTitle.style.color = "";
   }
   if (syncSubtitle) {
-    syncSubtitle.textContent = "Đang gọi helper local để đọc Installed audience, User acquisition và rating từ Play Console...";
+    syncSubtitle.textContent = "Helper sẽ mở/focus Play Console để đọc Installed audience, User acquisition và rating...";
   }
 
   addLog("Bắt đầu đồng bộ số liệu cài đặt từ UI Play Console...", "blue");
   addLog(`Helper local: ${PLAY_CONSOLE_UI_SYNC_HELPER_URL}`, "muted");
   addLog(`Nếu helper chưa chạy: ${PLAY_CONSOLE_UI_SYNC_HELPER_COMMAND}`, "muted");
+  addLog("Play Console sẽ được focus trong lúc đọc UI; nếu helper tự mở cửa sổ tạm thì sẽ đóng sau khi sync xong.", "muted");
 
   try {
     const selectedAccount = currentGooglePlayAccount();
