@@ -1746,9 +1746,21 @@ function playConsoleUiMetricUpdate(row, sourceDate, updatedAt) {
     update.play_last_updated_at = row.playLastUpdatedAt;
     hasMeta = true;
   }
+  if (row.playAppStatus) {
+    update.play_app_status = row.playAppStatus;
+    hasMeta = true;
+  }
+  if (row.playUpdateStatus) {
+    update.play_update_status = row.playUpdateStatus;
+    hasMeta = true;
+  }
   if (row.playProductionStatus) {
     update.play_production_status = row.playProductionStatus;
     hasMeta = true;
+  }
+  if (hasMeta) {
+    update.play_app_meta_source_date = sourceDate;
+    update.play_app_meta_updated_at = updatedAt;
   }
 
   if (row.hasInstalledAudience) {
@@ -1824,10 +1836,10 @@ async function triggerPlayConsoleUiSync() {
     syncTitle.style.color = "";
   }
   if (syncSubtitle) {
-    syncSubtitle.textContent = "Helper sẽ mở/focus Play Console để đọc Installed audience, User acquisition và rating...";
+    syncSubtitle.textContent = "Helper sẽ mở/focus Play Console để đọc số liệu, trạng thái và ngày cập nhật mới nhất...";
   }
 
-  addLog("Bắt đầu đồng bộ số liệu cài đặt từ UI Play Console...", "blue");
+  addLog("Bắt đầu đồng bộ số liệu/trạng thái từ UI Play Console...", "blue");
   addLog(`Helper local: ${PLAY_CONSOLE_UI_SYNC_HELPER_URL}`, "muted");
   addLog(`Nếu helper chưa chạy: ${PLAY_CONSOLE_UI_SYNC_HELPER_COMMAND}`, "muted");
   addLog("Play Console sẽ được focus trong lúc đọc UI; nếu helper tự mở cửa sổ tạm thì sẽ đóng sau khi sync xong.", "muted");
@@ -1878,7 +1890,7 @@ async function triggerPlayConsoleUiSync() {
     serverSummary = null;
     await loadDataAndRender();
     setSyncProgress(100, "complete");
-    setSyncStatus(true, "Đã cập nhật số liệu cài đặt/rating từ UI Play Console.");
+    setSyncStatus(true, "Đã cập nhật số liệu, trạng thái và ngày cập nhật từ UI Play Console.");
   } catch (err) {
     stopSyncProgressTimer();
     setSyncProgress(syncProgressCurrent || 5, "error");
@@ -4362,6 +4374,7 @@ function playProductionLabel(value) {
   const normalized = raw.toLowerCase();
   const compact = normalized.replace(/[\s_-]/g, "");
   if (compact.includes("review")) return "Đang review";
+  if (compact.includes("readytopublish")) return "Sẵn sàng phát hành";
   if (!raw || compact === "published" || compact === "completed" || compact === "inprogress") {
     return "Đang phát hành";
   }
@@ -4370,6 +4383,28 @@ function playProductionLabel(value) {
   if (compact === "rejected") return "Bị từ chối";
   if (compact === "unpublished") return "Đã gỡ";
   return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+function isFreshSourceDate(value, maxAgeDays = 2) {
+  if (!value) return false;
+  const ms = Date.parse(value);
+  if (!Number.isFinite(ms)) return false;
+  const now = new Date();
+  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const date = new Date(ms);
+  const sourceUtc = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  return sourceUtc >= todayUtc - maxAgeDays * 24 * 3600 * 1000;
+}
+
+function playStatusLabel(app) {
+  const updateStatus = app.playUpdateStatus || app.play_update_status || "";
+  const effectiveStatus = updateStatus || app.productionStatus || app.play_production_status || app.playAppStatus || app.play_app_status || app.playStoreStatus || app.play_store_status || "";
+  const compact = String(effectiveStatus || "").toLowerCase().replace(/[\s_-]/g, "");
+  const sourceDate = app.appMetaSourceDate || app.play_app_meta_source_date || "";
+  if (!updateStatus && (compact === "completed" || compact === "production") && !isFreshSourceDate(sourceDate)) {
+    return "Cần đồng bộ UI";
+  }
+  return playProductionLabel(effectiveStatus);
 }
 
 function playLastUpdatedLabel(value) {
@@ -4409,9 +4444,13 @@ function normalizeTopRevenueCards(sortedApps) {
     totalUSD: topRevenueValue(app),
     playStoreUrl: app.playStoreUrl || app.play_store_url || `https://play.google.com/store/apps/details?id=${encodeURIComponent(app.id)}`,
     playStoreStatus: app.playStoreStatus || app.play_store_status || "published",
-    productionStatus: app.productionStatus || app.play_production_status || "Production",
+    playAppStatus: app.playAppStatus || app.play_app_status || "",
+    playUpdateStatus: app.playUpdateStatus || app.play_update_status || "",
+    productionStatus: app.productionStatus || app.play_update_status || app.play_production_status || app.play_app_status || "Production",
     releaseDateAt: app.releaseDateAt || app.release_date_at || app.play_last_updated_at || "",
     lastUpdatedAt: app.lastUpdatedAt || app.play_last_updated_at || app.play_stats_source_date || "",
+    appMetaSourceDate: app.appMetaSourceDate || app.play_app_meta_source_date || "",
+    appMetaUpdatedAt: app.appMetaUpdatedAt || app.play_app_meta_updated_at || "",
     statsSourceDate: app.statsSourceDate || app.play_stats_source_date || "",
     installedAudience: app.installedAudience ?? app.installed_audience ?? null,
     installedAudienceSourceDate: app.installedAudienceSourceDate || app.installed_audience_source_date || app.statsSourceDate || app.play_stats_source_date || "",
@@ -4436,7 +4475,7 @@ function renderTopAppsList(sortedApps, emptyText) {
   const cards = normalizeTopRevenueCards(sortedApps);
   topAppsList.innerHTML = cards.map((a) => {
     const icon = appIconHtml(a.id, a.title, "play-app-logo", "play-app-fallback", a.iconUrl);
-    const status = playProductionLabel(a.productionStatus || a.playStoreStatus);
+    const status = playStatusLabel(a);
     const releaseLabel = playLastUpdatedLabel(a.releaseDateAt);
     const countriesLabel = formatPlaySupportedCountries(a.supportedCountriesCount);
     const meta = [
