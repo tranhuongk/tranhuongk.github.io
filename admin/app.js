@@ -1740,6 +1740,16 @@ function playConsoleUiMetricUpdate(row, sourceDate, updatedAt) {
     play_stats_updated_at: updatedAt,
   };
   let hasMetric = false;
+  let hasMeta = false;
+
+  if (row.playLastUpdatedAt) {
+    update.play_last_updated_at = row.playLastUpdatedAt;
+    hasMeta = true;
+  }
+  if (row.playProductionStatus) {
+    update.play_production_status = row.playProductionStatus;
+    hasMeta = true;
+  }
 
   if (row.hasInstalledAudience) {
     update.installed_audience = row.installedAudience == null ? null : Number(row.installedAudience);
@@ -1759,7 +1769,7 @@ function playConsoleUiMetricUpdate(row, sourceDate, updatedAt) {
     hasMetric = true;
   }
   if (hasMetric) update.play_stats_source_date = sourceDate;
-  return hasMetric ? update : null;
+  return hasMetric || hasMeta ? update : null;
 }
 
 async function savePlayConsoleUiStats(result) {
@@ -4355,12 +4365,16 @@ function playProductionLabel(value) {
   if (!raw || compact === "published" || compact === "completed" || compact === "inprogress") {
     return "Đang phát hành";
   }
+  if (compact === "production") return "Đang phát hành";
+  if (compact === "draft") return "Bản nháp";
+  if (compact === "rejected") return "Bị từ chối";
+  if (compact === "unpublished") return "Đã gỡ";
   return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
-function playReleaseDateLabel(value) {
+function playLastUpdatedLabel(value) {
   const formatted = formatPlayDate(value);
-  return formatted ? `Phát hành ${formatted}` : "";
+  return formatted ? `Cập nhật ${formatted}` : "";
 }
 
 function playDeltaHtml(value) {
@@ -4423,7 +4437,7 @@ function renderTopAppsList(sortedApps, emptyText) {
   topAppsList.innerHTML = cards.map((a) => {
     const icon = appIconHtml(a.id, a.title, "play-app-logo", "play-app-fallback", a.iconUrl);
     const status = playProductionLabel(a.productionStatus || a.playStoreStatus);
-    const releaseLabel = playReleaseDateLabel(a.releaseDateAt);
+    const releaseLabel = playLastUpdatedLabel(a.releaseDateAt);
     const countriesLabel = formatPlaySupportedCountries(a.supportedCountriesCount);
     const meta = [
       a.id,
