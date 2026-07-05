@@ -2454,6 +2454,14 @@ function formatCount(value) {
   return new Intl.NumberFormat("vi-VN").format(numberValue(value));
 }
 
+function formatCommaNumber(value, digits = 0) {
+  const n = numberValue(value, NaN);
+  if (!Number.isFinite(n)) return "—";
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: digits,
+  }).format(n);
+}
+
 function formatCompactNumber(value, digits = 2) {
   const n = numberValue(value);
   const abs = Math.abs(n);
@@ -4305,7 +4313,7 @@ function topRevenueValue(app) {
 
 function formatPlayMetricNumber(value) {
   if (value === null || value === undefined || value === "") return "—";
-  return formatCompactNumber(value, 2);
+  return formatCommaNumber(value);
 }
 
 function formatPlayRating(value) {
@@ -4345,7 +4353,7 @@ function playDeltaHtml(value) {
   const n = numberValue(value);
   const cls = n > 0 ? "is-up" : n < 0 ? "is-down" : "is-flat";
   const icon = n > 0 ? "fa-arrow-up" : n < 0 ? "fa-arrow-down" : "fa-minus";
-  return `<span class="play-delta ${cls}"><i class="fa-solid ${icon}"></i> ${trimNumber(Math.abs(n), 1)}% so với 30 ngày trước</span>`;
+  return `<span class="play-delta ${cls}"><i class="fa-solid ${icon}"></i> ${formatCommaNumber(Math.abs(n), 1)}% so với 30 ngày trước</span>`;
 }
 
 function playMetricSourceHtml(sourceDate) {
