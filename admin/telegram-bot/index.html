@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lịch sử đăng nhập - Galax Admin</title>
+  <title>Lịch sử Telegram bot - Galax Admin</title>
   <link rel="icon" type="image/png" sizes="32x32" href="../assets/admin-favicon-32.png?v=20260703a">
   <link rel="icon" type="image/png" sizes="512x512" href="../assets/admin-favicon-512.png?v=20260703a">
   <link rel="apple-touch-icon" sizes="180x180" href="../assets/admin-favicon-180.png?v=20260703a">
@@ -16,7 +16,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.8/dist/umd/supabase.js"></script>
   <link rel="stylesheet" href="../style.css?v=20260705a">
 </head>
-<body class="login-history-detail-page" data-page="login-history">
+<body class="telegram-detail-page" data-page="telegram-bot">
   <div class="bg-blob blob-1"></div>
   <div class="bg-blob blob-2"></div>
   <div class="bg-blob blob-3"></div>
@@ -88,29 +88,29 @@
     </header>
 
     <section class="data-section audit-detail-section">
-      <div class="glass-panel table-card hidden" id="login-log-card">
+      <div class="glass-panel table-card hidden" id="telegram-log-card">
         <div class="panel-header table-actions">
           <div class="table-title">
-            <h4><i class="fa-solid fa-shield-halved"></i> Lịch sử đăng nhập</h4>
-            <span class="subtitle" id="login-log-subtitle">Ghi nhận IP các lần đăng nhập web admin</span>
+            <h4><i class="fa-brands fa-telegram"></i> Lịch sử Telegram bot</h4>
+            <span class="subtitle" id="telegram-log-subtitle">Ghi nhận user sử dụng bot Telegram</span>
           </div>
-          <button id="login-log-show-more" class="glass-button secondary login-log-show-more hidden" type="button">
+          <button id="telegram-log-show-more" class="glass-button secondary telegram-log-show-more hidden" type="button">
             <i class="fa-solid fa-arrow-up-right-from-square"></i>
             <span>Xem thêm</span>
           </button>
         </div>
         <div class="table-wrapper">
-          <table id="login-log-table">
+          <table id="telegram-log-table">
             <thead>
               <tr>
                 <th>Thời gian</th>
-                <th>Email</th>
-                <th>IP</th>
-                <th>Thiết bị</th>
-                <th>Trạng thái</th>
+                <th>User</th>
+                <th>Username</th>
+                <th>Chat</th>
+                <th>Nội dung</th>
               </tr>
             </thead>
-            <tbody id="login-log-body">
+            <tbody id="telegram-log-body">
               <tr><td colspan="5" style="text-align:center;">Đang tải...</td></tr>
             </tbody>
           </table>

@@ -17,6 +17,8 @@ const ADMIN_TRAFFIC_DASHBOARD_LIMIT = 5;
 const ADMIN_TRAFFIC_DETAIL_LIMIT = 50;
 const ADMIN_LOGIN_DASHBOARD_LIMIT = 5;
 const ADMIN_LOGIN_DETAIL_LIMIT = 50;
+const ADMIN_TELEGRAM_DASHBOARD_LIMIT = 5;
+const ADMIN_TELEGRAM_DETAIL_LIMIT = 50;
 const DEFAULT_PLAY_ACCOUNT_ID = "default";
 const DEFAULT_PLAY_ACCOUNT_LABEL = "Galax VN Team";
 const ORDER_SYNC_BATCH_LIMIT = 500;
@@ -73,8 +75,13 @@ function isLoginHistoryDetailPage() {
   return Boolean((document.body && document.body.dataset.page === "login-history") || path.endsWith("/admin/login-history"));
 }
 
+function isTelegramDetailPage() {
+  const path = window.location.pathname.replace(/\/index\.html$/i, "").replace(/\/+$/g, "");
+  return Boolean((document.body && document.body.dataset.page === "telegram-bot") || path.endsWith("/admin/telegram-bot"));
+}
+
 function isAuditDetailPage() {
-  return isTrafficDetailPage() || isLoginHistoryDetailPage();
+  return isTrafficDetailPage() || isLoginHistoryDetailPage() || isTelegramDetailPage();
 }
 
 function currentTrafficLimit() {
@@ -85,12 +92,20 @@ function currentLoginLogLimit() {
   return isLoginHistoryDetailPage() ? ADMIN_LOGIN_DETAIL_LIMIT : ADMIN_LOGIN_DASHBOARD_LIMIT;
 }
 
+function currentTelegramLogLimit() {
+  return isTelegramDetailPage() ? ADMIN_TELEGRAM_DETAIL_LIMIT : ADMIN_TELEGRAM_DASHBOARD_LIMIT;
+}
+
 function trafficDetailUrl() {
   return "traffic/";
 }
 
 function loginHistoryDetailUrl() {
   return "login-history/";
+}
+
+function telegramDetailUrl() {
+  return "telegram-bot/";
 }
 
 function cleanAppTitle(pkg, fallback) {
@@ -366,6 +381,7 @@ const trafficShowMore = document.getElementById("traffic-show-more");
 const telegramLogCard = document.getElementById("telegram-log-card");
 const telegramLogSubtitle = document.getElementById("telegram-log-subtitle");
 const telegramLogBody = document.getElementById("telegram-log-body");
+const telegramLogShowMore = document.getElementById("telegram-log-show-more");
 
 // --- Initialization ---
 document.addEventListener("DOMContentLoaded", async () => {
@@ -543,6 +559,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       window.location.href = loginHistoryDetailUrl();
     });
   }
+  if (telegramLogShowMore) {
+    telegramLogShowMore.addEventListener("click", () => {
+      window.location.href = telegramDetailUrl();
+    });
+  }
 
   // Try to initialize Supabase
   initSupabase();
@@ -559,6 +580,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       renderTrafficPageSkeleton();
     } else if (isLoginHistoryDetailPage()) {
       renderLoginHistoryPageSkeleton();
+    } else if (isTelegramDetailPage()) {
+      renderTelegramPageSkeleton();
     } else {
       renderDashboardSkeleton();
     }
@@ -772,6 +795,7 @@ function updateTelegramLogAccess() {
     if (telegramLogSubtitle) telegramLogSubtitle.textContent = "";
     if (telegramLogBody) telegramLogBody.innerHTML = "";
   }
+  updateTelegramLogMoreButton();
 }
 
 // --- Authentication Handler ---
@@ -805,6 +829,8 @@ async function handleLogin(e) {
       renderTrafficPageSkeleton();
     } else if (isLoginHistoryDetailPage()) {
       renderLoginHistoryPageSkeleton();
+    } else if (isTelegramDetailPage()) {
+      renderTelegramPageSkeleton();
     } else {
       renderDashboardSkeleton();
     }
@@ -1033,6 +1059,10 @@ function renderDashboardSkeleton() {
     renderLoginHistoryPageSkeleton();
     return;
   }
+  if (isTelegramDetailPage()) {
+    renderTelegramPageSkeleton();
+    return;
+  }
   renderKpiSkeleton(kpiPrev2MonthLabel, kpiPrev2Month, kpiPrev2MonthVnd);
   renderKpiSkeleton(kpiPrevMonthLabel, kpiPrevMonth, kpiPrevMonthVnd);
   renderKpiSkeleton(kpiCurrentRtdnLabel, kpiCurrentRtdn, kpiCurrentRtdnVnd, chartKpiSubtitle);
@@ -1063,9 +1093,10 @@ function renderDashboardSkeleton() {
   updateLoginLogMoreButton();
   updateTelegramLogAccess();
   if (canViewTelegramLogs()) {
-    renderSimpleTableSkeleton(telegramLogBody, 5, 4);
+    renderSimpleTableSkeleton(telegramLogBody, 5, ADMIN_TELEGRAM_DASHBOARD_LIMIT);
     if (telegramLogSubtitle) telegramLogSubtitle.textContent = "Đang tải lịch sử Telegram...";
   }
+  updateTelegramLogMoreButton();
 }
 
 function renderTrafficPageSkeleton() {
@@ -1089,6 +1120,17 @@ function renderLoginHistoryPageSkeleton() {
   renderSimpleTableSkeleton(loginLogBody, 5, Math.min(5, currentLoginLogLimit()));
   if (loginLogSubtitle) loginLogSubtitle.textContent = "Đang tải lịch sử đăng nhập...";
   updateLoginLogMoreButton();
+}
+
+function renderTelegramPageSkeleton() {
+  document.title = "Lịch sử Telegram bot - Galax Admin";
+  if (navExchangeRate) navExchangeRate.textContent = `Tỷ giá: ${fmtVND(currentUsdToVndRate)} / USD`;
+  updateTelegramLogAccess();
+  if (!canViewTelegramLogs()) return;
+  if (telegramLogCard) telegramLogCard.classList.remove("hidden");
+  renderSimpleTableSkeleton(telegramLogBody, 5, Math.min(5, currentTelegramLogLimit()));
+  if (telegramLogSubtitle) telegramLogSubtitle.textContent = "Đang tải lịch sử Telegram...";
+  updateTelegramLogMoreButton();
 }
 
 async function recordAdminLogin(eventType = "login", { retryOnUnauthorized = true } = {}) {
@@ -1334,7 +1376,7 @@ function setupRealtimeSubscriptions() {
     }, (payload) => scheduleTrafficRefresh(payload));
   }
 
-  if (canViewTelegramLogs() && !isAuditDetailPage()) {
+  if (canViewTelegramLogs() && (!isAuditDetailPage() || isTelegramDetailPage())) {
     channel = channel.on("postgres_changes", {
       event: "*",
       schema: "public",
@@ -1579,6 +1621,11 @@ async function loadDataAndRender() {
     await loadLoginLogs();
     return;
   }
+  if (isTelegramDetailPage()) {
+    renderTelegramPageSkeleton();
+    await loadTelegramLogs();
+    return;
+  }
 
   const skeletonStartedAt = performance.now();
   renderDashboardSkeleton();
@@ -1742,18 +1789,19 @@ async function loadLoginLogs({ showSkeleton = true, limit = currentLoginLogLimit
   }
 }
 
-async function loadTelegramLogs({ showSkeleton = true } = {}) {
+async function loadTelegramLogs({ showSkeleton = true, limit = currentTelegramLogLimit() } = {}) {
   if (!telegramLogCard || !telegramLogBody || !supabaseClient || !session) return;
   if (!canViewTelegramLogs()) {
     telegramLogCard.classList.add("hidden");
     if (telegramLogSubtitle) telegramLogSubtitle.textContent = "";
     telegramLogBody.innerHTML = "";
+    updateTelegramLogMoreButton();
     return;
   }
 
   telegramLogCard.classList.remove("hidden");
   if (showSkeleton) {
-    renderSimpleTableSkeleton(telegramLogBody, 5, 4);
+    renderSimpleTableSkeleton(telegramLogBody, 5, Math.min(5, limit));
     if (telegramLogSubtitle) telegramLogSubtitle.textContent = "Đang tải lịch sử Telegram...";
   }
 
@@ -1762,7 +1810,7 @@ async function loadTelegramLogs({ showSkeleton = true } = {}) {
       .from("telegram_bot_usage_logs")
       .select("telegram_user_id,chat_id,username,first_name,last_name,language_code,chat_type,command,message_text,logged_at,metadata")
       .order("logged_at", { ascending: false })
-      .limit(30);
+      .limit(limit);
     if (error) throw error;
     renderTelegramLogs(data || []);
   } catch (err) {
@@ -3220,6 +3268,12 @@ function updateLoginLogMoreButton() {
   loginLogShowMore.classList.toggle("hidden", !canShow);
 }
 
+function updateTelegramLogMoreButton() {
+  if (!telegramLogShowMore) return;
+  const canShow = canViewTelegramLogs() && !isTelegramDetailPage();
+  telegramLogShowMore.classList.toggle("hidden", !canShow);
+}
+
 function renderLoginLogs(rows) {
   if (!loginLogBody) return;
   if (loginLogSubtitle) {
@@ -3272,10 +3326,14 @@ function renderTelegramLogs(rows) {
   if (!telegramLogBody) return;
   if (telegramLogSubtitle) {
     const userCount = new Set(rows.map(row => row.telegram_user_id || row.username || row.chat_id).filter(Boolean)).size;
+    const prefix = isTelegramDetailPage()
+      ? `${formatCount(rows.length)} lượt mới nhất`
+      : `${formatCount(rows.length)} lượt mới`;
     telegramLogSubtitle.textContent = rows.length
-      ? `${rows.length} lượt gần nhất · ${userCount} user`
+      ? `${prefix} · ${formatCount(userCount)} user`
       : "Chưa có lịch sử Telegram";
   }
+  updateTelegramLogMoreButton();
 
   if (!rows.length) {
     telegramLogBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Chưa có lịch sử Telegram</td></tr>`;

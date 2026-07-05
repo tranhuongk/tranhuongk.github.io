@@ -1606,7 +1606,8 @@ tr:hover td {
 }
 
 .traffic-show-more,
-.login-log-show-more {
+.login-log-show-more,
+.telegram-log-show-more {
   min-width: 132px;
   justify-content: center;
 }
@@ -1659,17 +1660,20 @@ tr:hover td {
 }
 
 body.traffic-detail-page .dashboard-container,
-body.login-history-detail-page .dashboard-container {
+body.login-history-detail-page .dashboard-container,
+body.telegram-detail-page .dashboard-container {
   padding-bottom: 44px;
 }
 
 body.traffic-detail-page .traffic-detail-section,
-body.login-history-detail-page .audit-detail-section {
+body.login-history-detail-page .audit-detail-section,
+body.telegram-detail-page .audit-detail-section {
   margin-top: 28px;
 }
 
 body.traffic-detail-page #traffic-card,
-body.login-history-detail-page #login-log-card {
+body.login-history-detail-page #login-log-card,
+body.telegram-detail-page #telegram-log-card {
   min-height: calc(100vh - 180px);
 }
 
