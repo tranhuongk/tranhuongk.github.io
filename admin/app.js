@@ -1742,25 +1742,16 @@ function playConsoleUiMetricUpdate(row, sourceDate, updatedAt) {
   let hasMetric = false;
   let hasMeta = false;
 
-  if (row.playLastUpdatedAt) {
-    update.play_last_updated_at = row.playLastUpdatedAt;
-    hasMeta = true;
-  }
-  if (row.playAppStatus) {
-    update.play_app_status = row.playAppStatus;
-    hasMeta = true;
-  }
-  if (row.playUpdateStatus) {
-    update.play_update_status = row.playUpdateStatus;
-    hasMeta = true;
-  }
-  if (row.playProductionStatus) {
-    update.play_production_status = row.playProductionStatus;
-    hasMeta = true;
-  }
-  if (hasMeta) {
+  const hasPlayAppMeta = Boolean(row.hasPlayAppMeta || row.playLastUpdatedAt || row.playAppStatus || row.playUpdateStatus || row.playProductionStatus);
+  if (hasPlayAppMeta) {
+    if (row.playLastUpdatedAt) update.play_last_updated_at = row.playLastUpdatedAt;
+    if (row.playAppStatus) update.play_app_status = row.playAppStatus;
+    update.play_update_status = row.playUpdateStatus || null;
+    const productionStatus = row.playProductionStatus || row.playUpdateStatus || row.playAppStatus;
+    if (productionStatus) update.play_production_status = productionStatus;
     update.play_app_meta_source_date = sourceDate;
     update.play_app_meta_updated_at = updatedAt;
+    hasMeta = true;
   }
 
   if (row.hasInstalledAudience) {
