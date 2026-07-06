@@ -1742,7 +1742,8 @@ function playConsoleUiMetricUpdate(row, sourceDate, updatedAt) {
   let hasMetric = false;
   let hasMeta = false;
 
-  const hasPlayAppMeta = Boolean(row.hasPlayAppMeta || row.playLastUpdatedAt || row.playAppStatus || row.playUpdateStatus || row.playProductionStatus);
+  const hasPlayAppMeta = String(row.playMetaSource || "").toLowerCase() === "ui" &&
+    Boolean(row.hasPlayAppMeta || row.playLastUpdatedAt || row.playAppStatus || row.playUpdateStatus || row.playProductionStatus);
   if (hasPlayAppMeta) {
     if (row.playLastUpdatedAt) update.play_last_updated_at = row.playLastUpdatedAt;
     if (row.playAppStatus) update.play_app_status = row.playAppStatus;
