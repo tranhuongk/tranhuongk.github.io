@@ -140,20 +140,21 @@ function appRecordById(id) {
   return appsList.find(app => String(app.id || "").trim().toLowerCase() === cleanId) || null;
 }
 
-function isPublishedApp(id, title) {
-  const app = appRecordById(id) || {};
-  const statusText = String(
+function isGooglePlayAvailableApp(id, title, candidate = {}) {
+  const app = { ...(appRecordById(id) || {}), ...(candidate || {}) };
+  const availabilityStatus = String(
     app.publish_status ||
     app.play_status ||
+    app.playStoreStatus ||
     app.play_store_status ||
     app.status ||
     app.state ||
     ""
   ).trim().toLowerCase();
-  if (statusText) {
-    if (/unpublish|not[_\s-]*publish|removed|deleted|suspend|inactive|archived|draft/.test(statusText)) return false;
-    if (/publish|active|live/.test(statusText)) return true;
-  }
+  const appStatus = String(app.playAppStatus || app.play_app_status || "").trim().toLowerCase();
+  const unavailableText = `${availabilityStatus} ${appStatus}`;
+  if (/unpublish|not[_\s-]*publish|removed|deleted|suspend|inactive|archived|draft/.test(unavailableText)) return false;
+  if (/publish|production|active|live/.test(`${availabilityStatus} ${appStatus}`)) return true;
 
   const boolFields = ["published", "is_published", "isPublished"];
   for (const field of boolFields) {
@@ -1301,8 +1302,8 @@ function renderRealtimeUpdatedSections({ animateKpi = true } = {}) {
     const selectedMonth = (serverSummary && serverSummary.currentMonth) || currentMonthKeyVN();
     const syncText = currentMonthSyncText(serverSummary);
     topAppsSyncInfo.textContent = syncText
-      ? `${syncText} · Ước tính ledger tháng ${monthLabel(selectedMonth)}, chỉ gồm app đang publish`
-      : `Ước tính ledger tháng ${monthLabel(selectedMonth)}, chỉ gồm app đang publish`;
+      ? `${syncText} · Ước tính ledger tháng ${monthLabel(selectedMonth)}, chỉ gồm app đang có trên Google Play`
+      : `Ước tính ledger tháng ${monthLabel(selectedMonth)}, chỉ gồm app đang có trên Google Play`;
   }
 
   renderRtdnTransactions();
@@ -4595,7 +4596,7 @@ async function renderTopAppsCustomRange(range, appMap, rate) {
         };
       })
       .filter(a => !isAdjustmentApp(a.id, a.title))
-      .filter(a => isPublishedApp(a.id, a.title))
+      .filter(a => isGooglePlayAvailableApp(a.id, a.title, a))
       .filter(a => !searchQuery || a.id.toLowerCase().includes(searchQuery) || a.title.toLowerCase().includes(searchQuery))
       .filter(a => !shouldHideTopApp(a))
       .sort((a, b) => b.total - a.total);
@@ -4679,8 +4680,8 @@ function renderTopApps(filtered, appMap, rate) {
     const syncText = currentMonthSyncText(serverSummary);
     topAppsSyncInfo.textContent =
       syncText
-        ? `${syncText} · Ước tính ledger tháng ${monthLabel(selectedMonth)}, chỉ gồm app đang publish`
-        : `Ước tính ledger tháng ${monthLabel(selectedMonth)}, chỉ gồm app đang publish`;
+        ? `${syncText} · Ước tính ledger tháng ${monthLabel(selectedMonth)}, chỉ gồm app đang có trên Google Play`
+        : `Ước tính ledger tháng ${monthLabel(selectedMonth)}, chỉ gồm app đang có trên Google Play`;
   }
 
   let sortedApps = [];
@@ -4690,7 +4691,7 @@ function renderTopApps(filtered, appMap, rate) {
 
   if (topRevenueCards) {
     sortedApps = topRevenueCards
-      .filter(a => isPublishedApp(a.id, a.title))
+      .filter(a => isGooglePlayAvailableApp(a.id, a.title, a))
       .filter(a => !shouldHideTopApp(a))
       .sort((a, b) => topRevenueValue(b) - topRevenueValue(a));
   } else {
@@ -4704,7 +4705,7 @@ function renderTopApps(filtered, appMap, rate) {
       });
     const appIds = new Set([
       ...appsList
-        .filter(app => isPublishedApp(app.id, app.title))
+        .filter(app => isGooglePlayAvailableApp(app.id, app.title, app))
         .map(app => app.id),
       ...Object.keys(totals).filter(id => !isAdjustmentApp(id, appMap[id])),
     ]);
@@ -4718,12 +4719,12 @@ function renderTopApps(filtered, appMap, rate) {
           totalUSD: Math.max(0, totals[id] || 0),
         };
       })
-      .filter(a => isPublishedApp(a.id, a.title))
+      .filter(a => isGooglePlayAvailableApp(a.id, a.title, a))
       .filter(a => !shouldHideTopApp(a))
       .sort((a, b) => topRevenueValue(b) - topRevenueValue(a));
   }
 
-  renderTopAppsList(sortedApps, `Không có ứng dụng đang publish trong tháng ${monthLabel(selectedMonth)}`);
+  renderTopAppsList(sortedApps, `Không có ứng dụng đang có trên Google Play trong tháng ${monthLabel(selectedMonth)}`);
 }
 
 // Render Chart
