@@ -3247,12 +3247,13 @@ function renderDashboard(options = {}) {
   const recentMonthlyKpis = unfiltered && serverSummary && serverSummary.kpis && Array.isArray(serverSummary.kpis.recentMonths)
     ? serverSummary.kpis.recentMonths
     : buildRecentMonthlyKpisFromEarnings(filtered, rate);
+  const [prev2Kpi, prevKpi, currentKpi] = monthlyKpiSlots(recentMonthlyKpis);
 
   // Guard against null: a browser may have an older cached index.html whose
   // KPI elements differ from this script during a deploy transition.
-  renderMonthlyKpi(kpiPrev2MonthLabel, kpiPrev2Month, kpiPrev2MonthVnd, recentMonthlyKpis[0], "Tháng N-2");
-  renderMonthlyKpi(kpiPrevMonthLabel, kpiPrevMonth, kpiPrevMonthVnd, recentMonthlyKpis[1], "Tháng N-1");
-  renderMonthlyKpi(kpiCurrentRtdnLabel, kpiCurrentRtdn, kpiCurrentRtdnVnd, recentMonthlyKpis[2], "Ước tính tháng N", {
+  renderMonthlyKpi(kpiPrev2MonthLabel, kpiPrev2Month, kpiPrev2MonthVnd, prev2Kpi, "Tháng N-2");
+  renderMonthlyKpi(kpiPrevMonthLabel, kpiPrevMonth, kpiPrevMonthVnd, prevKpi, "Tháng N-1");
+  renderMonthlyKpi(kpiCurrentRtdnLabel, kpiCurrentRtdn, kpiCurrentRtdnVnd, currentKpi, "Ước tính tháng N", {
     animate: options.animateLatestKpi,
     animateInitial: options.animateLatestKpi,
   });
@@ -3772,6 +3773,18 @@ function monthLabel(p) {
 
 function roundMoney(value) {
   return Math.round(numberValue(value) * 100) / 100;
+}
+
+function monthlyKpiSlots(rows) {
+  const cleanRows = (Array.isArray(rows) ? rows : [])
+    .filter(row => row && /^\d{6}$/.test(String(row.month || "")))
+    .sort((a, b) => String(a.month).localeCompare(String(b.month)))
+    .slice(-3);
+  return [
+    cleanRows[cleanRows.length - 3] || null,
+    cleanRows[cleanRows.length - 2] || null,
+    cleanRows[cleanRows.length - 1] || null,
+  ];
 }
 
 function monthlyKpiLabel(row, fallback) {
