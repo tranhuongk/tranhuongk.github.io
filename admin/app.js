@@ -1780,38 +1780,27 @@ function playConsoleUiMetricUpdate(row, sourceDate, updatedAt) {
 async function savePlayConsoleUiStats(result) {
   const sourceDate = result.sourceDate || new Date().toISOString().slice(0, 10);
   const updatedAt = result.updatedAt || new Date().toISOString();
-  const rows = Array.isArray(result.apps) ? result.apps : [];
-  let attempted = 0;
-  let updated = 0;
-  let skipped = 0;
-  const errors = [];
-
-  for (const row of rows) {
-    const appId = String(row.id || "").trim();
-    if (!appId) {
-      skipped += 1;
-      continue;
-    }
-    const update = playConsoleUiMetricUpdate(row, sourceDate, updatedAt);
-    if (!update) {
-      skipped += 1;
-      continue;
-    }
-    attempted += 1;
-    const { error, count } = await supabaseClient
-      .from("apps")
-      .update(update, { count: "exact" })
-      .eq("play_account_id", currentPlayAccountId())
-      .eq("id", appId);
-    if (error) {
-      errors.push(`${appId}: ${error.message || error}`);
-      continue;
-    }
-    if (count && count > 0) updated += 1;
-    else skipped += 1;
+  const rows = (Array.isArray(result.apps) ? result.apps : [])
+    .filter(row => String(row?.id || row?.packageName || "").trim());
+  const res = await fetch(`${supabaseUrl}/functions/v1/play-console-ui-sync`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${session ? session.access_token : supabaseAnonKey}`,
+    },
+    body: JSON.stringify({
+      playAccountId: currentPlayAccountId(),
+      sourceDate,
+      updatedAt,
+      apps: rows,
+    }),
+  });
+  const body = await readJsonResponse(res);
+  if (!res.ok || body.error) {
+    throw new Error(body.error || `play-console-ui-sync ${res.status}`);
   }
-
-  return { attempted, updated, skipped, errors };
+  return body;
 }
 
 async function triggerPlayConsoleUiSync() {
