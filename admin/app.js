@@ -21,8 +21,6 @@ const ADMIN_TELEGRAM_DASHBOARD_LIMIT = 5;
 const ADMIN_TELEGRAM_DETAIL_LIMIT = 50;
 const DEFAULT_PLAY_ACCOUNT_ID = "default";
 const DEFAULT_PLAY_ACCOUNT_LABEL = "Galax VN Team";
-const PLAY_CONSOLE_UI_SYNC_HELPER_URL = "http://127.0.0.1:8765";
-const PLAY_CONSOLE_UI_SYNC_HELPER_COMMAND = "python3 scripts/play_console_ui_sync/local_helper.py";
 const ORDER_SYNC_BATCH_LIMIT = 500;
 const ORDER_SYNC_SCAN_LIMIT = 5000;
 const ORDER_SYNC_MAX_RUNS = 20;
@@ -308,7 +306,6 @@ const sbAnonKeyInput = document.getElementById("supabase-anon-key");
 const authError = document.getElementById("auth-error");
 
 const btnLogout = document.getElementById("btn-logout");
-const btnPlayConsoleUiSync = document.getElementById("btn-play-console-ui-sync");
 const btnSync = document.getElementById("btn-sync");
 const playAccountSwitcher = document.getElementById("play-account-switcher");
 const playAccountSelect = document.getElementById("google-play-account-select");
@@ -409,7 +406,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if (loginForm) loginForm.addEventListener("submit", handleLogin);
   if (btnLogout) btnLogout.addEventListener("click", handleLogout);
-  if (btnPlayConsoleUiSync) btnPlayConsoleUiSync.addEventListener("click", triggerPlayConsoleUiSync);
   if (btnSync) btnSync.addEventListener("click", triggerSync);
   if (playAccountSelect) {
     playAccountSelect.addEventListener("change", () => {
@@ -754,10 +750,6 @@ function canViewTelegramLogs() {
   return canViewLoginLogs();
 }
 
-function canUsePlayConsoleUiSync() {
-  return currentSessionEmail() === SOURCE_FILTER_ADMIN_EMAIL;
-}
-
 function updateSourceFilterAccess() {
   if (filterSource) {
     const canViewFilter = canViewAllSourceFilter();
@@ -771,14 +763,6 @@ function updateSourceFilterAccess() {
   updateLoginLogAccess();
   updateTrafficAccess();
   updateTelegramLogAccess();
-  updatePlayConsoleUiSyncAccess();
-}
-
-function updatePlayConsoleUiSyncAccess() {
-  if (!btnPlayConsoleUiSync) return;
-  const canUse = canUsePlayConsoleUiSync();
-  btnPlayConsoleUiSync.classList.toggle("hidden", !canUse);
-  btnPlayConsoleUiSync.disabled = !canUse;
 }
 
 function updateLoginLogAccess() {
@@ -1706,185 +1690,6 @@ async function loadDataAndRender() {
   } catch (err) {
     console.error("Lỗi khi tải dữ liệu:", err);
     alert("Không thể tải dữ liệu từ Supabase: " + err.message);
-  }
-}
-
-function currentGooglePlayAccount() {
-  return googlePlayAccounts.find(account => account.id === currentPlayAccountId()) || null;
-}
-
-async function appsForPlayConsoleUiSync() {
-  const fromSummary = appsList
-    .filter(app => String(app.id || "").includes("."))
-    .map(app => ({
-      id: String(app.id || "").trim(),
-      title: app.title || cleanAppTitle(app.id),
-    }));
-  if (fromSummary.length) return fromSummary;
-
-  const { data, error } = await supabaseClient
-    .from("apps")
-    .select("id,title")
-    .eq("play_account_id", currentPlayAccountId())
-    .order("title");
-  if (error) throw error;
-  return (data || [])
-    .filter(app => String(app.id || "").includes("."))
-    .map(app => ({
-      id: String(app.id || "").trim(),
-      title: app.title || cleanAppTitle(app.id),
-    }));
-}
-
-function playConsoleUiMetricUpdate(row, sourceDate, updatedAt) {
-  const update = {
-    play_stats_updated_at: updatedAt,
-  };
-  let hasMetric = false;
-  let hasMeta = false;
-
-  const hasPlayAppMeta = String(row.playMetaSource || "").toLowerCase() === "ui" &&
-    Boolean(row.hasPlayAppMeta || row.playLastUpdatedAt || row.playAppStatus || row.playUpdateStatus || row.playProductionStatus);
-  if (hasPlayAppMeta) {
-    if (row.playLastUpdatedAt) update.play_last_updated_at = row.playLastUpdatedAt;
-    if (row.playAppStatus) update.play_app_status = row.playAppStatus;
-    update.play_update_status = row.playUpdateStatus || null;
-    const productionStatus = row.playProductionStatus || row.playUpdateStatus || row.playAppStatus;
-    if (productionStatus) update.play_production_status = productionStatus;
-    update.play_app_meta_source_date = sourceDate;
-    update.play_app_meta_updated_at = updatedAt;
-    hasMeta = true;
-  }
-
-  if (row.hasInstalledAudience) {
-    update.installed_audience = row.installedAudience == null ? null : Number(row.installedAudience);
-    update.installed_audience_delta_pct = row.installedAudienceDeltaPct == null ? null : Number(row.installedAudienceDeltaPct);
-    update.installed_audience_source_date = sourceDate;
-    hasMetric = true;
-  }
-  if (row.hasUserAcquisition) {
-    update.user_acquisition = row.userAcquisition == null ? null : Number(row.userAcquisition);
-    update.user_acquisition_delta_pct = row.userAcquisitionDeltaPct == null ? null : Number(row.userAcquisitionDeltaPct);
-    update.user_acquisition_source_date = sourceDate;
-    hasMetric = true;
-  }
-  if (row.hasGooglePlayRating) {
-    update.google_play_rating = row.googlePlayRating == null ? null : Number(row.googlePlayRating);
-    update.google_play_rating_source_date = sourceDate;
-    hasMetric = true;
-  }
-  if (hasMetric) update.play_stats_source_date = sourceDate;
-  return hasMetric || hasMeta ? update : null;
-}
-
-async function savePlayConsoleUiStats(result) {
-  const sourceDate = result.sourceDate || new Date().toISOString().slice(0, 10);
-  const updatedAt = result.updatedAt || new Date().toISOString();
-  const rows = (Array.isArray(result.apps) ? result.apps : [])
-    .filter(row => String(row?.id || row?.packageName || "").trim());
-  const res = await fetch(`${supabaseUrl}/functions/v1/play-console-ui-sync`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: supabaseAnonKey,
-      Authorization: `Bearer ${session ? session.access_token : supabaseAnonKey}`,
-    },
-    body: JSON.stringify({
-      playAccountId: currentPlayAccountId(),
-      sourceDate,
-      updatedAt,
-      apps: rows,
-    }),
-  });
-  const body = await readJsonResponse(res);
-  if (!res.ok || body.error) {
-    throw new Error(body.error || `play-console-ui-sync ${res.status}`);
-  }
-  return body;
-}
-
-async function triggerPlayConsoleUiSync() {
-  if (!supabaseClient || !session || !canUsePlayConsoleUiSync()) return;
-
-  syncOverlay.classList.remove("hidden");
-  btnCloseSyncOverlay.classList.add("hidden");
-  syncLogs.innerHTML = "";
-  stopSyncProgressTimer();
-  syncProgressPlan = null;
-  if (syncLoader) syncLoader.classList.remove("hidden");
-  setSyncProgress(5);
-  if (syncTitle) {
-    syncTitle.textContent = "Đang đồng bộ UI Play Console...";
-    syncTitle.style.color = "";
-  }
-  if (syncSubtitle) {
-    syncSubtitle.textContent = "Helper sẽ mở/focus Play Console để đọc số liệu, trạng thái và ngày cập nhật mới nhất...";
-  }
-
-  addLog("Bắt đầu đồng bộ số liệu/trạng thái từ UI Play Console...", "blue");
-  addLog(`Helper local: ${PLAY_CONSOLE_UI_SYNC_HELPER_URL}`, "muted");
-  addLog(`Nếu helper chưa chạy: ${PLAY_CONSOLE_UI_SYNC_HELPER_COMMAND}`, "muted");
-  addLog("Play Console sẽ được focus trong lúc đọc UI; nếu helper tự mở cửa sổ tạm thì sẽ đóng sau khi sync xong.", "muted");
-
-  try {
-    const selectedAccount = currentGooglePlayAccount();
-    const apps = await appsForPlayConsoleUiSync();
-    addLog(`Account Google Play: ${selectedAccount?.label || currentPlayAccountId()}`, "muted");
-    addLog(`Số app gửi sang helper: ${apps.length}`, "blue");
-    setSyncProgress(18);
-
-    const helperResponse = await fetchWithTimeout(`${PLAY_CONSOLE_UI_SYNC_HELPER_URL}/sync`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        playAccountId: currentPlayAccountId(),
-        developerAccountId: selectedAccount?.developerAccountId || selectedAccount?.developer_account_id || "",
-        apps,
-      }),
-    }, 10 * 60 * 1000);
-    const result = await readJsonResponse(helperResponse);
-    if (!helperResponse.ok) {
-      throw new Error(result.error || `Helper HTTP ${helperResponse.status}`);
-    }
-
-    if (result.authRequired || result.status === "auth_required") {
-      setSyncProgress(35, "error");
-      addLog("Google Play Console cần đăng nhập lại.", "yellow");
-      addLog(result.message || "Chrome đăng nhập đã được mở. Đăng nhập xong rồi bấm lại nút sync.", "yellow");
-      if (result.loginUrl) addLog(`Login URL: ${result.loginUrl}`, "muted");
-      setSyncStatus(false, "Cần đăng nhập Google Play Console trong Chrome vừa mở, sau đó bấm sync lại.");
-      return;
-    }
-
-    if (!result.success) {
-      throw new Error(result.error || "Helper không trả dữ liệu hợp lệ");
-    }
-
-    setSyncProgress(70);
-    addLog(`Helper đọc được ${numberValue(result.matchedApps)} / ${numberValue(result.requestedApps, apps.length)} app.`, "blue");
-    const saveResult = await savePlayConsoleUiStats(result);
-    if (saveResult.errors.length) {
-      addLog(`Một số app update lỗi: ${saveResult.errors.slice(0, 3).join("; ")}`, "red");
-    }
-    addLog(`Đã cập nhật ${saveResult.updated} app vào DB. Bỏ qua ${saveResult.skipped} app.`, "green");
-    addLog(`Ngày ghi nhận từ UI sync: ${result.sourceDate || "hôm nay"}`, "muted");
-
-    serverSummary = null;
-    await loadDataAndRender();
-    setSyncProgress(100, "complete");
-    setSyncStatus(true, "Đã cập nhật số liệu, trạng thái và ngày cập nhật từ UI Play Console.");
-  } catch (err) {
-    stopSyncProgressTimer();
-    setSyncProgress(syncProgressCurrent || 5, "error");
-    const message = err && err.message ? err.message : String(err || "Unknown error");
-    addLog(`Lỗi đồng bộ UI Play Console: ${message}`, "red");
-    if (/Failed to fetch|NetworkError|Load failed/i.test(message)) {
-      addLog(`Helper local có thể chưa chạy. Mở terminal ở repo và chạy: ${PLAY_CONSOLE_UI_SYNC_HELPER_COMMAND}`, "yellow");
-    }
-    setSyncStatus(false, "Không đồng bộ được UI Play Console.");
-  } finally {
-    stopSyncProgressTimer();
-    btnCloseSyncOverlay.classList.remove("hidden");
   }
 }
 
@@ -4397,7 +4202,7 @@ function playStatusLabel(app) {
   const compact = String(effectiveStatus || "").toLowerCase().replace(/[\s_-]/g, "");
   const sourceDate = app.appMetaSourceDate || app.play_app_meta_source_date || "";
   if (!updateStatus && (compact === "completed" || compact === "production") && !isFreshSourceDate(sourceDate)) {
-    return "Cần đồng bộ UI";
+    return "Cần đồng bộ extension";
   }
   return playProductionLabel(effectiveStatus);
 }
