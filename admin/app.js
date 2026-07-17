@@ -114,7 +114,7 @@ function cleanAppTitle(pkg, fallback) {
   if (fallback) {
     const cleanFallback = String(fallback).trim().toLowerCase();
     if (cleanFallback === "__adjustments__" || cleanFallback === "adjustments") return "Khác";
-    return fallback;
+    if (cleanFallback !== cleanPkg) return fallback;
   }
   if (pkg && pkg.includes(".")) {
     const parts = pkg.split(".");
@@ -135,7 +135,9 @@ function isAdjustmentApp(id, title) {
 
 function appRecordById(id) {
   const cleanId = String(id || "").trim().toLowerCase();
-  return appsList.find(app => String(app.id || "").trim().toLowerCase() === cleanId) || null;
+  return appsList.find(app => String(app.id || "").trim().toLowerCase() === cleanId) ||
+    appMetadataList.find(app => String(app.id || "").trim().toLowerCase() === cleanId) ||
+    null;
 }
 
 function isGooglePlayAvailableApp(id, title, candidate = {}) {
@@ -168,6 +170,7 @@ function shouldHideTopApp(app) {
 
 // Local caching of data
 let appsList = [];
+let appMetadataList = [];
 let earningsData = [];
 let currentUsdToVndRate = 25000;
 // KPI summary computed by the `dashboard-summary` edge function — the single
@@ -1222,6 +1225,10 @@ function applyDashboardSummary(summary) {
   serverSummary = summary;
   currentUsdToVndRate = summary.rate || currentUsdToVndRate;
   appsList = (summary.apps || []).map(a => ({ ...a, title: cleanAppTitle(a.id, a.title) }));
+  appMetadataList = (summary.appMetadata || []).map(a => ({
+    ...a,
+    title: cleanAppTitle(a.id, a.title),
+  }));
   earningsData = mergeRtdnAddonIntoEarnings(summary.earnings || [], summary);
 }
 
@@ -1659,6 +1666,7 @@ async function loadDataAndRender() {
 
   // Fallback: read the tables directly (KPIs then computed client-side).
   serverSummary = null;
+  appMetadataList = [];
   try {
     const { data: apps, error: appsErr } = await supabaseClient
       .from("apps")
@@ -3028,6 +3036,7 @@ function renderDashboard(options = {}) {
   // Create quick lookup for app titles
   const appMap = {};
   appsList.forEach(a => appMap[a.id] = a.title);
+  appMetadataList.forEach(a => appMap[a.id] = a.title);
 
   // App filter by search query
   if (searchQuery) {
@@ -3368,7 +3377,7 @@ function renderTelegramLogs(rows) {
 }
 
 function appIconUrl(pkg) {
-  const app = appsList.find(a => a.id === pkg);
+  const app = appRecordById(pkg);
   return app && app.icon_url ? app.icon_url : "";
 }
 
