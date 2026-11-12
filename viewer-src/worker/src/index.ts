@@ -9,7 +9,7 @@ interface Env {
 }
 
 const MAX_PER_IP = 4;
-const LEASE_RENEW_MS = 5 * 60 * 1000; // must stay well under the limiter's lease TTL
+const LEASE_RENEW_MS = 15 * 1000; // a third of the limiter's 45 s lease TTL
 
 // WebSocket close codes (application range).
 const CLOSE_FORBIDDEN_TARGET = 4403;

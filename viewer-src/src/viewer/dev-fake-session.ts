@@ -4,7 +4,7 @@
 // (monitor 1 left of the primary, negative coordinates), marks where the last pointer
 // message landed, and lists what the page sent. `?fake&old` = UltraViewer 6.2.12 (no
 // keyboard packets), `?fake&viewonly` = host starts in view-only. `window.uvFake` exposes
-// the sent log and `permission(allowed)` / `end()` to simulate commands 49 and 27. The remote
+// the sent log and `permission(allowed)` / `end()` to simulate commands 49 and 27, `drop()` a lost pipe. The remote
 // pointer follows the last mouse message: shape 1001 (red DIB arrow) while the button is up,
 // 1002 (green PNG-in-CUR ring) while it is down; shapes are only sent when the page asks (`4|||hash`).
 // Chat is echoed back ("typing", then "Đã nhận: …"); `uvFake.chat(text)`, `uvFake.typing(on)` and
@@ -104,6 +104,8 @@ interface FakeHooks {
   sent: string[];
   permission(allowed: boolean): void;
   end(): void;
+  /** Simulates the Worker pipe dropping mid-session (the page should reconnect by itself). */
+  drop(): void;
   chat(text: string): void;
   typing(on: boolean): void;
   clipboard(text: string): void;
@@ -165,6 +167,7 @@ class DevFakeSession implements ViewerSession {
       if (this.state === 'active') this.on({ type: 'inputPermission', allowed });
     };
     hooks.end = () => this.finish('partnerEnded');
+    hooks.drop = () => this.finish('transportClosed');
     hooks.chat = (text) => {
       if (this.canUseSessionTools()) this.on({ type: 'chat', text });
     };
@@ -416,7 +419,7 @@ class DevFakeSession implements ViewerSession {
     if (this.state === 'active') this.on({ type: 'cursor', event: { type: 'shape', hash, cur } });
   }
 
-  private finish(reason: 'partnerEnded' | null): void {
+  private finish(reason: 'partnerEnded' | 'transportClosed' | null): void {
     if (this.state === 'closed') return;
     this.state = 'closed';
     for (const [id, transfer] of [...this.transfers]) {
@@ -486,7 +489,7 @@ class DevFakeSession implements ViewerSession {
 }
 
 export function createDevFakeSession(params: URLSearchParams): ViewerDeps['createSession'] {
-  const hooks: FakeHooks = { sent: [], permission: () => {}, end: () => {}, chat: () => {}, typing: () => {}, clipboard: () => {}, offer: () => '', fileLog: [], audioPackets: 0 };
+  const hooks: FakeHooks = { sent: [], permission: () => {}, end: () => {}, drop: () => {}, chat: () => {}, typing: () => {}, clipboard: () => {}, offer: () => '', fileLog: [], audioPackets: 0 };
   window.uvFake = hooks;
   return () => new DevFakeSession(hooks, params);
 }

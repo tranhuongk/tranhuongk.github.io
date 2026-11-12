@@ -1,10 +1,11 @@
 import { DurableObject } from 'cloudflare:workers';
 
 /**
- * A lease not renewed within this window is presumed leaked (Worker evicted or redeployed
- * before it could release) and ignored. Live pipes renew every few minutes (see index.ts).
+ * A lease not renewed within this window is presumed leaked and ignored. Cloudflare kills a
+ * busy pipe's invocation outright (no `finally`, no release), so this TTL is how long a dead
+ * pipe keeps its slot: keep it short or a reconnect hits 4429. Live pipes renew every 15 s.
  */
-const LEASE_TTL_MS = 15 * 60 * 1000;
+const LEASE_TTL_MS = 45 * 1000;
 
 /**
  * Counts concurrent pipes for ONE client IP (the Durable Object is named after the SHA-256

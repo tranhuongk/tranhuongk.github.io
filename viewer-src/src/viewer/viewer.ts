@@ -20,6 +20,7 @@ import {
   type Peer,
   type SessionDiagnostics,
   type SessionEvent,
+  type SessionFailure,
   type SessionPhase,
 } from '../session/relay-session';
 import { connectFormError, formatStats, mountDiagnostics, purgeLegacyToken, readStorage, REASONS } from '../spike/diagnostics';
@@ -105,7 +106,17 @@ export const CLIPBOARD_STORAGE_KEY = 'uvweb.clipboard';
 /** Remembered computer-audio volume (0.25 | 0.5 | 0.75 | 1; stored only with "Nhớ trên thiết bị này"). */
 export const AUDIO_VOLUME_STORAGE_KEY = 'uvweb.audioVolume';
 const AUDIO_SUSPENDED_NOTICE = 'Trình duyệt chưa cho phát âm thanh — bấm Âm thanh lần nữa';
-const OVERFLOW_NOTICE = 'Hàng đợi chuột/bàn phím bị đầy: đã thả mọi phím và nút, Điều khiển đã tắt. Bật lại để tiếp tục.';
+/** Waits before each automatic reconnect; the total outlasts the Worker's 45 s lease TTL (4429). */
+const RECONNECT_DELAYS_MS = [2_000, 5_000, 10_000, 20_000, 30_000];
+/** Failures a retry can fix: the pipe dropped, the Worker refused (lease still held) or timed out. */
+const RECONNECTABLE: ReadonlySet<SessionFailure> = new Set<SessionFailure>(['transportClosed', 'workerRefused', 'deadline']);
+
+interface ConnectFields {
+  workerUrl: string;
+  partnerID: string;
+  password: string;
+}
+const OVERFLOW_NOTICE ='Hàng đợi chuột/bàn phím bị đầy: đã thả mọi phím và nút, Điều khiển đã tắt. Bật lại để tiếp tục.';
 
 const LAYOUT = `
   <header class="top">
@@ -242,6 +253,11 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
   const recording = deps.recording ?? defaultRecording;
   let startedAt = 0;
   let clock: ReturnType<typeof setInterval> | null = null;
+  // Auto-reconnect. Cloudflare can end the Worker pipe mid-session; `resume` holds the last
+  // accepted session's fields (memory only, never stored) for the retries, null otherwise.
+  let resume: ConnectFields | null = null;
+  let reconnectAttempt = 0;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   const screenView = new ScreenView(canvas, viewport);
   // Local pinch-zoom (touch) of the screen + overlay wrapper; nothing is sent for it.
@@ -874,6 +890,17 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
     setConnecting(false);
     setStatus(reason === null ? 'Đã ngắt.' : REASONS[reason]);
     log(`Phiên kết thúc: ${reason ?? 'người dùng ngắt'}`);
+    if (
+      reason !== null && resume !== null && !destroyed && RECONNECTABLE.has(reason) &&
+      reconnectAttempt < RECONNECT_DELAYS_MS.length
+    ) {
+      scheduleReconnect(reason);
+      return;
+    }
+    if (reason !== null && resume !== null && reconnectAttempt > 0) {
+      setStatus(`${REASONS[reason]} Đã thử kết nối lại ${reconnectAttempt} lần, bấm Kết nối để thử tiếp.`);
+    }
+    stopReconnect();
   }
 
   async function disconnect(): Promise<void> {
@@ -903,7 +930,32 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
     const problem = connectFormError(fields);
     if (problem) return log(problem);
     persist();
+    stopReconnect();
+    startSession(fields);
+  });
 
+  function stopReconnect(): void {
+    if (reconnectTimer !== null) clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+    resume = null;
+    reconnectAttempt = 0;
+  }
+
+  /** The Worker pipe dropped (or a retry was refused): try again with the last accepted credentials. */
+  function scheduleReconnect(reason: SessionFailure): void {
+    const fields = resume;
+    if (fields === null) return;
+    const delay = RECONNECT_DELAYS_MS[reconnectAttempt++] ?? RECONNECT_DELAYS_MS[RECONNECT_DELAYS_MS.length - 1]!;
+    setConnecting(true);
+    setStatus(`${REASONS[reason]} Tự kết nối lại sau ${delay / 1000} s (lần ${reconnectAttempt}/${RECONNECT_DELAYS_MS.length})…`);
+    log(`Tự kết nối lại lần ${reconnectAttempt} sau ${delay / 1000} s (lý do: ${reason})`);
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      if (!destroyed && resume === fields) startSession(fields);
+    }, delay);
+  }
+
+  function startSession(fields: ConnectFields): void {
     const current = deps.createSession({ workerUrl: fields.workerUrl });
     session = current;
     peer = null;
@@ -940,6 +992,8 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
               log(e.text);
               break;
             case 'accepted':
+              resume = fields;
+              reconnectAttempt = 0;
               onAccepted(current, e.peer);
               break;
             case 'inputPermission':
@@ -981,15 +1035,28 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
       );
     } catch (e) {
       log(`Không bắt đầu được phiên: ${describe(e)}`);
+      stopReconnect();
+      setConnecting(false);
       return;
     }
     startedAt = performance.now();
     clock = setInterval(renderStats, 1000);
-    setStatus('Đang kết nối…');
+    setStatus(reconnectAttempt > 0 ? `Đang kết nối lại (lần ${reconnectAttempt}/${RECONNECT_DELAYS_MS.length})…` : 'Đang kết nối…');
     setConnecting(true);
-  });
+  }
 
-  cancelButton.addEventListener('click', () => session?.close());
+  cancelButton.addEventListener('click', () => {
+    if (reconnectTimer !== null) {
+      // Waiting between retries: no session is open, just stop retrying.
+      stopReconnect();
+      setConnecting(false);
+      setStatus('Đã ngắt.');
+      log('Đã dừng tự kết nối lại.');
+      return;
+    }
+    resume = null;
+    session?.close();
+  });
 
   forgetButton.addEventListener('click', () => {
     forgetDevice();
@@ -1017,6 +1084,7 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
   return {
     destroy() {
       destroyed = true;
+      stopReconnect();
       recorder?.abort();
       recorder = null;
       captureModal?.close();
