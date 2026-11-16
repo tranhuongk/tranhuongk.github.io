@@ -14,6 +14,7 @@ import { cursorShapeRequest, type CursorEvent } from '../proto/cursor';
 import type { ScreenBitmap } from '../proto/screen-renderer';
 import { createIdentity, forgetDevice, IDENTITY_STORAGE_KEY, loadIdentity, saveIdentity, type ClientIdentity } from '../session/identity';
 import { createFrameScheduler } from '../session/latest-frame';
+import { clearPartners, loadPartners, rememberPartner, removePartner, type SavedPartner } from '../session/saved-partners';
 import {
   RelaySessionError,
   type ConnectOptions,
@@ -134,6 +135,10 @@ const LAYOUT = `
       </div>
       <button id="forget" type="button" class="text secondary">Quên thiết bị này</button>
     </form>
+    <section id="saved" hidden>
+      <h2 class="saved-title">Máy đã kết nối</h2>
+      <ul id="saved-list"></ul>
+    </section>
     <p id="status" role="status">Chưa kết nối</p>
     <p id="env-notice" role="alert" hidden></p>
   </header>
@@ -166,6 +171,8 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
   const connectButton = $<HTMLButtonElement>('connect');
   const cancelButton = $<HTMLButtonElement>('disconnect');
   const forgetButton = $<HTMLButtonElement>('forget');
+  const savedSection = $<HTMLElement>('saved');
+  const savedList = $<HTMLUListElement>('saved-list');
   const statusEl = $<HTMLParagraphElement>('status');
   const stage = $<HTMLElement>('stage');
   const toolbarEl = $<HTMLDivElement>('toolbar');
@@ -228,6 +235,66 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
     }
   };
   remember.addEventListener('change', persistAudioVolume);
+
+  // Remembered PCs: ID + reported name only (never the password), kept only with "Nhớ trên thiết bị này".
+  const renderSaved = (list: SavedPartner[] = loadPartners()) => {
+    savedSection.hidden = list.length === 0;
+    savedList.replaceChildren(
+      ...list.map((p) => {
+        const item = document.createElement('li');
+        const pick = document.createElement('button');
+        pick.type = 'button';
+        pick.className = 'saved-pick';
+        pick.dataset.id = p.id;
+        pick.title = `Điền ID ${p.id}`;
+        const name = document.createElement('span');
+        name.className = 'saved-name';
+        name.textContent = p.name || `Máy ${p.id}`;
+        const id = document.createElement('span');
+        id.className = 'saved-id';
+        id.textContent = p.id;
+        pick.append(name, id);
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'text saved-del';
+        del.dataset.id = p.id;
+        del.setAttribute('aria-label', `Xoá máy ${p.name || p.id}`);
+        del.textContent = '×';
+        item.append(pick, del);
+        return item;
+      }),
+    );
+  };
+  renderSaved();
+  savedList.addEventListener('click', (event) => {
+    const target = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-id]');
+    if (!target) return;
+    const id = target.dataset.id!;
+    if (target.classList.contains('saved-del')) {
+      try {
+        renderSaved(removePartner(id));
+      } catch (e) {
+        log(`Không xoá được máy đã lưu (${(e as Error).name}).`);
+      }
+      return;
+    }
+    partner.value = id;
+    password.focus();
+  });
+  remember.addEventListener('change', () => {
+    if (!remember.checked) {
+      clearPartners();
+      renderSaved();
+    }
+  });
+  const savePartner = (id: string, name: string | null) => {
+    if (!remember.checked) return;
+    try {
+      renderSaved(rememberPartner(id, name, Date.now()));
+    } catch (e) {
+      log(`Cảnh báo: không lưu được máy đã kết nối (${(e as Error).name}).`);
+    }
+  };
 
   // --- session state ------------------------------------------------------------------------
   let session: ViewerSession | null = null;
@@ -994,6 +1061,7 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
             case 'accepted':
               resume = fields;
               reconnectAttempt = 0;
+              savePartner(fields.partnerID, e.peer.displayName);
               onAccepted(current, e.peer);
               break;
             case 'inputPermission':
@@ -1062,6 +1130,7 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
     forgetDevice();
     identity = createIdentity();
     remember.checked = false;
+    renderSaved();
     log('Đã xoá danh tính đã lưu trên thiết bị này; lần kết nối sau dùng danh tính mới.');
   });
 

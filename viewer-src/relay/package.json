@@ -1,0 +1,17 @@
+{
+  "name": "uv-relay",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Self-hosted WS<->TCP relay for the web viewer (replaces the Cloudflare Worker pipe).",
+  "type": "module",
+  "main": "relay.mjs",
+  "scripts": {
+    "start": "node relay.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "8.23.0"
+  }
+}

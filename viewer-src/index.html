@@ -117,6 +117,15 @@
       #connect { flex: 1; min-height: 44px; font-size: 15px; }
       #forget { align-self: flex-start; margin-left: -10px; }
       #status { margin: 0; font-size: 13px; color: var(--text-2); }
+      /* Remembered PCs under the connect form: pick fills the ID, × forgets that PC. */
+      #saved { display: flex; flex-direction: column; gap: 8px; }
+      .saved-title { margin: 0; font-size: 13px; font-weight: 500; color: var(--text-2); }
+      #saved-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+      #saved-list li { display: flex; align-items: stretch; gap: 4px; }
+      .saved-pick { flex: 1; min-width: 0; justify-content: space-between; gap: 12px; padding: 0 12px; }
+      .saved-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+      .saved-id { flex: none; color: var(--text-2); font-variant-numeric: tabular-nums; font-size: 13px; }
+      .saved-del { flex: none; padding: 0 12px; font-size: 18px; }
       #env-notice { margin: 0; padding: 10px 12px; border-radius: var(--r-panel); background: var(--danger-fill); color: var(--text); font-size: 13px; }
       details#diagnostics { flex: none; box-sizing: border-box; width: 100%; max-width: 420px; margin: 0 auto; color: var(--text-2); font-size: 13px; }
       details#diagnostics > summary { cursor: pointer; padding: 4px 0; width: max-content; }

@@ -849,6 +849,35 @@ describe('desktop viewer page', () => {
       expect(created).toEqual([{ workerUrl: 'ws://127.0.0.1:8787' }]);
     });
 
+    test('remembered PCs: saved on connect only with "Nhớ", listed, pick fills the ID, × removes', () => {
+      $<HTMLInputElement>('#remember').checked = true;
+      connect(peer({ displayName: 'Kế toán' }));
+      expect(JSON.parse(localStorage.getItem('uvweb.partners')!)).toEqual([
+        expect.objectContaining({ id: '123456789', name: 'Kế toán' }),
+      ]);
+      expect(localStorage.getItem('uvweb.partners')).not.toContain('abc');
+      expect($('#saved').hidden).toBe(false);
+      expect($('.saved-name').textContent).toBe('Kế toán');
+      $<HTMLInputElement>('#partner').value = '';
+      $<HTMLButtonElement>('.saved-pick').click();
+      expect($<HTMLInputElement>('#partner').value).toBe('123456789');
+      $<HTMLButtonElement>('.saved-del').click();
+      expect($('#saved').hidden).toBe(true);
+      expect(JSON.parse(localStorage.getItem('uvweb.partners')!)).toEqual([]);
+    });
+
+    test('without "Nhớ" nothing is stored, and switching it off clears the list', () => {
+      connect(peer({ displayName: 'Kho' }));
+      expect(localStorage.getItem('uvweb.partners')).toBeNull();
+      $<HTMLInputElement>('#remember').checked = true;
+      session.emit({ type: 'accepted', peer: peer({ displayName: 'Kho' }) });
+      expect($('#saved').hidden).toBe(false);
+      $<HTMLInputElement>('#remember').checked = false;
+      $<HTMLInputElement>('#remember').dispatchEvent(new Event('change'));
+      expect(localStorage.getItem('uvweb.partners')).toBeNull();
+      expect($('#saved').hidden).toBe(true);
+    });
+
     test('a Worker token left in either storage by an older version is deleted on load', () => {
       viewer.destroy();
       localStorage.setItem('uvweb.token', 'legacy-local');
