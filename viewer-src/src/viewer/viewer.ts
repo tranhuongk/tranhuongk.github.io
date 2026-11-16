@@ -14,6 +14,7 @@ import { cursorShapeRequest, type CursorEvent } from '../proto/cursor';
 import type { ScreenBitmap } from '../proto/screen-renderer';
 import { createIdentity, forgetDevice, IDENTITY_STORAGE_KEY, loadIdentity, saveIdentity, type ClientIdentity } from '../session/identity';
 import { createFrameScheduler } from '../session/latest-frame';
+import { loadWorkerUrl, persistWorkerUrl } from '../session/saved-worker-url';
 import { clearPartners, loadPartners, rememberPartner, removePartner, type SavedPartner } from '../session/saved-partners';
 import {
   RelaySessionError,
@@ -182,7 +183,7 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
   const canvas = $<HTMLCanvasElement>('screen');
   const textarea = $<HTMLTextAreaElement>('keyboard-input');
   const diag = mountDiagnostics($<HTMLDetailsElement>('diagnostics'), {
-    workerUrl: deps.workerUrl,
+    workerUrl: loadWorkerUrl() ?? deps.workerUrl,
   });
   const { log } = diag;
 
@@ -197,7 +198,7 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
     connectButton.disabled = true;
     log(blocked);
   }
-  log(`Trang sẵn sàng. Worker: ${deps.workerUrl || '(chưa cấu hình — nhập trong Diagnostics)'}`);
+  log(`Trang sẵn sàng. Worker: ${diag.workerUrl() || '(chưa cấu hình — nhập trong Diagnostics)'}`);
 
   /** saveIdentity throws on blocked storage: keep everything in memory for this tab. */
   const persist = () => {
@@ -208,6 +209,17 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
     }
   };
   remember.addEventListener('change', persist);
+
+  // Worker URL: kept on the device only with "Nhớ trên thiết bị này" and only when it overrides the default.
+  const persistWorker = () => {
+    try {
+      persistWorkerUrl(diag.workerUrl(), deps.workerUrl, remember.checked);
+    } catch (e) {
+      log(`Cảnh báo: không lưu được Worker URL (${(e as Error).name}).`);
+    }
+  };
+  remember.addEventListener('change', persistWorker);
+  diag.onWorkerUrlInput(persistWorker);
 
   // Clipboard sharing preference: off by default, kept on the device only when remembered.
   let clipboardOn = readStorage(() => localStorage, CLIPBOARD_STORAGE_KEY) === '1';
@@ -997,6 +1009,7 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
     const problem = connectFormError(fields);
     if (problem) return log(problem);
     persist();
+    persistWorker();
     stopReconnect();
     startSession(fields);
   });
@@ -1130,6 +1143,7 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
     forgetDevice();
     identity = createIdentity();
     remember.checked = false;
+    diag.setWorkerUrl(deps.workerUrl);
     renderSaved();
     log('Đã xoá danh tính đã lưu trên thiết bị này; lần kết nối sau dùng danh tính mới.');
   });

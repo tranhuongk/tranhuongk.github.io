@@ -878,6 +878,23 @@ describe('desktop viewer page', () => {
       expect($('#saved').hidden).toBe(true);
     });
 
+    test('Worker URL override is kept only with "Nhớ", restored on load, and reset by forgetting the device', () => {
+      const url = () => $<HTMLInputElement>('#worker-url');
+      url().value = 'wss://relay.example.com';
+      url().dispatchEvent(new Event('input'));
+      expect(localStorage.getItem('uvweb.workerUrl')).toBeNull();
+      $<HTMLInputElement>('#remember').checked = true;
+      $<HTMLInputElement>('#remember').dispatchEvent(new Event('change'));
+      expect(localStorage.getItem('uvweb.workerUrl')).toBe('wss://relay.example.com');
+      viewer.destroy();
+      app.replaceChildren();
+      viewer = mountViewer(app, { createSession: () => session, workerUrl: 'ws://127.0.0.1:8787', schedule: (cb) => cb() });
+      expect(url().value).toBe('wss://relay.example.com');
+      $<HTMLButtonElement>('#forget').click();
+      expect(localStorage.getItem('uvweb.workerUrl')).toBeNull();
+      expect(url().value).toBe('ws://127.0.0.1:8787');
+    });
+
     test('a Worker token left in either storage by an older version is deleted on load', () => {
       viewer.destroy();
       localStorage.setItem('uvweb.token', 'legacy-local');

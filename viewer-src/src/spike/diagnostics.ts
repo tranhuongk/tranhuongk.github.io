@@ -72,6 +72,9 @@ export interface Diagnostics {
   log(line: string): void;
   setStats(text: string): void;
   workerUrl(): string;
+  setWorkerUrl(url: string): void;
+  /** Called whenever the user edits the Worker URL field. */
+  onWorkerUrlInput(cb: () => void): void;
 }
 
 /** Fills `details` with the diagnostics section: stats line, Worker URL, TLS probe and the log. */
@@ -114,5 +117,9 @@ export function mountDiagnostics(details: HTMLDetailsElement, o: { workerUrl: st
       statsEl.textContent = text;
     },
     workerUrl: () => workerUrl.value.trim(),
+    setWorkerUrl: (url) => {
+      workerUrl.value = url;
+    },
+    onWorkerUrlInput: (cb) => workerUrl.addEventListener('input', cb),
   };
 }
