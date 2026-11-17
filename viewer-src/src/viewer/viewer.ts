@@ -12,7 +12,7 @@ import { DEFAULT_DISPLAY_NAME } from '../proto/client-defaults';
 import { monitorRegion, type QualityPreset, type RemoteCommand } from '../proto/commands';
 import { cursorShapeRequest, type CursorEvent } from '../proto/cursor';
 import type { ScreenBitmap } from '../proto/screen-renderer';
-import { createIdentity, forgetDevice, IDENTITY_STORAGE_KEY, loadIdentity, saveIdentity, type ClientIdentity } from '../session/identity';
+import { createIdentity, IDENTITY_STORAGE_KEY, loadIdentity, saveIdentity, type ClientIdentity } from '../session/identity';
 import { createFrameScheduler } from '../session/latest-frame';
 import { loadWorkerUrl, persistWorkerUrl } from '../session/saved-worker-url';
 import { clearPartners, loadPartners, rememberPartner, removePartner, type SavedPartner } from '../session/saved-partners';
@@ -127,18 +127,17 @@ const LAYOUT = `
         <input id="partner" inputmode="numeric" autocomplete="off" required></label>
       <label>Mật khẩu
         <input id="password" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" required></label>
-      <label class="check"><input id="remember" type="checkbox"> Nhớ trên thiết bị này</label>
+      <input id="remember" type="checkbox" checked hidden>
       <div class="row">
         <button id="connect" type="submit" class="primary">Kết nối</button>
         <button id="disconnect" type="button" class="text" disabled>Huỷ</button>
       </div>
-      <button id="forget" type="button" class="text secondary">Quên thiết bị này</button>
     </form>
     <section id="saved" hidden>
       <h2 class="saved-title">Máy đã kết nối</h2>
       <ul id="saved-list"></ul>
     </section>
-    <p id="status" role="status">Chưa kết nối</p>
+    <p id="status" role="status"></p>
     <p id="env-notice" role="alert" hidden></p>
   </header>
   <section id="stage">
@@ -169,7 +168,6 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
   const password = $<HTMLInputElement>('password');
   const connectButton = $<HTMLButtonElement>('connect');
   const cancelButton = $<HTMLButtonElement>('disconnect');
-  const forgetButton = $<HTMLButtonElement>('forget');
   const savedSection = $<HTMLElement>('saved');
   const savedList = $<HTMLUListElement>('saved-list');
   const statusEl = $<HTMLParagraphElement>('status');
@@ -188,7 +186,8 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
   // --- identity (phase-0 rules); the Worker has no token any more -------------------------
   purgeLegacyToken();
   let identity: ClientIdentity = loadIdentity() ?? createIdentity();
-  remember.checked = readStorage(() => localStorage, IDENTITY_STORAGE_KEY) !== null;
+  // Always remembered on this device (the checkbox is gone); the partner password is never stored.
+  remember.checked = true;
   const blocked = deps.insecureNotice ?? null;
   if (blocked) {
     envNotice.textContent = blocked;
@@ -899,7 +898,6 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
   const setConnecting = (busy: boolean) => {
     connectButton.disabled = busy;
     cancelButton.disabled = !busy;
-    forgetButton.disabled = busy;
   };
 
   function showConnected(connected: boolean): void {
@@ -1135,15 +1133,6 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
     }
     resume = null;
     session?.close();
-  });
-
-  forgetButton.addEventListener('click', () => {
-    forgetDevice();
-    identity = createIdentity();
-    remember.checked = false;
-    diag.setWorkerUrl(deps.workerUrl);
-    renderSaved();
-    log('Đã xoá danh tính đã lưu trên thiết bị này; lần kết nối sau dùng danh tính mới.');
   });
 
   // No pointerup/pointercancel arrives when the page is backgrounded mid-touch: forget the fingers

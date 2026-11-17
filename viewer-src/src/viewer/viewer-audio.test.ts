@@ -206,7 +206,7 @@ describe('computer audio in the viewer page', () => {
     expect(log).toEqual([]);
   });
 
-  test('volume menu offers 25/50/75/100 %, applies to the player and is remembered only with "Nhớ trên thiết bị này"', async () => {
+  test('volume menu offers 25/50/75/100 %, applies to the player and is always remembered', async () => {
     const select = $<HTMLSelectElement>('#audio-volume');
     expect([...select.options].map((o) => o.textContent)).toEqual(['25%', '50%', '75%', '100%']);
     expect(select.value).toBe('1');
@@ -217,11 +217,6 @@ describe('computer audio in the viewer page', () => {
     select.value = '0.5';
     select.dispatchEvent(new Event('change'));
     expect(player.volumes.at(-1)).toBe(0.5);
-    expect(localStorage.getItem(AUDIO_VOLUME_STORAGE_KEY)).toBeNull();
-
-    const remember = $<HTMLInputElement>('#remember');
-    remember.checked = true;
-    remember.dispatchEvent(new Event('change'));
     expect(localStorage.getItem(AUDIO_VOLUME_STORAGE_KEY)).toBe('0.5');
     select.value = '0.25';
     select.dispatchEvent(new Event('change'));
@@ -233,10 +228,6 @@ describe('computer audio in the viewer page', () => {
     connect();
     $<HTMLButtonElement>('#audio-toggle').click();
     expect(player.volumes.at(-1)).toBe(0.25);
-
-    $<HTMLInputElement>('#remember').checked = false;
-    $<HTMLInputElement>('#remember').dispatchEvent(new Event('change'));
-    expect(localStorage.getItem(AUDIO_VOLUME_STORAGE_KEY)).toBeNull();
   });
 
   test('a corrupt stored volume falls back to 100 %', () => {

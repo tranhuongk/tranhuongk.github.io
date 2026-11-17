@@ -323,17 +323,7 @@ describe('clipboard sync in the viewer page', () => {
     expect(clipboardButton().disabled).toBe(false);
   });
 
-  test('the choice is remembered on the device only with "Nhớ trên thiết bị này"', () => {
-    connect();
-    clipboardButton().click();
-    expect(localStorage.getItem('uvweb.clipboard')).toBeNull();
-    session.close();
-    viewer.destroy();
-
-    mount();
-    const remember = $<HTMLInputElement>('#remember');
-    remember.checked = true;
-    remember.dispatchEvent(new Event('change'));
+  test('the choice is always remembered on the device', () => {
     connect();
     expect(session.sharing).toEqual([]);
     clipboardButton().click();
@@ -345,11 +335,6 @@ describe('clipboard sync in the viewer page', () => {
     connect();
     expect(clipboardButton().getAttribute('aria-pressed')).toBe('true');
     expect(session.sharing).toEqual([true]);
-    // Unchecking "remember" forgets it.
-    const again = $<HTMLInputElement>('#remember');
-    again.checked = false;
-    again.dispatchEvent(new Event('change'));
-    expect(localStorage.getItem('uvweb.clipboard')).toBeNull();
   });
 
   test('clipboard text never reaches the diagnostics log', async () => {

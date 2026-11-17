@@ -866,33 +866,21 @@ describe('desktop viewer page', () => {
       expect(JSON.parse(localStorage.getItem('uvweb.partners')!)).toEqual([]);
     });
 
-    test('without "Nhớ" nothing is stored, and switching it off clears the list', () => {
+    test('an accepted PC is always added to the saved list', () => {
       connect(peer({ displayName: 'Kho' }));
-      expect(localStorage.getItem('uvweb.partners')).toBeNull();
-      $<HTMLInputElement>('#remember').checked = true;
-      session.emit({ type: 'accepted', peer: peer({ displayName: 'Kho' }) });
       expect($('#saved').hidden).toBe(false);
-      $<HTMLInputElement>('#remember').checked = false;
-      $<HTMLInputElement>('#remember').dispatchEvent(new Event('change'));
-      expect(localStorage.getItem('uvweb.partners')).toBeNull();
-      expect($('#saved').hidden).toBe(true);
+      expect(localStorage.getItem('uvweb.partners')).not.toBeNull();
     });
 
-    test('Worker URL override is kept only with "Nhớ", restored on load, and reset by forgetting the device', () => {
+    test('Worker URL override is always kept and restored on load', () => {
       const url = () => $<HTMLInputElement>('#worker-url');
       url().value = 'wss://relay.example.com';
       url().dispatchEvent(new Event('input'));
-      expect(localStorage.getItem('uvweb.workerUrl')).toBeNull();
-      $<HTMLInputElement>('#remember').checked = true;
-      $<HTMLInputElement>('#remember').dispatchEvent(new Event('change'));
       expect(localStorage.getItem('uvweb.workerUrl')).toBe('wss://relay.example.com');
       viewer.destroy();
       app.replaceChildren();
       viewer = mountViewer(app, { createSession: () => session, workerUrl: 'ws://127.0.0.1:8787', schedule: (cb) => cb() });
       expect(url().value).toBe('wss://relay.example.com');
-      $<HTMLButtonElement>('#forget').click();
-      expect(localStorage.getItem('uvweb.workerUrl')).toBeNull();
-      expect(url().value).toBe('ws://127.0.0.1:8787');
     });
 
     test('a Worker token left in either storage by an older version is deleted on load', () => {

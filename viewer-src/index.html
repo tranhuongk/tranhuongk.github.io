@@ -113,8 +113,8 @@
       label.check { flex-direction: row; align-items: center; gap: 10px; font-size: 14px; font-weight: 400; color: var(--text); }
       .row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
       #connect { flex: 1; min-height: 44px; font-size: 15px; }
-      #forget { align-self: flex-start; margin-left: -10px; }
       #status { margin: 0; font-size: 13px; color: var(--text-2); }
+      #status:empty { display: none; }
       /* Remembered PCs under the connect form: pick fills the ID, × forgets that PC. */
       #saved { display: flex; flex-direction: column; gap: 8px; }
       .saved-title { margin: 0; font-size: 13px; font-weight: 500; color: var(--text-2); }
