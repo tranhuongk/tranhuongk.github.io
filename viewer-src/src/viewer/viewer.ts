@@ -122,12 +122,10 @@ const OVERFLOW_NOTICE ='Hàng đợi chuột/bàn phím bị đầy: đã thả 
 
 const LAYOUT = `
   <header class="top">
-    <h1>Điều khiển máy tính</h1>
-    <p class="lede">Nhập ID và mật khẩu đang hiện trong UltraViewer trên máy Windows.</p>
     <form id="connect-form" autocomplete="off">
-      <label>ID đối tác
+      <label>ID
         <input id="partner" inputmode="numeric" autocomplete="off" required></label>
-      <label>Mật khẩu đối tác
+      <label>Mật khẩu
         <input id="password" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" required></label>
       <label class="check"><input id="remember" type="checkbox"> Nhớ trên thiết bị này</label>
       <div class="row">

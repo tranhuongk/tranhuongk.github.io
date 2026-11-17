@@ -10,9 +10,9 @@ const LEGACY_TOKEN_KEY = 'uvweb.token';
 const MAX_LOG_LINES = 400;
 
 export const REASONS: Record<SessionFailure, string> = {
-  wrongPassword: 'Sai mật khẩu đối tác.',
-  lookupRejected: 'UltraViewer từ chối tìm đối tác (ID sai hoặc máy đang offline?).',
-  invalidLookupRoute: 'UltraViewer trả về địa chỉ đối tác không đầy đủ.',
+  wrongPassword: 'Sai mật khẩu.',
+  lookupRejected: 'UltraViewer từ chối tìm máy (ID sai hoặc máy đang offline?).',
+  invalidLookupRoute: 'UltraViewer trả về địa chỉ máy không đầy đủ.',
   unsupportedVersion: 'Phiên bản UltraViewer trên Windows chưa được hỗ trợ.',
   deadline: 'Hết thời gian chờ (20 s).',
   transportClosed: 'Mất kết nối.',
@@ -51,8 +51,8 @@ export interface ConnectFields {
 /** The first problem with the connect form, as a log line; null when it can be submitted. */
 export function connectFormError(f: ConnectFields): string | null {
   if (!f.workerUrl) return 'Chưa có Worker URL (mở Diagnostics để nhập).';
-  if (!/^[0-9]{1,64}$/.test(f.partnerID)) return 'ID đối tác chỉ gồm chữ số.';
-  if (!f.password) return 'Nhập mật khẩu đối tác.';
+  if (!/^[0-9]{1,64}$/.test(f.partnerID)) return 'ID chỉ gồm chữ số.';
+  if (!f.password) return 'Nhập mật khẩu.';
   return null;
 }
 
