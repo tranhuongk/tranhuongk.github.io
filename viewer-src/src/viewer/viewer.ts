@@ -130,7 +130,6 @@ const LAYOUT = `
       <input id="remember" type="checkbox" checked hidden>
       <div class="row">
         <button id="connect" type="submit" class="primary">Kết nối</button>
-        <button id="disconnect" type="button" class="text" disabled>Huỷ</button>
       </div>
     </form>
     <section id="saved" hidden>
@@ -167,7 +166,6 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
   const partner = $<HTMLInputElement>('partner');
   const password = $<HTMLInputElement>('password');
   const connectButton = $<HTMLButtonElement>('connect');
-  const cancelButton = $<HTMLButtonElement>('disconnect');
   const savedSection = $<HTMLElement>('saved');
   const savedList = $<HTMLUListElement>('saved-list');
   const statusEl = $<HTMLParagraphElement>('status');
@@ -897,7 +895,6 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
   // --- connect / disconnect ---------------------------------------------------------------
   const setConnecting = (busy: boolean) => {
     connectButton.disabled = busy;
-    cancelButton.disabled = !busy;
   };
 
   function showConnected(connected: boolean): void {
@@ -1121,19 +1118,6 @@ export function mountViewer(app: HTMLElement, deps: ViewerDeps): ViewerHandle {
     setStatus(reconnectAttempt > 0 ? `Đang kết nối lại (lần ${reconnectAttempt}/${RECONNECT_DELAYS_MS.length})…` : 'Đang kết nối…');
     setConnecting(true);
   }
-
-  cancelButton.addEventListener('click', () => {
-    if (reconnectTimer !== null) {
-      // Waiting between retries: no session is open, just stop retrying.
-      stopReconnect();
-      setConnecting(false);
-      setStatus('Đã ngắt.');
-      log('Đã dừng tự kết nối lại.');
-      return;
-    }
-    resume = null;
-    session?.close();
-  });
 
   // No pointerup/pointercancel arrives when the page is backgrounded mid-touch: forget the fingers
   // (DesktopInput releases what was held on blur/hidden by itself).
