@@ -167,9 +167,9 @@ export function decodeMessage(bytes: Uint8Array): Incoming {
 }
 
 /** IdPk {id, pk}: what both the ID server and the peer sign. */
-export function decodeIdPk(bytes: Uint8Array): { id: string; pk: Uint8Array } {
+export function decodeIdPk(bytes: Uint8Array): { id: string; pk: Uint8Array; dtlsFingerprint: string } {
   const f = readFields(bytes);
-  return { id: textOf(f, 1), pk: bytesOf(f, 2) ?? new Uint8Array() };
+  return { id: textOf(f, 1), pk: bytesOf(f, 2) ?? new Uint8Array(), dtlsFingerprint: textOf(f, 3) };
 }
 
 export function encodeIdPk(id: string, pk: Uint8Array): Uint8Array<ArrayBuffer> {

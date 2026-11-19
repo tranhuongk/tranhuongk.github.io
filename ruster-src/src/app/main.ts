@@ -35,6 +35,7 @@ const LAYOUT = `
     <summary>Diagnostics</summary>
     <label>Máy chủ RustDesk
       <input id="server" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <pre id="log"></pre>
   </details>
 `;
 
@@ -77,8 +78,10 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
   /** Why the page closed the session itself (shown instead of the plain "Đã ngắt."). */
   let closingNote: string | null = null;
 
+  const logEl = $('log');
   const say = (text: string) => {
     status.textContent = text;
+    if (text) logEl.textContent += `${new Date().toLocaleTimeString('vi-VN', { hour12: false })} ${text}\n`;
   };
 
   const renderSaved = (list: SavedPeer[] = loadPeers()) => {

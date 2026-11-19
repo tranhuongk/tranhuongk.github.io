@@ -4,10 +4,12 @@
 //   peer       ──Hash──▶ LoginRequest(proof) ──▶ LoginResponse ──▶ VideoFrame...
 import { decodeIdPk, decodeMessage, encodeKey, encodeLoginRequest, encodeMouse, encodePublicKey,
   encodeRefreshVideo, encodeTestDelayEcho, encodeVideoReceived, type KeyInput, type PeerSummary, type VideoChunk } from '../proto/message';
-import { CLIENT_VERSION, decodeConnectReply, encodePunchHoleRequest, encodeRequestRelay } from '../proto/rendezvous';
+import { CLIENT_VERSION, decodeConnectReply, encodeIceCandidate, encodePunchHoleRequest, encodeRequestRelay, type RelayOffer } from '../proto/rendezvous';
 import { fromBase64, loginProof, makeKeyOffer, openSigned, PUBLIC_SERVER_KEY, SecretStream } from './crypto';
 import { Pipe, PipeError } from './pipe';
 import { idSocketUrl, relaySocketUrl, type SocketFactory } from './rendezvous';
+import type { Transport } from './transport';
+import { DEFAULT_ICE_SERVERS, isMdnsCandidate, WebRtcTransport, type PeerConnectionFactory } from './webrtc';
 
 export class SessionError extends Error {
   constructor(readonly kind: 'offline' | 'refused' | 'old' | 'handshake' | 'login' | 'transport' | 'codec', message: string) {
@@ -36,12 +38,24 @@ export interface SessionOptions {
   /** Peer id shown on the other side; any label. */
   myId?: string;
   myName?: string;
+  /** Try a direct WebRTC channel next to the relay (default: when the browser has WebRTC). */
+  webrtc?: boolean;
+  peerConnection?: PeerConnectionFactory;
+  iceServers?: RTCIceServer[];
+  /** How long the relay waits for WebRTC to open before being used (ms). */
+  webrtcGraceMs?: number;
 }
 
-const STEP_TIMEOUT_MS = 15_000;
+const STEP_TIMEOUT_MS = 30_000;
+export const WEBRTC_OPEN_MS = 10_000;
+export const WEBRTC_GRACE_MS = 3_000;
+const ICE_RESEND_MS = 400;
 
 export class RustSession {
-  private relay: Pipe | null = null;
+  private relay: Transport | null = null;
+  private idPipe: Pipe | null = null;
+  /** Which path carries the session: shown in the status line and Diagnostics. */
+  path: 'relay' | 'webrtc' | null = null;
   private password: string | null;
   private hash: { salt: string; challenge: string } | null = null;
   private done = false;
@@ -74,6 +88,7 @@ export class RustSession {
     if (this.done) return;
     this.done = true;
     this.relay?.close();
+    this.idPipe?.close();
     this.o.events.closed(error);
   }
 
@@ -86,30 +101,149 @@ export class RustSession {
   }
 
   private async connect(): Promise<void> {
-    this.status('Hỏi máy chủ RustDesk…');
+    const t0 = Date.now();
+    const step = (text: string) => this.status(`${text} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+    step('Hỏi máy chủ RustDesk…');
     const id = new Pipe(this.open(idSocketUrl(this.o.server)), 'ID server');
+    this.idPipe = id;
     await id.open();
-    id.send(encodePunchHoleRequest(this.o.peerId));
-    const reply = decodeConnectReply(await id.next(STEP_TIMEOUT_MS));
-    id.close();
-    if (reply.kind === 'failure') {
-      throw new SessionError('offline', reply.detail || 'Máy đích không trực tuyến hoặc ID không tồn tại.');
+
+    let rtc: WebRtcTransport | null = null;
+    let offerEnvelope = '';
+    if (this.o.webrtc ?? WebRtcTransport.isSupported()) {
+      try {
+        rtc = new WebRtcTransport(this.o.iceServers ?? DEFAULT_ICE_SERVERS, this.o.peerConnection);
+        offerEnvelope = await rtc.createOffer();
+        const sendCandidate = (candidate: string) => {
+          if (isMdnsCandidate(candidate)) return;
+          const bytes = encodeIceCandidate(this.o.peerId, rtc!.sessionKey, candidate);
+          try {
+            id.send(bytes);
+            setTimeout(() => {
+              if (!this.done) {
+                try {
+                  id.send(bytes);
+                } catch {
+                  // ID socket closed: the first copy was enough
+                }
+              }
+            }, ICE_RESEND_MS);
+          } catch {
+            // ID socket closed
+          }
+        };
+        rtc.onLocalCandidate(sendCandidate);
+      } catch {
+        rtc?.close();
+        rtc = null;
+        offerEnvelope = '';
+      }
     }
-    if (reply.kind !== 'relay') throw new SessionError('handshake', `Phản hồi lạ từ máy chủ (trường ${reply.field}).`);
-    const { offer } = reply;
+
+    id.send(encodePunchHoleRequest(this.o.peerId, '', offerEnvelope));
+    const offer = await this.awaitRelayOffer(id, rtc);
+    step('Máy chủ đã trả lời');
+    // Keep feeding the peer's ICE candidates to WebRTC while the transports race.
+    void this.pumpIce(id, rtc);
     if (offer.refuseReason) throw new SessionError('refused', offer.refuseReason);
     if (!offer.version) throw new SessionError('old', 'Phiên bản RustDesk bên máy đích quá cũ, không hỗ trợ web.');
 
-    this.status('Nối relay…');
-    const relay = new Pipe(this.open(relaySocketUrl(offer.relayServer, this.o.server)), 'relay');
-    this.relay = relay;
-    await relay.open();
-    relay.send(encodeRequestRelay(offer.uuid));
-    await this.secure(relay, offer.signedPk);
-    this.status('Đã mã hoá, chờ máy đích…');
+    if (rtc && offer.webrtcAnswer) {
+      try {
+        await rtc.setRemoteAnswer(offer.webrtcAnswer);
+      } catch {
+        rtc.close();
+        rtc = null;
+      }
+    } else {
+      rtc?.close();
+      rtc = null;
+    }
+
+    step('Nối relay…');
+    const relayPromise = this.openRelay(offer);
+    const chosen = await this.chooseTransport(relayPromise, rtc);
+    this.relay = chosen.transport;
+    this.path = chosen.path;
+    await this.secure(chosen.transport, offer.signedPk, chosen.path === 'webrtc' ? rtc : null);
+    id.close();
+    step(chosen.path === 'webrtc' ? 'Đã mã hoá (WebRTC trực tiếp), chờ máy đích…' : 'Đã mã hoá (relay), chờ máy đích…');
   }
 
-  private async secure(relay: Pipe, signedPk: Uint8Array): Promise<void> {
+  private async awaitRelayOffer(id: Pipe, rtc: WebRtcTransport | null): Promise<RelayOffer> {
+    for (;;) {
+      const reply = decodeConnectReply(await id.next(STEP_TIMEOUT_MS));
+      if (reply.kind === 'relay') return reply.offer;
+      if (reply.kind === 'failure') {
+        throw new SessionError('offline', reply.detail || 'Máy đích không trực tuyến hoặc ID không tồn tại.');
+      }
+      if (reply.kind === 'ice') {
+        if (rtc && reply.sessionKey === rtc.sessionKey) void rtc.addRemoteCandidate(reply.candidate);
+        continue;
+      }
+      throw new SessionError('handshake', `Phản hồi lạ từ máy chủ (trường ${reply.field}).`);
+    }
+  }
+
+  /** After the offer is answered, the ID socket still carries the peer's candidates. */
+  private async pumpIce(id: Pipe, rtc: WebRtcTransport | null): Promise<void> {
+    try {
+      while (!this.done) {
+        const reply = decodeConnectReply(await id.next());
+        if (rtc && reply.kind === 'ice' && reply.sessionKey === rtc.sessionKey) void rtc.addRemoteCandidate(reply.candidate);
+      }
+    } catch {
+      // the ID socket closes once the transport is chosen
+    } finally {
+      id.close();
+    }
+  }
+
+  private async openRelay(offer: RelayOffer): Promise<Pipe> {
+    const relay = new Pipe(this.open(relaySocketUrl(offer.relayServer, this.o.server)), 'relay');
+    try {
+      await relay.open();
+    } catch (e) {
+      relay.close();
+      throw e;
+    }
+    relay.send(encodeRequestRelay(offer.uuid));
+    return relay;
+  }
+
+  /** Direct WebRTC wins when it opens (within the grace window) over a non-TURN path; otherwise the relay. */
+  private async chooseTransport(
+    relayPromise: Promise<Pipe>,
+    rtc: WebRtcTransport | null,
+  ): Promise<{ transport: Transport; path: 'relay' | 'webrtc' }> {
+    const settled = <T>(p: Promise<T>) => p.then((value) => ({ ok: true as const, value }), (error: unknown) => ({ ok: false as const, error }));
+    const relay = settled(relayPromise);
+    if (!rtc) {
+      const r = await relay;
+      if (!r.ok) throw r.error;
+      return { transport: r.value, path: 'relay' };
+    }
+    const grace = this.o.webrtcGraceMs ?? WEBRTC_GRACE_MS;
+    const direct = settled(rtc.waitOpen(WEBRTC_OPEN_MS).then(async () => ((await rtc.isRelayed()) ? Promise.reject(new Error('turn')) : true)));
+    const first = await Promise.race([relay.then(() => 'relay' as const), direct.then(() => 'rtc' as const)]);
+    let useRtc: boolean;
+    if (first === 'rtc') useRtc = (await direct).ok;
+    else {
+      const window = new Promise<'late'>((resolve) => setTimeout(() => resolve('late'), grace));
+      const second = await Promise.race([direct, window]);
+      useRtc = second !== 'late' && second.ok;
+    }
+    const r = await relay;
+    if (useRtc) {
+      if (r.ok) r.value.close();
+      return { transport: rtc, path: 'webrtc' };
+    }
+    rtc.close();
+    if (!r.ok) throw r.error;
+    return { transport: r.value, path: 'relay' };
+  }
+
+  private async secure(transport: Transport, signedPk: Uint8Array, rtc: WebRtcTransport | null): Promise<void> {
     const serverKey = fromBase64(this.o.serverKey ?? PUBLIC_SERVER_KEY);
     const vouched = signedPk.length ? openSigned(signedPk, serverKey) : null;
     if (!vouched) throw new SessionError('handshake', 'Chữ ký khoá của máy chủ RustDesk không hợp lệ.');
@@ -117,7 +251,7 @@ export class RustSession {
     if (vouchedPeer.id !== this.o.peerId || vouchedPeer.pk.length !== 32) {
       throw new SessionError('handshake', 'Khoá do máy chủ cấp không khớp ID máy đích.');
     }
-    const first = decodeMessage(await relay.next(STEP_TIMEOUT_MS));
+    const first = decodeMessage(await transport.next(STEP_TIMEOUT_MS));
     if (first.kind !== 'signedId') throw new SessionError('handshake', 'Máy đích không gửi danh tính đã ký.');
     const opened = openSigned(first.id, vouchedPeer.pk);
     if (!opened) throw new SessionError('handshake', 'Danh tính của máy đích không xác minh được.');
@@ -125,9 +259,12 @@ export class RustSession {
     if (peer.id !== this.o.peerId || peer.pk.length !== 32) {
       throw new SessionError('handshake', 'Danh tính của máy đích không khớp ID.');
     }
+    if (rtc && (!peer.dtlsFingerprint || peer.dtlsFingerprint !== rtc.remoteFingerprint)) {
+      throw new SessionError('handshake', 'Chứng chỉ DTLS của kênh WebRTC không khớp danh tính máy đích (có thể bị chen giữa).');
+    }
     const offer = makeKeyOffer(peer.pk, this.o.random);
-    relay.send(encodePublicKey(offer.asymmetric, offer.symmetric));
-    relay.secure(new SecretStream(offer.key));
+    transport.send(encodePublicKey(offer.asymmetric, offer.symmetric));
+    if (!rtc) transport.secure(new SecretStream(offer.key));
   }
 
   submitPassword(password: string): void {

@@ -1,5 +1,6 @@
 // A WebSocket as a queue of binary frames, optionally behind the session's secretbox stream.
 import type { SecretStream } from './crypto';
+import type { Transport } from './transport';
 
 export class PipeError extends Error {
   constructor(readonly kind: 'open' | 'timeout' | 'closed' | 'decrypt', message: string) {
@@ -8,7 +9,7 @@ export class PipeError extends Error {
   }
 }
 
-export class Pipe {
+export class Pipe implements Transport {
   private queue: Uint8Array[] = [];
   private waiter: { resolve: (b: Uint8Array) => void; reject: (e: Error) => void } | null = null;
   private stream: SecretStream | null = null;

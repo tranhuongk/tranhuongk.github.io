@@ -4,7 +4,8 @@ import { decodeMessage, encodeIdPk, FIELD, MOUSE, BUTTON, CONTROL_KEY } from '..
 import { boolField, lengthDelimited, readFields, stringField, varintField } from '../proto/wire';
 import { decodeIdPk } from '../proto/message';
 import { loginProof, SecretStream } from './crypto';
-import { RustSession, type SessionEvents } from './session';
+import { RustSession, type SessionEvents, type SessionOptions } from './session';
+import { encodeEndpoint } from './webrtc';
 
 const PEER_ID = '156993080';
 const PASSWORD = 'correct horse';
@@ -18,6 +19,9 @@ class World {
   readonly hostBox = nacl.box.keyPair();
   readonly urls: string[] = [];
   readonly clientFrames: Uint8Array[] = [];
+  readonly idFrames: Uint8Array[] = [];
+  /** webrtc_sdp_answer the ID server returns (empty: the peer took no offer). */
+  webrtcAnswer = '';
   secret: SecretStream | null = null;
   online = true;
   relayServer = 'rs-ny.rustdesk.com:21117';
@@ -35,7 +39,8 @@ class World {
   relayResponse(): Uint8Array {
     const pk = nacl.sign(encodeIdPk(PEER_ID, this.hostSign.publicKey), this.wrongSignature ? nacl.sign.keyPair().secretKey : this.server.secretKey);
     const body = [...stringField(2, 'uuid-1'), ...stringField(3, this.relayServer), ...lengthDelimited(5, pk),
-      ...(this.refuse ? stringField(6, this.refuse) : []), ...(this.version ? stringField(7, this.version) : [])];
+      ...(this.refuse ? stringField(6, this.refuse) : []), ...(this.version ? stringField(7, this.version) : []),
+      ...(this.webrtcAnswer ? stringField(12, this.webrtcAnswer) : [])];
     return wrap(19, body);
   }
 
@@ -72,6 +77,8 @@ class FakeSocket {
   secured = false;
   send(data: Uint8Array): void {
     if (this.kind === 'id') {
+      this.world.idFrames.push(data);
+      if (readFields(data)[0]?.field !== 8) return;
       this.deliver(this.world.online ? this.world.relayResponse() : this.world.failure());
       return;
     }
@@ -125,7 +132,7 @@ interface Recorder {
   closed: ({ kind: string; message: string } | null)[];
 }
 
-function run(world: World, password?: string) {
+function run(world: World, password?: string, extra: Partial<SessionOptions> = {}) {
   const rec: Recorder = { statuses: [], needs: [], ready: [], video: [], closed: [] };
   const events: SessionEvents = {
     status: (t) => rec.statuses.push(t),
@@ -136,7 +143,7 @@ function run(world: World, password?: string) {
   };
   const session = new RustSession({
     peerId: PEER_ID, server: 'wss://rs-ny.rustdesk.com', password, events, open: world.open,
-    serverKey: btoa(String.fromCharCode(...world.server.publicKey)),
+    serverKey: btoa(String.fromCharCode(...world.server.publicKey)), ...extra,
   });
   const done = session.run();
   return { rec, session, done };
@@ -222,6 +229,30 @@ describe('RustSession', () => {
     expect(w.clientFrames).toEqual([]);
   });
 
+  test('with WebRTC offered: the offer goes in the request, our candidates reach the ID server, and a channel that never opens falls back to the relay', async () => {
+    const w = new World();
+    const SDP = 'v=0\r\na=fingerprint:sha-256 AA\r\nm=application 9 x\r\na=candidate:1 1 udp 1 192.0.2.1 5000 typ host\r\n';
+    w.webrtcAnswer = encodeEndpoint('answer', SDP);
+    let pc!: FakePeer;
+    const { session, rec } = run(w, PASSWORD, {
+      webrtc: true, webrtcGraceMs: 50,
+      peerConnection: () => (pc = new FakePeer(SDP)) as unknown as RTCPeerConnection,
+    });
+    await until(() => w.idFrames.length >= 1);
+    const request = readFields(readFields(w.idFrames[0]!)[0]!.value as Uint8Array);
+    const offer = new TextDecoder().decode(request.find((f) => f.field === 12)!.value as Uint8Array);
+    expect(offer.startsWith('webrtc://')).toBe(true);
+    expect(request.find((f) => f.field === 8)?.value).toBe(1); // force_relay
+    pc.onicecandidate!({ candidate: { candidate: 'candidate:9 1 udp 1 198.51.100.7 6000 typ srflx', toJSON: () => ({ candidate: 'candidate:9 1 udp 1 198.51.100.7 6000 typ srflx' }) } });
+    await until(() => w.idFrames.some((f) => readFields(f)[0]?.field === 29));
+    const ice = readFields(readFields(w.idFrames.find((f) => readFields(f)[0]?.field === 29)!)[0]!.value as Uint8Array);
+    expect(new TextDecoder().decode(ice.find((f) => f.field === 3)!.value as Uint8Array)).toBe('sha-256 AA');
+    await until(() => rec.video.length === 1, 4000);
+    expect(session.path).toBe('relay');
+    expect(rec.ready).toHaveLength(1);
+    session.close();
+  });
+
   test('loginProof is sha256(sha256(password+salt)+challenge)', async () => {
     const sha = async (b: Uint8Array<ArrayBuffer>) => new Uint8Array(await crypto.subtle.digest('SHA-256', b));
     const inner = await sha(enc.encode('pw' + 'salt'));
@@ -230,6 +261,27 @@ describe('RustSession', () => {
   });
 
   test('decodeIdPk reads back what encodeIdPk wrote', () => {
-    expect(decodeIdPk(encodeIdPk('42', new Uint8Array([1, 2])))).toEqual({ id: '42', pk: new Uint8Array([1, 2]) });
+    expect(decodeIdPk(encodeIdPk('42', new Uint8Array([1, 2])))).toEqual({ id: '42', pk: new Uint8Array([1, 2]), dtlsFingerprint: '' });
   });
 });
+
+class FakePeer {
+  dc = { binaryType: '', readyState: 'connecting', send() {}, close() {}, onopen: null, onclose: null, onmessage: null };
+  onicecandidate: ((e: unknown) => void) | null = null;
+  onconnectionstatechange: (() => void) | null = null;
+  connectionState = 'new';
+  constructor(private readonly sdp: string) {}
+  createDataChannel() {
+    return this.dc;
+  }
+  async createOffer() {
+    return { type: 'offer', sdp: this.sdp };
+  }
+  async setLocalDescription() {}
+  async setRemoteDescription() {}
+  async addIceCandidate() {}
+  async getStats() {
+    return new Map();
+  }
+  close() {}
+}

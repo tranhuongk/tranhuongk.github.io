@@ -48,11 +48,12 @@ export function isPeerOnline(states: Uint8Array, index: number): boolean {
 const FIELD_PUNCH_HOLE_REQUEST = 8;
 const FIELD_REQUEST_RELAY = 18;
 const FIELD_RELAY_RESPONSE = 19;
+const FIELD_ICE_CANDIDATE = 29;
 export const CLIENT_VERSION = '1.5.3';
 const NAT_SYMMETRIC = 2;
 
 /** PunchHoleRequest forcing the relay path (the browser cannot punch holes). */
-export function encodePunchHoleRequest(peerId: string, licenceKey = ''): Uint8Array<ArrayBuffer> {
+export function encodePunchHoleRequest(peerId: string, licenceKey = '', webrtcOffer = ''): Uint8Array<ArrayBuffer> {
   const body = [
     ...stringField(1, peerId),
     ...varintField(2, NAT_SYMMETRIC),
@@ -60,6 +61,7 @@ export function encodePunchHoleRequest(peerId: string, licenceKey = ''): Uint8Ar
     ...varintField(4, 0),
     ...stringField(6, CLIENT_VERSION),
     ...varintField(8, 1),
+    ...(webrtcOffer ? stringField(12, webrtcOffer) : []),
   ];
   return new Uint8Array(lengthDelimited(FIELD_PUNCH_HOLE_REQUEST, body));
 }
@@ -77,10 +79,13 @@ export interface RelayOffer {
   signedPk: Uint8Array;
   version: string;
   refuseReason: string;
+  /** `webrtc://…` endpoint of the peer, when it took the WebRTC offer. */
+  webrtcAnswer: string;
 }
 
 export type ConnectReply =
   | { kind: 'relay'; offer: RelayOffer }
+  | { kind: 'ice'; sessionKey: string; candidate: string }
   | { kind: 'failure'; failure: number; detail: string }
   | { kind: 'other'; field: number };
 
@@ -97,11 +102,21 @@ export function decodeConnectReply(bytes: Uint8Array): ConnectReply {
         signedPk: bytesOf(inner, 5) ?? new Uint8Array(),
         refuseReason: textOf(inner, 6),
         version: textOf(inner, 7),
+        webrtcAnswer: textOf(inner, 12),
       },
     };
+  }
+  if (top.field === FIELD_ICE_CANDIDATE) {
+    return { kind: 'ice', sessionKey: textOf(inner, 3), candidate: textOf(inner, 4) };
   }
   if (top.field === FIELD_PUNCH_HOLE_RESPONSE) {
     return { kind: 'failure', failure: numberOf(inner, 3), detail: textOf(inner, 7) };
   }
   return { kind: 'other', field: top.field };
+}
+
+/** Our ICE candidate (JSON of RTCIceCandidate) for the peer, keyed by the offer's DTLS fingerprint. */
+export function encodeIceCandidate(peerId: string, sessionKey: string, candidate: string): Uint8Array<ArrayBuffer> {
+  const body = [...stringField(1, peerId), ...stringField(3, sessionKey), ...stringField(4, candidate)];
+  return new Uint8Array(lengthDelimited(FIELD_ICE_CANDIDATE, body));
 }
