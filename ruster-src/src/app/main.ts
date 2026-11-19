@@ -3,7 +3,10 @@ import { checkPeers, isValidPeerId, DEFAULT_SERVER } from '../net/rendezvous';
 import { RustSession, type SessionError, type SessionEvents, type SessionOptions } from '../net/session';
 import type { PeerSummary } from '../proto/message';
 import { attachInput, type Geometry } from './input';
-import { loadPeers, rememberPeer, removePeer, type SavedPeer } from './saved-peers';
+import {
+  avatarHue, avatarLetter, displayName, formatId, loadPeers, MAX_NAME_LENGTH, relativeTime, rememberPeer, removePeer,
+  renamePeer, type SavedPeer,
+} from './saved-peers';
 import { loadServer, saveServer } from './server-setting';
 import { VideoPlayer } from './video';
 
@@ -15,11 +18,10 @@ const LAYOUT = `
       <label>Mật khẩu
         <input id="password" type="password" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
       <div class="row">
-        <button id="connect" type="submit" class="primary">Kết nối</button>
+        <button id="connect" type="submit" class="primary">Enter</button>
       </div>
     </form>
-    <section id="saved" hidden>
-      <h2 class="saved-title">Máy đã kết nối</h2>
+    <section id="saved" aria-label="Máy đã kết nối" hidden>
       <ul id="saved-list"></ul>
     </section>
     <p id="status" role="status"></p>
@@ -84,34 +86,87 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     if (text) logEl.textContent += `${new Date().toLocaleTimeString('vi-VN', { hour12: false })} ${text}\n`;
   };
 
+  /** Id of the machine whose name is being edited in place, if any. */
+  let editingId: string | null = null;
+
+  const button = (className: string, id: string, label: string, text: string): HTMLButtonElement => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = className;
+    b.dataset.id = id;
+    b.setAttribute('aria-label', label);
+    b.textContent = text;
+    return b;
+  };
+
+  const renderEditor = (p: SavedPeer): HTMLFormElement => {
+    const f = document.createElement('form');
+    f.className = 'peer-edit-form';
+    f.dataset.id = p.id;
+    const input = document.createElement('input');
+    input.className = 'peer-edit-input';
+    input.maxLength = MAX_NAME_LENGTH;
+    input.value = p.name ?? '';
+    input.placeholder = p.hostname || formatId(p.id);
+    input.setAttribute('aria-label', `Tên của ${formatId(p.id)}`);
+    input.autocomplete = 'off';
+    const save = document.createElement('button');
+    save.type = 'submit';
+    save.className = 'primary peer-save';
+    save.textContent = 'Lưu';
+    const cancel = button('text peer-cancel', p.id, 'Huỷ đổi tên', 'Huỷ');
+    f.append(input, save, cancel);
+    return f;
+  };
+
+  const renderCard = (p: SavedPeer): HTMLLIElement => {
+    const li = document.createElement('li');
+    li.className = 'peer';
+    li.dataset.id = p.id;
+    if (p.id === editingId) {
+      li.classList.add('editing');
+      li.append(renderEditor(p));
+      return li;
+    }
+    const pick = document.createElement('button');
+    pick.type = 'button';
+    pick.className = 'saved-pick';
+    pick.dataset.id = p.id;
+    const avatar = document.createElement('span');
+    avatar.className = 'peer-avatar';
+    avatar.style.setProperty('--hue', String(avatarHue(p.id)));
+    avatar.textContent = avatarLetter(p);
+    const text = document.createElement('span');
+    text.className = 'peer-text';
+    const name = document.createElement('span');
+    name.className = 'peer-name';
+    name.textContent = displayName(p) || formatId(p.id);
+    const meta = document.createElement('span');
+    meta.className = 'peer-meta';
+    meta.textContent = displayName(p) ? `${formatId(p.id)} · ${relativeTime(p.lastUsed, deps.now())}` : relativeTime(p.lastUsed, deps.now());
+    text.append(name, meta);
+    const state = document.createElement('span');
+    state.className = 'saved-status';
+    const online = onlineById.get(p.id);
+    state.dataset.kind = online === undefined ? '' : online ? 'online' : 'offline';
+    state.textContent = online === undefined ? '' : online ? 'Trực tuyến' : 'Ngoại tuyến';
+    pick.append(avatar, text, state);
+    li.append(
+      pick,
+      button('text peer-edit', p.id, `Đổi tên ${displayName(p) || formatId(p.id)}`, '✎'),
+      button('text saved-del', p.id, `Xoá ${displayName(p) || formatId(p.id)}`, '×'),
+    );
+    return li;
+  };
+
   const renderSaved = (list: SavedPeer[] = loadPeers()) => {
     savedSection.hidden = list.length === 0;
-    savedList.replaceChildren(
-      ...list.map((p) => {
-        const li = document.createElement('li');
-        const pick = document.createElement('button');
-        pick.type = 'button';
-        pick.className = 'saved-pick';
-        pick.dataset.id = p.id;
-        const id = document.createElement('span');
-        id.className = 'saved-id';
-        id.textContent = p.id;
-        const state = document.createElement('span');
-        state.className = 'saved-status';
-        const online = onlineById.get(p.id);
-        state.dataset.kind = online ? 'online' : '';
-        state.textContent = online === undefined ? '' : online ? 'Trực tuyến' : 'Ngoại tuyến';
-        pick.append(id, state);
-        const del = document.createElement('button');
-        del.type = 'button';
-        del.className = 'text saved-del';
-        del.dataset.id = p.id;
-        del.setAttribute('aria-label', `Xoá ${p.id}`);
-        del.textContent = '×';
-        li.append(pick, del);
-        return li;
-      }),
-    );
+    savedList.replaceChildren(...list.map(renderCard));
+    const input = savedList.querySelector<HTMLInputElement>('.peer-edit-input');
+    if (input && document.activeElement !== input) {
+      input.focus();
+      input.select();
+    }
   };
 
   const refreshOnline = () => {
@@ -120,7 +175,7 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     void deps.checkPeers(ids, server.value).then((r) => {
       if (!alive || !r.ok) return;
       onlineById = r.online;
-      renderSaved();
+      if (editingId === null) renderSaved(); // never rebuild the card whose name is being typed
     });
   };
 
@@ -176,7 +231,7 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     },
     ready: (p) => {
       say('');
-      renderSaved(rememberPeer(id, deps.now()));
+      renderSaved(rememberPeer(id, deps.now(), p.hostname));
       startScreen(p);
     },
     video: (frames) => player?.feed(frames),
@@ -188,14 +243,40 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     },
   });
 
+  const finishEdit = (save: boolean, id: string, value: string) => {
+    editingId = null;
+    renderSaved(save ? renamePeer(id, value) : loadPeers());
+  };
+
   savedList.addEventListener('click', (event) => {
     const target = (event.target as HTMLElement).closest<HTMLButtonElement>('button');
-    if (!target?.dataset.id) return;
-    if (target.classList.contains('saved-del')) renderSaved(removePeer(target.dataset.id));
-    else {
-      peer.value = target.dataset.id;
+    const id = target?.dataset.id;
+    if (!target || !id) return;
+    if (target.classList.contains('saved-del')) {
+      if (editingId === id) editingId = null;
+      renderSaved(removePeer(id));
+    } else if (target.classList.contains('peer-edit')) {
+      editingId = id;
+      renderSaved();
+    } else if (target.classList.contains('peer-cancel')) {
+      finishEdit(false, id, '');
+    } else if (target.classList.contains('saved-pick')) {
+      peer.value = id;
       password.focus();
     }
+  });
+  savedList.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const f = event.target as HTMLFormElement;
+    const id = f.dataset.id;
+    if (!id) return;
+    finishEdit(true, id, f.querySelector<HTMLInputElement>('.peer-edit-input')?.value ?? '');
+  });
+  savedList.addEventListener('keydown', (event) => {
+    const input = event.target as HTMLElement;
+    if (event.key !== 'Escape' || !input.classList.contains('peer-edit-input') || editingId === null) return;
+    event.preventDefault();
+    finishEdit(false, editingId, '');
   });
   server.addEventListener('input', () => saveServer(server.value));
   disconnect.addEventListener('click', () => session?.close());
