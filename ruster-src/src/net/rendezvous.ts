@@ -25,24 +25,26 @@ export function idSocketUrl(server: string): string {
   return `wss://${trimmed}${ID_PATH}`;
 }
 
-export function checkPeer(
-  id: string,
+/** Online state of every id in one round trip; ids missing from the answer count as offline. */
+export function checkPeers(
+  ids: string[],
   server: string,
   open: SocketFactory = (url) => new WebSocket(url),
   timeoutMs = LOOKUP_TIMEOUT_MS,
-): Promise<PeerStatus> {
-  if (!isValidPeerId(id)) return Promise.resolve({ kind: 'error', detail: 'ID không hợp lệ.' });
+): Promise<{ ok: true; online: Map<string, boolean> } | { ok: false; detail: string }> {
+  const valid = ids.filter(isValidPeerId);
+  if (valid.length === 0) return Promise.resolve({ ok: true, online: new Map() });
   return new Promise((resolve) => {
     let ws: WebSocket;
     try {
       ws = open(idSocketUrl(server));
     } catch (e) {
-      resolve({ kind: 'error', detail: `Không mở được kết nối: ${(e as Error).message}` });
+      resolve({ ok: false, detail: `Không mở được kết nối: ${(e as Error).message}` });
       return;
     }
     ws.binaryType = 'arraybuffer';
     let done = false;
-    const finish = (status: PeerStatus) => {
+    const finish = (result: { ok: true; online: Map<string, boolean> } | { ok: false; detail: string }) => {
       if (done) return;
       done = true;
       clearTimeout(timer);
@@ -51,21 +53,49 @@ export function checkPeer(
       } catch {
         // already closed
       }
-      resolve(status);
+      resolve(result);
     };
-    const timer = setTimeout(() => finish({ kind: 'error', detail: 'Máy chủ RustDesk không trả lời.' }), timeoutMs);
-    ws.onopen = () => ws.send(encodeOnlineRequest('ruster', [id]));
-    ws.onerror = () => finish({ kind: 'error', detail: 'Không kết nối được tới máy chủ RustDesk.' });
-    ws.onclose = () => finish({ kind: 'error', detail: 'Máy chủ RustDesk đóng kết nối.' });
+    const timer = setTimeout(() => finish({ ok: false, detail: 'Máy chủ RustDesk không trả lời.' }), timeoutMs);
+    ws.onopen = () => ws.send(encodeOnlineRequest('ruster', valid));
+    ws.onerror = () => finish({ ok: false, detail: 'Không kết nối được tới máy chủ RustDesk.' });
+    ws.onclose = () => finish({ ok: false, detail: 'Máy chủ RustDesk đóng kết nối.' });
     ws.onmessage = (event) => {
       try {
         const reply = decodeRendezvous(new Uint8Array(event.data as ArrayBuffer));
-        if (reply.kind === 'online') finish(isPeerOnline(reply.states, 0) ? { kind: 'online' } : { kind: 'offline' });
-        else if (reply.kind === 'punchHoleFailure') finish({ kind: 'offline' });
-        else finish({ kind: 'error', detail: `Phản hồi lạ (trường ${reply.field}).` });
+        if (reply.kind !== 'online') {
+          finish({ ok: false, detail: `Phản hồi lạ (trường ${reply.kind === 'other' ? reply.field : 'lỗi'}).` });
+          return;
+        }
+        finish({ ok: true, online: new Map(valid.map((id, i) => [id, isPeerOnline(reply.states, i)])) });
       } catch (e) {
-        finish({ kind: 'error', detail: `Phản hồi không đọc được: ${(e as Error).message}` });
+        finish({ ok: false, detail: `Phản hồi không đọc được: ${(e as Error).message}` });
       }
     };
   });
+}
+
+export async function checkPeer(
+  id: string,
+  server: string,
+  open: SocketFactory = (url) => new WebSocket(url),
+  timeoutMs = LOOKUP_TIMEOUT_MS,
+): Promise<PeerStatus> {
+  if (!isValidPeerId(id)) return { kind: 'error', detail: 'ID không hợp lệ.' };
+  const r = await checkPeers([id], server, open, timeoutMs);
+  if (!r.ok) return { kind: 'error', detail: r.detail };
+  return r.online.get(id) ? { kind: 'online' } : { kind: 'offline' };
+}
+
+/** `relay_server` from the ID server → the relay's WebSocket URL (same rules as the official web client). */
+export function relaySocketUrl(relayServer: string, fallbackServer: string): string {
+  if (!relayServer.trim()) {
+    const own = fallbackServer.trim().replace(/\/+$/, '').replace(/\/ws\/id$/, '');
+    if (/^wss?:\/\//.test(own)) return `${own}/ws/relay`;
+  }
+  const raw = relayServer.trim() || fallbackServer.trim();
+  if (/^wss?:\/\//.test(raw)) return raw;
+  const ipv4 = raw.match(/^(\d{1,3}(?:\.\d{1,3}){3})(?::(\d+))?$/);
+  if (ipv4) return `wss://${ipv4[1]}:${ipv4[2] ? Number(ipv4[2]) + 2 : 21119}`;
+  const host = raw.replace(/^[a-z]+:\/\//, '').replace(/\/.*$/, '').replace(/:\d+$/, '');
+  return `wss://${host}/ws/relay`;
 }

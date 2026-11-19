@@ -1,0 +1,107 @@
+// Browser mouse and keyboard events → RustDesk input messages.
+import { BUTTON, CONTROL_KEY, MOUSE, type KeyInput } from '../proto/message';
+
+export interface InputTarget {
+  sendMouse(type: number, button: number, x: number, y: number): void;
+  sendKey(key: KeyInput): void;
+}
+
+export interface Geometry {
+  /** Remote display size in pixels. */
+  width: number;
+  height: number;
+  /** Top-left of that display on the remote desktop. */
+  originX: number;
+  originY: number;
+}
+
+/** Canvas client coordinates → absolute remote coordinates, clamped to the display. */
+export function toRemote(
+  clientX: number, clientY: number, rect: { left: number; top: number; width: number; height: number }, g: Geometry,
+): { x: number; y: number } {
+  const fx = rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
+  const fy = rect.height > 0 ? (clientY - rect.top) / rect.height : 0;
+  const clamp = (v: number, max: number) => Math.min(Math.max(Math.round(v * max), 0), Math.max(max - 1, 0));
+  return { x: g.originX + clamp(fx, g.width), y: g.originY + clamp(fy, g.height) };
+}
+
+const BUTTON_OF: Record<number, number> = { 0: BUTTON.left, 1: BUTTON.middle, 2: BUTTON.right, 3: BUTTON.back, 4: BUTTON.forward };
+
+const CONTROL_OF_CODE: Record<string, number> = {
+  Enter: CONTROL_KEY.Return, NumpadEnter: CONTROL_KEY.Return, Backspace: CONTROL_KEY.Backspace, Tab: CONTROL_KEY.Tab,
+  Escape: CONTROL_KEY.Escape, Delete: CONTROL_KEY.Delete, Insert: CONTROL_KEY.Insert, Home: CONTROL_KEY.Home,
+  End: CONTROL_KEY.End, PageUp: CONTROL_KEY.PageUp, PageDown: CONTROL_KEY.PageDown, ArrowUp: CONTROL_KEY.UpArrow,
+  ArrowDown: CONTROL_KEY.DownArrow, ArrowLeft: CONTROL_KEY.LeftArrow, ArrowRight: CONTROL_KEY.RightArrow,
+  CapsLock: CONTROL_KEY.CapsLock, F1: CONTROL_KEY.F1, F2: CONTROL_KEY.F2, F3: CONTROL_KEY.F3, F4: CONTROL_KEY.F4,
+  F5: CONTROL_KEY.F5, F6: CONTROL_KEY.F6, F7: CONTROL_KEY.F7, F8: CONTROL_KEY.F8, F9: CONTROL_KEY.F9,
+  F10: CONTROL_KEY.F10, F11: CONTROL_KEY.F11, F12: CONTROL_KEY.F12,
+};
+
+const MODIFIER_CODES = new Set(['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight']);
+
+/** The KeyInput for one keydown, or null for keys that need no message (bare modifiers, IME). */
+export function keyInputFor(e: Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'altKey' | 'metaKey' | 'shiftKey' | 'isComposing'>): KeyInput | null {
+  if (e.isComposing || e.key === 'Process' || e.key === 'Dead') return null;
+  if (MODIFIER_CODES.has(e.code)) return null;
+  const modifiers: number[] = [];
+  if (e.ctrlKey) modifiers.push(CONTROL_KEY.Control);
+  if (e.altKey) modifiers.push(CONTROL_KEY.Alt);
+  if (e.metaKey) modifiers.push(CONTROL_KEY.Meta);
+  if (e.shiftKey) modifiers.push(CONTROL_KEY.Shift);
+  const control = CONTROL_OF_CODE[e.code];
+  if (control !== undefined) return { controlKey: control, modifiers: modifiers.length ? modifiers : undefined };
+  if (e.key === ' ') return modifiers.length ? { controlKey: CONTROL_KEY.Space, modifiers } : { text: ' ' };
+  if (e.key.length === 1) {
+    // A chord (Ctrl+C, Alt+Tab…) goes as a key with modifiers; plain or shifted text as typed text.
+    if (e.ctrlKey || e.altKey || e.metaKey) return { chr: e.key.toLowerCase().charCodeAt(0), modifiers };
+    return { text: e.key };
+  }
+  return null;
+}
+
+/** Wires pointer and keyboard events on `canvas` to `target`; returns the cleanup. */
+export function attachInput(canvas: HTMLCanvasElement, target: InputTarget, geometry: () => Geometry): () => void {
+  const point = (e: MouseEvent) => toRemote(e.clientX, e.clientY, canvas.getBoundingClientRect(), geometry());
+  const move = (e: PointerEvent) => {
+    const p = point(e);
+    target.sendMouse(MOUSE.move, 0, p.x, p.y);
+  };
+  const down = (e: PointerEvent) => {
+    canvas.focus();
+    canvas.setPointerCapture?.(e.pointerId);
+    const p = point(e);
+    target.sendMouse(MOUSE.down, BUTTON_OF[e.button] ?? BUTTON.left, p.x, p.y);
+    e.preventDefault();
+  };
+  const up = (e: PointerEvent) => {
+    const p = point(e);
+    target.sendMouse(MOUSE.up, BUTTON_OF[e.button] ?? BUTTON.left, p.x, p.y);
+    e.preventDefault();
+  };
+  const wheel = (e: WheelEvent) => {
+    // One notch per event, in the direction of the scroll (negative deltaY scrolls up).
+    target.sendMouse(MOUSE.wheel, 0, Math.sign(e.deltaX), -Math.sign(e.deltaY));
+    e.preventDefault();
+  };
+  const keydown = (e: KeyboardEvent) => {
+    const k = keyInputFor(e);
+    if (!k) return;
+    target.sendKey(k);
+    e.preventDefault();
+  };
+  const noMenu = (e: Event) => e.preventDefault();
+  canvas.addEventListener('pointermove', move);
+  canvas.addEventListener('pointerdown', down);
+  canvas.addEventListener('pointerup', up);
+  canvas.addEventListener('wheel', wheel, { passive: false });
+  canvas.addEventListener('keydown', keydown);
+  canvas.addEventListener('contextmenu', noMenu);
+  return () => {
+    canvas.removeEventListener('pointermove', move);
+    canvas.removeEventListener('pointerdown', down);
+    canvas.removeEventListener('pointerup', up);
+    canvas.removeEventListener('wheel', wheel);
+    canvas.removeEventListener('keydown', keydown);
+    canvas.removeEventListener('contextmenu', noMenu);
+  };
+}

@@ -1,6 +1,6 @@
 // RendezvousMessage (union field numbers from the public RustDesk protocol) for the web
 // client's ID server socket: OnlineRequest/OnlineResponse and PunchHoleResponse failures.
-import { decodeText, lengthDelimited, readFields, stringField } from './wire';
+import { bytesOf, decodeText, lengthDelimited, numberOf, readFields, stringField, textOf, varintField } from './wire';
 
 const FIELD_ONLINE_REQUEST = 23;
 const FIELD_ONLINE_RESPONSE = 24;
@@ -41,4 +41,67 @@ export function isPeerOnline(states: Uint8Array, index: number): boolean {
   const byte = states[Math.floor(index / 8)];
   if (byte === undefined) return false;
   return (byte & (0x80 >> index % 8)) !== 0;
+}
+
+// --- connecting through the relay -------------------------------------------------------------
+
+const FIELD_PUNCH_HOLE_REQUEST = 8;
+const FIELD_REQUEST_RELAY = 18;
+const FIELD_RELAY_RESPONSE = 19;
+export const CLIENT_VERSION = '1.5.3';
+const NAT_SYMMETRIC = 2;
+
+/** PunchHoleRequest forcing the relay path (the browser cannot punch holes). */
+export function encodePunchHoleRequest(peerId: string, licenceKey = ''): Uint8Array<ArrayBuffer> {
+  const body = [
+    ...stringField(1, peerId),
+    ...varintField(2, NAT_SYMMETRIC),
+    ...(licenceKey ? stringField(3, licenceKey) : []),
+    ...varintField(4, 0),
+    ...stringField(6, CLIENT_VERSION),
+    ...varintField(8, 1),
+  ];
+  return new Uint8Array(lengthDelimited(FIELD_PUNCH_HOLE_REQUEST, body));
+}
+
+/** First message on the relay socket: which rendezvous session to join. */
+export function encodeRequestRelay(uuid: string, licenceKey = ''): Uint8Array<ArrayBuffer> {
+  const body = [...stringField(2, uuid), ...(licenceKey ? stringField(6, licenceKey) : [])];
+  return new Uint8Array(lengthDelimited(FIELD_REQUEST_RELAY, body));
+}
+
+export interface RelayOffer {
+  uuid: string;
+  relayServer: string;
+  /** Peer public key signed by the ID server (verify with the server key). */
+  signedPk: Uint8Array;
+  version: string;
+  refuseReason: string;
+}
+
+export type ConnectReply =
+  | { kind: 'relay'; offer: RelayOffer }
+  | { kind: 'failure'; failure: number; detail: string }
+  | { kind: 'other'; field: number };
+
+export function decodeConnectReply(bytes: Uint8Array): ConnectReply {
+  const top = readFields(bytes).find((f) => f.value instanceof Uint8Array);
+  if (!top || !(top.value instanceof Uint8Array)) throw new Error('empty rendezvous message');
+  const inner = readFields(top.value);
+  if (top.field === FIELD_RELAY_RESPONSE) {
+    return {
+      kind: 'relay',
+      offer: {
+        uuid: textOf(inner, 2),
+        relayServer: textOf(inner, 3),
+        signedPk: bytesOf(inner, 5) ?? new Uint8Array(),
+        refuseReason: textOf(inner, 6),
+        version: textOf(inner, 7),
+      },
+    };
+  }
+  if (top.field === FIELD_PUNCH_HOLE_RESPONSE) {
+    return { kind: 'failure', failure: numberOf(inner, 3), detail: textOf(inner, 7) };
+  }
+  return { kind: 'other', field: top.field };
 }

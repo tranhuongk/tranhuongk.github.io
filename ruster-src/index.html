@@ -112,7 +112,7 @@
       label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; color: var(--text-2); }
       label.check { flex-direction: row; align-items: center; gap: 10px; font-size: 14px; font-weight: 400; color: var(--text); }
       .row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-      #check { flex: 1; min-height: 44px; font-size: 15px; }
+      #connect { flex: 1; min-height: 44px; font-size: 15px; }
       #status { margin: 0; font-size: 13px; color: var(--text-2); }
       #status:empty { display: none; }
       /* Remembered PCs under the connect form: pick fills the ID, × forgets that PC. */
@@ -139,6 +139,17 @@
       .result[data-kind="error"] { background: var(--danger-fill); }
       .saved-status { flex: none; font-size: 12px; }
       .saved-status[data-kind="online"] { color: var(--ok); }
+
+      /* --- connected: full-window screen with a thin bar ------------------------------------- */
+      #stage { display: none; flex: 1; min-height: 0; flex-direction: column; gap: 8px; }
+      .connected #stage { display: flex; }
+      .connected header.top, .connected details#diagnostics { display: none; }
+      .connected #app { padding: 8px; }
+      #bar { display: flex; align-items: center; gap: 8px; flex: none; }
+      #bar-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); font-size: 13px; }
+      #screen-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; background: var(--screen);
+                     border-radius: var(--r-control); overflow: hidden; }
+      #screen { max-width: 100%; max-height: 100%; object-fit: contain; touch-action: none; outline: none; cursor: default; }
       @media (max-width: 600px) {
         header.top { max-width: none; margin-top: 0; padding: 24px 20px; }
         details#diagnostics { max-width: none; }

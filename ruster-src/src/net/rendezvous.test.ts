@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { checkPeer, idSocketUrl, isValidPeerId } from './rendezvous';
+import { checkPeer, checkPeers, idSocketUrl, isValidPeerId, relaySocketUrl } from './rendezvous';
 
 class FakeSocket {
   binaryType = '';
@@ -51,7 +51,7 @@ describe('checkPeer', () => {
     expect(h.s!.closed).toBe(true);
   });
 
-  test('offline for a zero bit and for a punch-hole failure', async () => {
+  test('offline for a zero bit; an unexpected reply type is an error', async () => {
     const h: { s?: FakeSocket } = {};
     const p = checkPeer('123456789', 'wss://x', open(h));
     h.s!.onopen!();
@@ -59,7 +59,26 @@ describe('checkPeer', () => {
     await expect(p).resolves.toEqual({ kind: 'offline' });
     const p2 = checkPeer('123456789', 'wss://x', open(h));
     h.s!.reply('5a0418023a00');
-    await expect(p2).resolves.toEqual({ kind: 'offline' });
+    await expect(p2).resolves.toMatchObject({ kind: 'error' });
+  });
+
+  test('checkPeers asks once for many ids and maps the bits MSB first', async () => {
+    const h: { s?: FakeSocket } = {};
+    const p = checkPeers(['1', 'bad id', '2', '3'], 'wss://x', open(h));
+    h.s!.onopen!();
+    expect(h.s!.sent).toHaveLength(1);
+    h.s!.reply('c201030a01a0');
+    const r = await p;
+    expect(r.ok && [...r.online]).toEqual([['1', true], ['2', false], ['3', true]]);
+  });
+
+  test('relaySocketUrl follows the official client: domains drop the port, IPs add 2', () => {
+    expect(relaySocketUrl('rs-ny.rustdesk.com:21117', 'x')).toBe('wss://rs-ny.rustdesk.com/ws/relay');
+    expect(relaySocketUrl('rs-ny.rustdesk.com', 'x')).toBe('wss://rs-ny.rustdesk.com/ws/relay');
+    expect(relaySocketUrl('1.2.3.4:21117', 'x')).toBe('wss://1.2.3.4:21119');
+    expect(relaySocketUrl('1.2.3.4', 'x')).toBe('wss://1.2.3.4:21119');
+    expect(relaySocketUrl('', 'wss://srv.example.com/ws/id')).toBe('wss://srv.example.com/ws/relay');
+    expect(relaySocketUrl('ws://h:1/ws/relay', 'x')).toBe('ws://h:1/ws/relay');
   });
 
   test('errors on a closed socket, garbage and timeout; rejects a bad id without a socket', async () => {
