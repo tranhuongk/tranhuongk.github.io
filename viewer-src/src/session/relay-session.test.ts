@@ -18,7 +18,7 @@ import { readFileSync } from 'node:fs';
 import type { FileSink, FileSource } from './file-engine';
 import type { PcmDecoder } from './control';
 import type { ClientIdentity } from './identity';
-import { COMMAND_ATTEMPT_MS, RelaySession, type RelaySessionDeps, type SessionEvent } from './relay-session';
+import { COMMAND_ATTEMPT_MS, COMMAND_STAGGER_MS, orderByLatency, RelaySession, type RelaySessionDeps, type SessionEvent } from './relay-session';
 
 // Synthetic values; the secrecy test asserts none of them reaches any emitted string.
 const SENTINEL_PASSWORD = 'SENTINEL-partner-secret-7f3a';
@@ -553,8 +553,9 @@ describe('RelaySession', () => {
     expect(w.closedEvent()).toBeUndefined();
   });
 
-  test('command IPs are tried in order, 8 s each; the abandoned attempt is aborted and a late connection is closed', async () => {
+  test('command IPs are raced: a failure starts the next at once, a slow one is overtaken after the stagger and abandoned', async () => {
     expect(COMMAND_ATTEMPT_MS).toBe(8_000);
+    expect(COMMAND_STAGGER_MS).toBe(500);
     useFakeClock();
     let late: (ch: ByteChannel) => void = () => {};
     let lateSignal: AbortSignal | undefined;
@@ -572,21 +573,46 @@ describe('RelaySession', () => {
     });
     w.connect();
     await settle(() => w.opens.length === 2);
-    expect(lateSignal?.aborted).toBe(false);
-    await vi.advanceTimersByTimeAsync(7_999);
+    await vi.advanceTimersByTimeAsync(COMMAND_STAGGER_MS - 1);
     expect(w.opens).toHaveLength(2);
     expect(lateSignal?.aborted).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
-    // Abandoned: the opener is told to close its pipe (Worker lease) right away.
-    expect(lateSignal?.aborted).toBe(true);
     await settle(() => w.opens.length >= 3);
-    const commandOpens = w.opens.slice(0, 3);
-    expect(commandOpens.map((o) => o.ip)).toEqual(['192.0.2.1', '192.0.2.4', '192.0.2.9']);
-    expect(commandOpens.every((o) => o.certName === COMMAND_HOST)).toBe(true);
+    expect(w.opens.slice(0, 3).map((o) => o.ip)).toEqual(['192.0.2.1', '192.0.2.4', '192.0.2.9']);
+    expect(w.opens.slice(0, 3).every((o) => o.certName === COMMAND_HOST)).toBe(true);
+    // The winner abandons the slow attempt: its opener is told to close the pipe right away.
+    await settle(() => lateSignal?.aborted === true);
     late(lateChannel);
     await settle(() => lateChannel.closed);
     await settle(() => w.commandTexts.length >= 1);
     expect(w.command!.ip).toBe('192.0.2.9');
+  });
+
+  test('command relays are tried fastest known first, unmeasured next, and the timings are saved', async () => {
+    useFakeClock();
+    let saved: Record<string, number> = {};
+    const w: World = new World({
+      ips: ['192.0.2.1', '192.0.2.4', '192.0.2.9'],
+      deps: {
+        commandLatency: {
+          load: () => ({ '192.0.2.1': 1400, '192.0.2.9': 40 }),
+          save: (latency) => (saved = { ...latency }),
+        },
+      },
+    });
+    w.connect();
+    await settle(() => w.commandTexts.length >= 1);
+    expect(w.opens[0]!.ip).toBe('192.0.2.9');
+    expect(w.command!.ip).toBe('192.0.2.9');
+    expect(Object.keys(saved).sort()).toEqual(['192.0.2.1', '192.0.2.9']);
+    expect(saved['192.0.2.1']).toBe(1400);
+    // Averaged with the stored 40 ms (the fake clock opens it in 0 ms).
+    expect(saved['192.0.2.9']).toBe(20);
+  });
+
+  test('orderByLatency keeps DNS order for ties and puts unmeasured relays between fast and slow', () => {
+    expect(orderByLatency(['a', 'b', 'c', 'd'], { a: 1400, c: 100 })).toEqual(['c', 'b', 'd', 'a']);
+    expect(orderByLatency(['a', 'b'], {})).toEqual(['a', 'b']);
   });
 
   test('a successful attempt is never aborted afterwards', async () => {

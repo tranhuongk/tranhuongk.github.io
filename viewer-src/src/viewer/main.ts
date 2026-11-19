@@ -10,10 +10,24 @@ import './fonts.css';
 import { insecureContextNotice } from './secure-context';
 import { mountViewer, type ViewerDeps } from './viewer';
 
+/** Per-relay open times of earlier command connections (see RelaySessionDeps.commandLatency). */
+const COMMAND_LATENCY_STORAGE_KEY = 'uvweb.commandLatency';
+
 const realSession: ViewerDeps['createSession'] = ({ workerUrl }) =>
   new RelaySession({
     openChannel: workerChannelOpener({ workerUrl }),
     resolve: resolveIPv4,
+    commandLatency: {
+      load: () => {
+        try {
+          const parsed: unknown = JSON.parse(localStorage.getItem(COMMAND_LATENCY_STORAGE_KEY) ?? '{}');
+          return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, number>) : {};
+        } catch {
+          return {};
+        }
+      },
+      save: (latency) => localStorage.setItem(COMMAND_LATENCY_STORAGE_KEY, JSON.stringify(latency)),
+    },
     now: () => performance.now(),
   });
 

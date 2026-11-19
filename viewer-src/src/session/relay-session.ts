@@ -64,6 +64,24 @@ const SNI = 'ultraviewer';
  * still bounds the whole registration phase.
  */
 export const COMMAND_ATTEMPT_MS = 8_000;
+/**
+ * Command relays are raced: the next address starts when the current one has not opened within
+ * this delay (or failed), at most COMMAND_MAX_PARALLEL at once so the Worker's per-IP pipe limit
+ * is never hit; the first TLS channel wins and the others are abandoned.
+ */
+export const COMMAND_STAGGER_MS = 500;
+export const COMMAND_MAX_PARALLEL = 2;
+/** Score of a command relay never measured: ahead of the slow ones, behind the fast ones. */
+export const UNMEASURED_LATENCY_MS = 600;
+
+/** Fastest known first, unmeasured relays scored UNMEASURED_LATENCY_MS; stable for ties. */
+export function orderByLatency(ips: string[], latency: Record<string, number>): string[] {
+  const score = (ip: string) => {
+    const v = latency[ip];
+    return typeof v === 'number' && Number.isFinite(v) ? v : UNMEASURED_LATENCY_MS;
+  };
+  return ips.map((ip, i) => ({ ip, i })).sort((a, b) => score(a.ip) - score(b.ip) || a.i - b.i).map((x) => x.ip);
+}
 /** FramedTCPTransport.open default timeout (data connection). */
 export const PEER_CONNECT_MS = 10_000;
 /** armDeadline: 20 s per handshake phase. */
@@ -138,6 +156,12 @@ export interface RelaySessionDeps {
    */
   openChannel(ip: string, certName: string, signal?: AbortSignal): Promise<ByteChannel>;
   resolve(host: string): Promise<string[]>;
+  /**
+   * How long each command relay took to open on earlier connections (ms, kept on the device).
+   * The relays behind functions3 range from ~10 ms (Hanoi) to ~1 s away, and DNS returns them
+   * in random order, so the race tries the fast and the unmeasured ones first.
+   */
+  commandLatency?: { load(): Record<string, number>; save(latency: Record<string, number>): void };
   /** Milliseconds, monotonic enough for durations. */
   now(): number;
   /** Defaults to the bundled 8bit.dat (pinned SHA-256). */
@@ -582,7 +606,8 @@ export class RelaySession {
     if (!this.live(gen)) return;
     this.status(`DNS ${COMMAND_HOST}: ${ips.join(', ') || '(không có A record)'}`);
     if (ips.length === 0) throw new Failure('transportClosed', `không có địa chỉ IPv4 cho ${COMMAND_HOST}`);
-    const opened = await this.openFirst(ips, COMMAND_HOST, COMMAND_ATTEMPT_MS, gen, 'command');
+    const ordered = orderByLatency(ips, this.loadLatency());
+    const opened = await this.openFastest(ordered, COMMAND_HOST, COMMAND_ATTEMPT_MS, gen, 'command');
     if (!opened) return;
     this.command = opened;
     opened.channel.onClose((reason) => this.fail(new Failure('transportClosed', `kết nối command đóng: ${reason}`), gen));
@@ -634,11 +659,116 @@ export class RelaySession {
   }
 
   /**
+   * Staggered race over `ips` (see COMMAND_STAGGER_MS): returns the first channel that opens and
+   * abandons the attempts still in flight. Records every timing in `commandLatency`.
+   */
+  private openFastest(
+    ips: string[], certName: string, timeoutMs: number, gen: number, label: string,
+  ): Promise<FramedChannel | null> {
+    return new Promise((resolve, reject) => {
+      const abandon = new AbortController();
+      const started = new Map<string, number>();
+      const latency = this.loadLatency();
+      let next = 0;
+      let pending = 0;
+      let settled = false;
+      let lastError: unknown = null;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const finish = (done: () => void) => {
+        if (settled) return;
+        settled = true;
+        if (timer !== null) clearTimeout(timer);
+        abandon.abort();
+        done();
+      };
+      const schedule = () => {
+        if (timer !== null) clearTimeout(timer);
+        timer = next < ips.length ? setTimeout(() => {
+          timer = null;
+          if (pending < COMMAND_MAX_PARALLEL) launch();
+        }, COMMAND_STAGGER_MS) : null;
+      };
+      const launch = () => {
+        if (settled || next >= ips.length) return;
+        if (!this.live(gen)) {
+          finish(() => resolve(null));
+          return;
+        }
+        const ip = ips[next++]!;
+        started.set(ip, this.deps.now());
+        pending++;
+        this.status(`${label}: WS + TLS tới ${ip} (cert ${certName})…`);
+        this.withTimeout((signal) => this.deps.openChannel(ip, certName, signal), timeoutMs, abandon.signal).then(
+          (channel) => {
+            pending--;
+            if (settled || !this.live(gen)) {
+              channel.close();
+              finish(() => resolve(null));
+              return;
+            }
+            const framed = new FramedChannel(channel, ip);
+            const expired = framed.expired;
+            this.status(`${label}: TLS OK ${ip}${expired === null ? '' : ` (cert expired: ${expired})`}`);
+            const took = this.deps.now() - (started.get(ip) ?? this.deps.now());
+            // Averaged with the previous value: one cold or congested open must not bury a relay.
+            const before = latency[ip];
+            latency[ip] = typeof before === 'number' ? Math.round((before + took) / 2) : Math.round(took);
+            // Still in flight: slower than the winner (a lower bound, enough for the order).
+            for (const other of started.keys()) {
+              if (other !== ip && !(other in latency)) latency[other] = Math.round(took) + 1;
+            }
+            this.saveLatency(latency);
+            finish(() => resolve(framed));
+          },
+          (raw: unknown) => {
+            pending--;
+            if (settled) return;
+            if (!this.live(gen)) {
+              finish(() => resolve(null));
+              return;
+            }
+            const e = transportError(raw);
+            lastError = e;
+            latency[ip] = timeoutMs;
+            started.delete(ip);
+            this.saveLatency(latency);
+            this.status(`${label}: ${ip} thất bại: ${classify(e).detail}`);
+            if (next < ips.length) launch();
+            else if (pending === 0) {
+              finish(() => reject(lastError ?? new Failure('transportClosed', `không có địa chỉ cho ${certName}`)));
+            }
+          },
+        );
+        schedule();
+      };
+      launch();
+    });
+  }
+
+  private loadLatency(): Record<string, number> {
+    try {
+      return { ...(this.deps.commandLatency?.load() ?? {}) };
+    } catch {
+      return {};
+    }
+  }
+
+  private saveLatency(latency: Record<string, number>): void {
+    try {
+      this.deps.commandLatency?.save(latency);
+    } catch {
+      // storage blocked: the order is only a speed-up
+    }
+  }
+
+  /**
    * Rejects after `ms` and aborts the attempt's signal, so the opener closes its pipe (and the
    * Worker lease) at once; a channel that still opens later is closed instead of leaking.
    * The signal is never aborted once the channel has been handed out.
    */
-  private withTimeout(open: (signal: AbortSignal) => Promise<ByteChannel>, ms: number): Promise<ByteChannel> {
+  private withTimeout(
+    open: (signal: AbortSignal) => Promise<ByteChannel>, ms: number, cancel?: AbortSignal,
+  ): Promise<ByteChannel> {
     const controller = new AbortController();
     let p: Promise<ByteChannel>;
     try {
@@ -653,6 +783,16 @@ export class RelaySession {
         reject(new AttemptTimeout(ms));
         controller.abort();
       }, ms);
+      // A raced attempt that lost: close its pipe now instead of waiting for the timeout.
+      const onCancel = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        reject(new AttemptTimeout(0));
+        controller.abort();
+      };
+      if (cancel?.aborted) onCancel();
+      else cancel?.addEventListener('abort', onCancel, { once: true });
       p.then(
         (channel) => {
           if (done) channel.close();
