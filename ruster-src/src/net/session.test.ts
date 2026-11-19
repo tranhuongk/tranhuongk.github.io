@@ -20,6 +20,7 @@ class World {
   readonly urls: string[] = [];
   readonly clientFrames: Uint8Array[] = [];
   readonly idFrames: Uint8Array[] = [];
+  readonly sockets: FakeSocket[] = [];
   /** webrtc_sdp_answer the ID server returns (empty: the peer took no offer). */
   webrtcAnswer = '';
   secret: SecretStream | null = null;
@@ -33,7 +34,9 @@ class World {
 
   open = (url: string): WebSocket => {
     this.urls.push(url);
-    return new FakeSocket(this, url) as unknown as WebSocket;
+    const socket = new FakeSocket(this, url);
+    this.sockets.push(socket);
+    return socket as unknown as WebSocket;
   };
 
   relayResponse(): Uint8Array {
@@ -285,3 +288,25 @@ class FakePeer {
   }
   close() {}
 }
+
+describe('decodeMessage tolerates what the peer really sends', () => {
+  test('a message whose only field is a number (cursor_id) or nothing at all is ignored', () => {
+    expect(decodeMessage(new Uint8Array([0x70, 0x05]))).toEqual({ kind: 'other', field: 14 });
+    expect(decodeMessage(new Uint8Array())).toEqual({ kind: 'other', field: 0 });
+  });
+});
+
+describe('RustSession keeps going through number-only messages', () => {
+  test('a cursor_id message after login does not end the session', async () => {
+    const w = new World();
+    const { session, rec } = run(w, PASSWORD);
+    await until(() => rec.video.length === 1);
+    const sock = w.sockets.find((s) => s.url.endsWith('/ws/relay'))!;
+    sock.deliver(new Uint8Array([0x70, 0x05]));
+    sock.deliver(new Uint8Array());
+    sock.deliver(wrap(FIELD.videoFrame, lengthDelimited(6, lengthDelimited(1, [...lengthDelimited(1, [9]), ...boolField(2, false), ...varintField(3, 8)]))));
+    await until(() => rec.video.length === 2);
+    expect(rec.closed).toEqual([]);
+    session.close();
+  });
+});

@@ -133,8 +133,10 @@ function decodePeer(bytes: Uint8Array): PeerSummary {
 }
 
 export function decodeMessage(bytes: Uint8Array): Incoming {
-  const top = readFields(bytes).find((f) => f.value instanceof Uint8Array);
-  if (!top || !(top.value instanceof Uint8Array)) throw new Error('empty message');
+  // The peer also sends messages whose only field is a number (cursor_id, field 14) or nothing at
+  // all; those carry nothing we act on and must not end the session.
+  const top = readFields(bytes)[0];
+  if (!top || !(top.value instanceof Uint8Array)) return { kind: 'other', field: top?.field ?? 0 };
   const inner = readFields(top.value);
   switch (top.field) {
     case FIELD.signedId:

@@ -300,7 +300,13 @@ export class RustSession {
     const relay = this.relay;
     if (!relay) return;
     for (;;) {
-      const msg = decodeMessage(await relay.next());
+      const frame = await relay.next();
+      let msg: ReturnType<typeof decodeMessage>;
+      try {
+        msg = decodeMessage(frame);
+      } catch {
+        continue; // one undecodable message must not end the session
+      }
       switch (msg.kind) {
         case 'hash':
           this.hash = { salt: msg.salt, challenge: msg.challenge };
