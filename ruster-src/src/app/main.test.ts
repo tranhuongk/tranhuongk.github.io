@@ -58,7 +58,7 @@ describe('ruster page', () => {
   test('shows only ID, password and the Enter button: no title, no description, no list heading', () => {
     mountRuster(app, deps);
     expect(app.querySelector('h1')).toBeNull();
-    expect([...app.querySelectorAll('label')].map((l) => l.firstChild?.textContent?.trim())).toEqual(['ID', 'Mật khẩu', 'Máy chủ RustDesk']);
+    expect([...app.querySelectorAll('label')].map((l) => l.firstChild?.textContent?.trim())).toEqual(['ID', 'Mật khẩu']);
     expect(app.querySelector('#connect')?.textContent).toBe('Enter');
     expect(app.querySelector('.saved-title')).toBeNull();
     expect(app.querySelector('#saved')?.getAttribute('aria-label')).toBe('Máy đã kết nối');
@@ -202,14 +202,13 @@ describe('ruster page', () => {
     vi.restoreAllMocks();
   });
 
-  test('the server override is kept only when it differs from the default', () => {
+  test('there is no Diagnostics section, and a stored server override is used', () => {
+    localStorage.setItem(SERVER_KEY, 'wss://relay.example.com');
     mountRuster(app, deps);
-    const server = app.querySelector<HTMLInputElement>('#server')!;
-    server.value = 'wss://relay.example.com';
-    server.dispatchEvent(new Event('input'));
-    expect(localStorage.getItem(SERVER_KEY)).toBe('wss://relay.example.com');
-    server.value = 'wss://rs-ny.rustdesk.com';
-    server.dispatchEvent(new Event('input'));
-    expect(localStorage.getItem(SERVER_KEY)).toBeNull();
+    expect(app.querySelector('details')).toBeNull();
+    expect(app.querySelector('#log')).toBeNull();
+    expect(app.querySelector('#server')).toBeNull();
+    submit('123456789', 'pw');
+    expect(sessions[0]!.o.server).toBe('wss://relay.example.com');
   });
 });

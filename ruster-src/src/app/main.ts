@@ -1,5 +1,5 @@
 import './fonts.css';
-import { checkPeers, isValidPeerId, DEFAULT_SERVER } from '../net/rendezvous';
+import { checkPeers, isValidPeerId } from '../net/rendezvous';
 import { RustSession, type SessionError, type SessionEvents, type SessionOptions } from '../net/session';
 import type { PeerSummary } from '../proto/message';
 import { attachInput, type Geometry } from './input';
@@ -7,7 +7,7 @@ import {
   avatarHue, avatarLetter, displayName, formatId, loadPeers, MAX_NAME_LENGTH, relativeTime, rememberPeer, removePeer,
   renamePeer, type SavedPeer,
 } from './saved-peers';
-import { loadServer, saveServer } from './server-setting';
+import { loadServer } from './server-setting';
 import { VideoPlayer } from './video';
 
 const LAYOUT = `
@@ -33,12 +33,6 @@ const LAYOUT = `
     </div>
     <div id="screen-wrap"><canvas id="screen" tabindex="0" width="16" height="9"></canvas></div>
   </section>
-  <details id="diagnostics">
-    <summary>Diagnostics</summary>
-    <label>Máy chủ RustDesk
-      <input id="server" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
-    <pre id="log"></pre>
-  </details>
 `;
 
 export interface RusterDeps {
@@ -64,12 +58,12 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
   const savedSection = $('saved');
   const savedList = $<HTMLUListElement>('saved-list');
   const status = $<HTMLParagraphElement>('status');
-  const server = $<HTMLInputElement>('server');
   const stage = $('stage');
   const barTitle = $('bar-title');
   const canvas = $<HTMLCanvasElement>('screen');
   const disconnect = $<HTMLButtonElement>('disconnect');
-  server.value = loadServer();
+  /** The ID server: RustDesk's public one unless a `ruster.server` override is stored on the device. */
+  const serverUrl = () => loadServer();
 
   let session: ReturnType<RusterDeps['createSession']> | null = null;
   let player: VideoPlayer | null = null;
@@ -80,10 +74,8 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
   /** Why the page closed the session itself (shown instead of the plain "Đã ngắt."). */
   let closingNote: string | null = null;
 
-  const logEl = $('log');
   const say = (text: string) => {
     status.textContent = text;
-    if (text) logEl.textContent += `${new Date().toLocaleTimeString('vi-VN', { hour12: false })} ${text}\n`;
   };
 
   /** Id of the machine whose name is being edited in place, if any. */
@@ -172,7 +164,7 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
   const refreshOnline = () => {
     const ids = loadPeers().map((p) => p.id);
     if (ids.length === 0) return;
-    void deps.checkPeers(ids, server.value).then((r) => {
+    void deps.checkPeers(ids, serverUrl()).then((r) => {
       if (!alive || !r.ok) return;
       onlineById = r.online;
       if (editingId === null) renderSaved(); // never rebuild the card whose name is being typed
@@ -278,7 +270,6 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     event.preventDefault();
     finishEdit(false, editingId, '');
   });
-  server.addEventListener('input', () => saveServer(server.value));
   disconnect.addEventListener('click', () => session?.close());
 
   form.addEventListener('submit', (event) => {
@@ -296,7 +287,7 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     }
     connect.disabled = true;
     say('Đang kết nối…');
-    session = deps.createSession({ peerId: id, server: server.value.trim() || DEFAULT_SERVER, password: password.value, events: events(id) });
+    session = deps.createSession({ peerId: id, server: serverUrl(), password: password.value, events: events(id) });
     void session.run();
   });
 
