@@ -189,7 +189,7 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     }
     const user = deps.account.token() ? deps.account.user() ?? { name: '', displayName: '' } : null;
     if (user) {
-      label.textContent = `Đã đăng nhập RustDesk${user.displayName || user.name ? `: ${user.displayName || user.name}` : ''}`;
+      label.textContent = `Đã đăng nhập${user.displayName || user.name ? `: ${user.displayName || user.name}` : ''}`;
       const out = document.createElement('button');
       out.type = 'button';
       out.className = 'text account-logout';
@@ -197,8 +197,7 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
       accountEl.append(label, out);
       return;
     }
-    label.textContent = 'Đăng nhập RustDesk';
-    accountEl.append(label);
+    // Logged out: just the provider buttons, no caption.
     for (const op of OPS) {
       const b = document.createElement('button');
       b.type = 'button';
@@ -215,7 +214,7 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     if (target.classList.contains('account-logout')) {
       deps.account.logout();
       renderAccount();
-      say('Đã đăng xuất RustDesk.');
+      say('Đã đăng xuất.');
     } else if (target.classList.contains('account-cancel')) {
       loginAbort?.abort();
     } else if (target.dataset.op) {
@@ -228,7 +227,7 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
         (user) => {
           loginAbort = null;
           renderAccount();
-          say(`Đã đăng nhập RustDesk${user.displayName || user.name ? `: ${user.displayName || user.name}` : ''}. Bấm Enter để kết nối.`);
+          say(`Đã đăng nhập${user.displayName || user.name ? `: ${user.displayName || user.name}` : ''}. Bấm Enter để kết nối.`);
         },
         (e: unknown) => {
           loginAbort = null;
@@ -284,7 +283,7 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
   };
 
   const events = (id: string): SessionEvents => ({
-    status: (t) => say(t),
+    status: () => {}, // the page only says "Đang kết nối…"; step-by-step progress is not shown
     needPassword: (reason) => {
       connect.disabled = false;
       password.value = '';
@@ -305,7 +304,7 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
         const expired = Boolean(deps.account.token());
         if (expired) deps.account.logout();
         renderAccount();
-        say(expired ? 'Phiên đăng nhập RustDesk đã hết hạn. Đăng nhập lại rồi bấm Enter.' : 'Máy chủ RustDesk yêu cầu đăng nhập trước khi kết nối. Chọn một tài khoản ở trên rồi bấm Enter.');
+        say(expired ? 'Phiên đăng nhập đã hết hạn. Đăng nhập lại rồi bấm Enter.' : 'Máy chủ yêu cầu đăng nhập trước khi kết nối. Chọn một tài khoản ở trên rồi bấm Enter.');
       } else say(error ? error.message : (closingNote ?? 'Đã ngắt.'));
       closingNote = null;
       refreshOnline();

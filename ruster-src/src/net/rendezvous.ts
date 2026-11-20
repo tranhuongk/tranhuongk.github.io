@@ -55,10 +55,10 @@ export function checkPeers(
       }
       resolve(result);
     };
-    const timer = setTimeout(() => finish({ ok: false, detail: 'Máy chủ RustDesk không trả lời.' }), timeoutMs);
+    const timer = setTimeout(() => finish({ ok: false, detail: 'Máy chủ không trả lời.' }), timeoutMs);
     ws.onopen = () => ws.send(encodeOnlineRequest('ruster', valid));
-    ws.onerror = () => finish({ ok: false, detail: 'Không kết nối được tới máy chủ RustDesk.' });
-    ws.onclose = () => finish({ ok: false, detail: 'Máy chủ RustDesk đóng kết nối.' });
+    ws.onerror = () => finish({ ok: false, detail: 'Không kết nối được tới máy chủ.' });
+    ws.onclose = () => finish({ ok: false, detail: 'Máy chủ đóng kết nối.' });
     ws.onmessage = (event) => {
       try {
         const reply = decodeRendezvous(new Uint8Array(event.data as ArrayBuffer));

@@ -111,7 +111,7 @@ export class RustSession {
   private async connect(): Promise<void> {
     const t0 = Date.now();
     const step = (text: string) => this.status(`${text} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
-    step('Hỏi máy chủ RustDesk…');
+    step('Kết nối…');
     const id = new Pipe(this.open(idSocketUrl(this.o.server)), 'ID server');
     this.idPipe = id;
     await id.open();
@@ -154,7 +154,7 @@ export class RustSession {
     // Keep feeding the peer's ICE candidates to WebRTC while the transports race.
     void this.pumpIce(id, rtc);
     if (offer.refuseReason) throw new SessionError(LOGIN_REQUIRED.test(offer.refuseReason) ? 'auth' : 'refused', offer.refuseReason);
-    if (!offer.version) throw new SessionError('old', 'Phiên bản RustDesk bên máy đích quá cũ, không hỗ trợ web.');
+    if (!offer.version) throw new SessionError('old', 'Phiên bản bên máy đích quá cũ, không hỗ trợ web.');
 
     if (rtc && offer.webrtcAnswer) {
       try {
@@ -255,7 +255,7 @@ export class RustSession {
   private async secure(transport: Transport, signedPk: Uint8Array, rtc: WebRtcTransport | null): Promise<void> {
     const serverKey = fromBase64(this.o.serverKey ?? PUBLIC_SERVER_KEY);
     const vouched = signedPk.length ? openSigned(signedPk, serverKey) : null;
-    if (!vouched) throw new SessionError('handshake', 'Chữ ký khoá của máy chủ RustDesk không hợp lệ.');
+    if (!vouched) throw new SessionError('handshake', 'Chữ ký khoá của máy chủ không hợp lệ.');
     const vouchedPeer = decodeIdPk(vouched);
     if (vouchedPeer.id !== this.o.peerId || vouchedPeer.pk.length !== 32) {
       throw new SessionError('handshake', 'Khoá do máy chủ cấp không khớp ID máy đích.');

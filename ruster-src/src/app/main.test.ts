@@ -73,6 +73,16 @@ describe('ruster page', () => {
     expect(app.querySelector('#saved')?.getAttribute('aria-label')).toBe('Máy đã kết nối');
   });
 
+  test('while connecting the page only says "Đang kết nối…": step-by-step progress is not shown', () => {
+    mountRuster(app, deps);
+    submit('123456789', 'pw');
+    for (const text of ['Kết nối… (0.0 s)', 'Nối relay… (1.0 s)', 'Đã mã hoá (WebRTC trực tiếp), chờ máy đích… (2.0 s)', 'Đăng nhập…', 'Đã đăng nhập.']) {
+      sessions[0]!.events.status(text);
+    }
+    expect(status()).toBe('Đang kết nối…');
+    expect(app.textContent).not.toContain('RustDesk');
+  });
+
   test('connect starts a session with the id, password and server; an invalid id never does', () => {
     mountRuster(app, deps);
     submit('bad id');
@@ -224,8 +234,9 @@ describe('ruster page', () => {
   describe('RustDesk account', () => {
     const accountText = () => app.querySelector('#account')!.textContent;
 
-    test('logged out: the three sign-in buttons show; connecting sends no token', () => {
+    test('logged out: just the three sign-in buttons, no caption; connecting sends no token', () => {
       mountRuster(app, deps);
+      expect(accountText()).toBe('GoogleGitHubMicrosoft');
       expect([...app.querySelectorAll<HTMLButtonElement>('.account-op')].map((b) => b.dataset.op)).toEqual(['google', 'github', 'microsoft']);
       submit('123456789', 'pw');
       expect(sessions[0]!.o.token).toBe('');
@@ -256,7 +267,8 @@ describe('ruster page', () => {
       (account.user as ReturnType<typeof vi.fn>).mockReturnValue({ name: 'octo', displayName: '' });
       finish({ name: 'octo', displayName: '' });
       await flush();
-      expect(accountText()).toContain('Đã đăng nhập RustDesk: octo');
+      expect(accountText()).toContain('Đã đăng nhập: octo');
+      expect(accountText()).not.toContain('RustDesk');
       expect(status()).toContain('Bấm Enter');
     });
 

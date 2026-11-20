@@ -130,7 +130,7 @@ export async function login(op: Op, deps: LoginDeps, win: Window | null, signal?
       body: JSON.stringify({ op, id, uuid, deviceInfo: { os: 'web', type: 'web client', name: 'ruster' }, apiDomain: api }),
     })).json()) as AuthReply;
     if (start.error) throw new LoginError('request', start.error);
-    if (!start.code || !start.url) throw new LoginError('request', 'Máy chủ RustDesk trả về phản hồi đăng nhập không hợp lệ.');
+    if (!start.code || !start.url) throw new LoginError('request', 'Máy chủ trả về phản hồi đăng nhập không hợp lệ.');
 
     let shown = false;
     if (win && !win.closed) {
