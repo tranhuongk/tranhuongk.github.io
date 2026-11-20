@@ -27,6 +27,7 @@ class World {
   online = true;
   relayServer = 'rs-ny.rustdesk.com:21117';
   refuse = '';
+  failureText = 'offline';
   version = '1.5.3';
   wrongSignature = false;
   challenge = 'chal-123';
@@ -48,7 +49,7 @@ class World {
   }
 
   failure(): Uint8Array {
-    return wrap(11, [...varintField(3, 2), ...stringField(7, 'offline')]);
+    return wrap(11, [...varintField(3, 2), ...stringField(7, this.failureText)]);
   }
 
   signedId(): Uint8Array {
@@ -308,5 +309,68 @@ describe('RustSession keeps going through number-only messages', () => {
     await until(() => rec.video.length === 2);
     expect(rec.closed).toEqual([]);
     session.close();
+  });
+});
+
+describe('cursor, delay and Ctrl+Alt+Del', () => {
+  test('the login asks for the remote cursor, delay reports arrive and the toggles reach the peer', async () => {
+    const w = new World();
+    const delays: number[] = [];
+    const rec: Recorder = { statuses: [], needs: [], ready: [], video: [], closed: [] };
+    const session = new RustSession({
+      peerId: PEER_ID, server: 'wss://rs-ny.rustdesk.com', password: PASSWORD, open: w.open,
+      serverKey: btoa(String.fromCharCode(...w.server.publicKey)),
+      events: {
+        status: () => {}, needPassword: () => {}, ready: (p) => rec.ready.push({ width: p.width, height: p.height, hostname: p.hostname }),
+        video: (f) => f.forEach((x) => rec.video.push({ key: x.key, pts: x.pts, bytes: [...x.data] })),
+        delay: (ms) => delays.push(ms), closed: () => {},
+      },
+    });
+    void session.run();
+    await until(() => rec.video.length === 1);
+    const login = w.clientFrames.find((f) => readFields(f)[0]?.field === FIELD.loginRequest)!;
+    const option = readFields(readFields(readFields(login)[0]!.value as Uint8Array).find((f) => f.field === 6)!.value as Uint8Array);
+    expect(option.find((f) => f.field === 3)?.value).toBe(2); // show_remote_cursor = Yes
+
+    w.sockets.find((s) => s.url.endsWith('/ws/relay'))!.deliver(wrap(FIELD.testDelay, [...varintField(1, 5), ...varintField(3, 42)]));
+    await until(() => delays.length === 1);
+    expect(delays).toEqual([42]);
+
+    session.setShowRemoteCursor(false);
+    session.sendCtrlAltDel('Windows');
+    session.sendCtrlAltDel('Mac OS');
+    await until(() => w.clientFrames.filter((f) => readFields(f)[0]?.field === FIELD.keyEvent).length === 2);
+    const misc = w.clientFrames.find((f) => readFields(f)[0]?.field === FIELD.misc && readFields(readFields(f)[0]!.value as Uint8Array)[0]?.field === 7)!;
+    const optionMsg = readFields(readFields(readFields(misc)[0]!.value as Uint8Array)[0]!.value as Uint8Array);
+    expect(optionMsg.find((f) => f.field === 3)?.value).toBe(1); // No
+    const keys = w.clientFrames.filter((f) => readFields(f)[0]?.field === FIELD.keyEvent).map((f) => readFields(readFields(f)[0]!.value as Uint8Array));
+    expect(keys[0]!.find((f) => f.field === 1)?.value).toBe(1); // down
+    expect(keys[0]!.find((f) => f.field === 3)?.value).toBe(100); // CtrlAltDel
+    expect(keys[1]!.find((f) => f.field === 3)?.value).toBe(5); // Delete + Alt/Control modifiers
+    expect(keys[1]!.find((f) => f.field === 8)).toBeDefined();
+    session.close();
+  });
+});
+
+describe('account token and login-required answers', () => {
+  test('the access token travels in the PunchHoleRequest (field 5)', async () => {
+    const w = new World();
+    const { session, rec } = run(w, PASSWORD, { token: 'ACCESS-TOKEN' });
+    await until(() => rec.video.length === 1);
+    const request = readFields(readFields(w.idFrames[0]!)[0]!.value as Uint8Array);
+    expect(new TextDecoder().decode(request.find((f) => f.field === 5)!.value as Uint8Array)).toBe('ACCESS-TOKEN');
+    session.close();
+  });
+
+  test('a "please log in" refusal ends the session with kind auth, whichever message carries it', async () => {
+    const msg = 'The connection is not allowed. This public server currently requires users to log in before connecting.';
+    for (const set of [(w: World) => (w.refuse = msg), (w: World) => (w.failureText = msg)]) {
+      const w = new World();
+      if (set.toString().includes('failureText')) w.online = false;
+      set(w);
+      const { rec, done } = run(w, PASSWORD);
+      await done;
+      expect(rec.closed[0]).toMatchObject({ kind: 'auth' });
+    }
   });
 });

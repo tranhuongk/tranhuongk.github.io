@@ -25,12 +25,14 @@ export interface LoginOptions {
   sessionId: number;
   version: string;
   platform: string;
+  /** Ask the peer to draw its cursor into the video (OptionMessage.show_remote_cursor = Yes). */
+  showRemoteCursor?: boolean;
 }
 
 /** LoginRequest advertising VP9 as the only decoder (WebCodecs `vp09.00.10.08`). */
 export function encodeLoginRequest(o: LoginOptions): Uint8Array<ArrayBuffer> {
   const supportedDecoding = [...varintField(1, 1)];
-  const option = [...lengthDelimited(10, supportedDecoding)];
+  const option = [...(o.showRemoteCursor ? varintField(3, BOOL_YES) : []), ...lengthDelimited(10, supportedDecoding)];
   const body = [
     ...stringField(1, o.targetId),
     ...(o.password.length ? lengthDelimited(2, o.password) : []),
@@ -48,6 +50,14 @@ export function encodeLoginRequest(o: LoginOptions): Uint8Array<ArrayBuffer> {
 /** Misc.video_received: acknowledges one video message (login asked for acks). */
 export const encodeVideoReceived = (): Uint8Array<ArrayBuffer> => wrap(FIELD.misc, boolField(12, true));
 /** Misc.refresh_video: asks for a new key frame. */
+/** OptionMessage BoolOption values. */
+export const BOOL_NO = 1;
+export const BOOL_YES = 2;
+
+/** Misc.option.show_remote_cursor: whether the peer draws its cursor into the video. */
+export const encodeShowRemoteCursor = (on: boolean): Uint8Array<ArrayBuffer> =>
+  wrap(FIELD.misc, lengthDelimited(7, varintField(3, on ? BOOL_YES : BOOL_NO)));
+
 export const encodeRefreshVideo = (): Uint8Array<ArrayBuffer> => wrap(FIELD.misc, boolField(10, true));
 
 /** Echo of a TestDelay the peer sent: same payload, returned unchanged. */
@@ -67,12 +77,14 @@ export const CONTROL_KEY = {
   Alt: 1, Backspace: 2, CapsLock: 3, Control: 4, Delete: 5, DownArrow: 6, End: 7, Escape: 8,
   F1: 9, F10: 10, F11: 11, F12: 12, F2: 13, F3: 14, F4: 15, F5: 16, F6: 17, F7: 18, F8: 19, F9: 20,
   Home: 21, LeftArrow: 22, Meta: 23, PageDown: 25, PageUp: 26, Return: 27, RightArrow: 28, Shift: 29,
-  Space: 30, Tab: 31, UpArrow: 32, Insert: 58,
+  Space: 30, Tab: 31, UpArrow: 32, Insert: 58, CtrlAltDel: 100, LockScreen: 101,
 } as const;
 
 export interface KeyInput {
   /** A control key pressed and released as one click. */
   controlKey?: number;
+  /** Send `down` (a held key, as the official client does for Ctrl+Alt+Del) instead of a `press` click. */
+  down?: boolean;
   /** Typed text, delivered as an input string. */
   text?: string;
   /** Character key held with modifiers (Ctrl+C): lower-case character code. */
@@ -81,7 +93,7 @@ export interface KeyInput {
 }
 
 export function encodeKey(k: KeyInput): Uint8Array<ArrayBuffer> {
-  const body = [...boolField(2, true)];
+  const body = [...(k.down ? boolField(1, true) : boolField(2, true))];
   if (k.controlKey !== undefined) body.push(...varintField(3, k.controlKey));
   if (k.chr !== undefined) body.push(...varintField(4, k.chr));
   if (k.text !== undefined) body.push(...stringField(6, k.text));
@@ -96,7 +108,7 @@ export type Incoming =
   | { kind: 'hash'; salt: string; challenge: string }
   | { kind: 'loginResponse'; error: string; peer: PeerSummary | null }
   | { kind: 'video'; codec: string; frames: VideoChunk[] }
-  | { kind: 'testDelay'; raw: Uint8Array }
+  | { kind: 'testDelay'; raw: Uint8Array; /** Round-trip time the peer measured (ms). */ lastDelay: number }
   | { kind: 'other'; field: number };
 
 export interface PeerSummary {
@@ -162,7 +174,7 @@ export function decodeMessage(bytes: Uint8Array): Incoming {
       return { kind: 'video', codec: 'unknown', frames: [] };
     }
     case FIELD.testDelay:
-      return { kind: 'testDelay', raw: top.value };
+      return { kind: 'testDelay', raw: top.value, lastDelay: numberOf(inner, 3) };
     default:
       return { kind: 'other', field: top.field };
   }

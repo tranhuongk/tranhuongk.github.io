@@ -53,12 +53,13 @@ export const CLIENT_VERSION = '1.5.3';
 const NAT_SYMMETRIC = 2;
 
 /** PunchHoleRequest forcing the relay path (the browser cannot punch holes). */
-export function encodePunchHoleRequest(peerId: string, licenceKey = '', webrtcOffer = ''): Uint8Array<ArrayBuffer> {
+export function encodePunchHoleRequest(peerId: string, licenceKey = '', webrtcOffer = '', token = ''): Uint8Array<ArrayBuffer> {
   const body = [
     ...stringField(1, peerId),
     ...varintField(2, NAT_SYMMETRIC),
     ...(licenceKey ? stringField(3, licenceKey) : []),
     ...varintField(4, 0),
+    ...(token ? stringField(5, token) : []),
     ...stringField(6, CLIENT_VERSION),
     ...varintField(8, 1),
     ...(webrtcOffer ? stringField(12, webrtcOffer) : []),

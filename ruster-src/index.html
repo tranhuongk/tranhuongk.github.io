@@ -139,16 +139,45 @@
       .peer-edit-input { flex: 1; min-width: 0; min-height: 40px; background: var(--surface); }
       .peer-save { min-height: 40px; }
 
-      /* --- connected: full-window screen with a thin bar ------------------------------------- */
-      #stage { display: none; flex: 1; min-height: 0; flex-direction: column; gap: 8px; }
-      .connected #stage { display: flex; }
+      /* Account row: sign-in buttons while logged out, the name and Đăng xuất while logged in. */
+      .account { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
+      .account-label { margin-right: 4px; }
+      .account button { min-height: 30px; padding: 0 10px; font-size: 13px; }
+      /* --- connected: the remote screen fills the window; the toolbar floats and hides itself ------ */
+      #stage { display: none; position: fixed; inset: 0; z-index: 10; background: var(--screen); overflow: hidden; }
+      .connected #stage { display: block; }
       .connected header.top { display: none; }
-      .connected #app { padding: 8px; }
-      #bar { display: flex; align-items: center; gap: 8px; flex: none; }
-      #bar-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); font-size: 13px; }
-      #screen-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; background: var(--screen);
-                     border-radius: var(--r-control); overflow: hidden; }
-      #screen { max-width: 100%; max-height: 100%; object-fit: contain; touch-action: none; outline: none; cursor: default; }
+      #screen-wrap { position: absolute; inset: 0; display: flex; overflow: auto; overscroll-behavior: contain; }
+      /* margin:auto centres the canvas when it is smaller than the window and lets 100 % scroll when larger;
+         the local cursor is a small dot so pointing feels instant next to the remote cursor in the video. */
+      #screen { flex: none; margin: auto; outline: none; touch-action: none; user-select: none;
+                cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Ccircle cx='6' cy='6' r='3' fill='%23ffffff' fill-opacity='.85' stroke='%23000000' stroke-opacity='.6'/%3E%3C/svg%3E") 6 6, default; }
+      #hud { position: absolute; top: 0; left: 0; right: 0; z-index: 2; display: flex; justify-content: center; padding: 8px; pointer-events: none;
+             transition: transform 0.18s ease, opacity 0.18s ease; }
+      #hud.hidden { transform: translateY(-110%); opacity: 0; }
+      #bar { pointer-events: auto; display: flex; align-items: center; gap: 6px; box-sizing: border-box; max-width: 100%; padding: 6px;
+             border-radius: var(--r-panel); background: color-mix(in srgb, var(--surface) 92%, transparent); overflow-x: auto; }
+      #bar button { flex: none; min-height: 34px; padding: 0 10px; font-size: 13px; white-space: nowrap; }
+      #bar button[aria-pressed="false"] { opacity: 0.55; }
+      #bar button.danger { background: var(--danger-solid); color: var(--on-danger); }
+      #bar button.danger:hover:not(:disabled) { background: var(--danger-text); color: var(--on-danger); }
+      #bar .title { gap: 6px; font-weight: 600; background: transparent; max-width: 220px; }
+      #bar .title #bar-name { overflow: hidden; text-overflow: ellipsis; }
+      #bar .pen { color: var(--text-2); font-weight: 400; }
+      #bar-rename { flex-direction: row; align-items: center; gap: 6px; }
+      #bar-rename input { width: 160px; min-height: 34px; padding: 0 10px; font-size: 14px; }
+      #bar-rename:not([hidden]) { display: flex; }
+      #bar .spacer { flex: 1; min-width: 8px; }
+      .link { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 0 6px; font-size: 12px; color: var(--text-2);
+              font-variant-numeric: tabular-nums; white-space: nowrap; }
+      .link .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-2); opacity: 0.6; }
+      .link[data-quality="good"] .dot { background: var(--ok); opacity: 1; }
+      .link[data-quality="ok"] .dot { background: var(--warn); opacity: 1; }
+      .link[data-quality="bad"] .dot { background: var(--danger); opacity: 1; }
+      #hud-grip { position: absolute; top: 0; left: 50%; z-index: 2; transform: translateX(-50%); width: 64px; min-height: 0; height: 14px; padding: 0;
+                  border-radius: 0 0 var(--r-control) var(--r-control); background: color-mix(in srgb, var(--surface) 70%, transparent); opacity: 0.8; }
+      #lost { position: absolute; top: 64px; left: 50%; z-index: 3; transform: translateX(-50%); padding: 8px 14px; border-radius: var(--r-panel);
+              background: var(--warn-fill); color: var(--text); font-size: 13px; pointer-events: none; }
       @media (max-width: 600px) {
         header.top { max-width: none; margin-top: 0; padding: 24px 20px; }
       }

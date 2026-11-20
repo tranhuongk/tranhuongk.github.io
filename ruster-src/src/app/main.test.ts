@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { SessionEvents, SessionOptions } from '../net/session';
 import type { PeerSummary } from '../proto/message';
-import { mountRuster, type RusterDeps } from './main';
+import { mountRuster, type AccountApi, type RusterDeps } from './main';
 import { PEERS_KEY } from './saved-peers';
 import { SERVER_KEY } from './server-setting';
 
@@ -20,9 +20,12 @@ class FakeSession {
   submitPassword(p: string) {
     this.passwords.push(p);
   }
+  path: 'relay' | 'webrtc' | null = 'webrtc';
   sendMouse = vi.fn();
   sendKey = vi.fn();
   requestKeyFrame = vi.fn();
+  setShowRemoteCursor = vi.fn();
+  sendCtrlAltDel = vi.fn();
   get events(): SessionEvents {
     return this.o.events;
   }
@@ -32,7 +35,12 @@ describe('ruster page', () => {
   let app: HTMLElement;
   let sessions: FakeSession[];
   let deps: RusterDeps;
+  let account: AccountApi & { token: ReturnType<typeof vi.fn>; login: ReturnType<typeof vi.fn>; logout: ReturnType<typeof vi.fn> };
   beforeEach(() => {
+    account = {
+      token: vi.fn().mockReturnValue(''), user: vi.fn().mockReturnValue(null), openBlank: vi.fn().mockReturnValue(null),
+      login: vi.fn(), logout: vi.fn(),
+    } as unknown as typeof account;
     localStorage.clear();
     document.body.innerHTML = '<div id="app"></div>';
     app = document.getElementById('app')!;
@@ -45,6 +53,7 @@ describe('ruster page', () => {
       },
       checkPeers: vi.fn().mockResolvedValue({ ok: true, online: new Map() }),
       now: () => 1000,
+      account,
     };
   });
 
@@ -94,7 +103,7 @@ describe('ruster page', () => {
     sessions[0]!.events.ready(PEER);
     expect(JSON.parse(localStorage.getItem(PEERS_KEY)!)).toEqual([{ id: '123456789', lastUsed: 1000, hostname: 'MAC' }]);
     expect(app.classList.contains('connected')).toBe(true);
-    expect(app.querySelector('#bar-title')!.textContent).toContain('MAC');
+    expect(app.querySelector('#bar-name')!.textContent).toBe('MAC');
     app.querySelector<HTMLButtonElement>('#disconnect')!.click();
     expect(sessions[0]!.closed).toBe(true);
     expect(app.classList.contains('connected')).toBe(false);
@@ -210,5 +219,74 @@ describe('ruster page', () => {
     expect(app.querySelector('#server')).toBeNull();
     submit('123456789', 'pw');
     expect(sessions[0]!.o.server).toBe('wss://relay.example.com');
+  });
+
+  describe('RustDesk account', () => {
+    const accountText = () => app.querySelector('#account')!.textContent;
+
+    test('logged out: the three sign-in buttons show; connecting sends no token', () => {
+      mountRuster(app, deps);
+      expect([...app.querySelectorAll<HTMLButtonElement>('.account-op')].map((b) => b.dataset.op)).toEqual(['google', 'github', 'microsoft']);
+      submit('123456789', 'pw');
+      expect(sessions[0]!.o.token).toBe('');
+    });
+
+    test('logged in: the name and Đăng xuất show and the token is sent', () => {
+      account.token.mockReturnValue('TOKEN');
+      (account.user as ReturnType<typeof vi.fn>).mockReturnValue({ name: 'octo', displayName: 'Octo Cat' });
+      mountRuster(app, deps);
+      expect(accountText()).toContain('Octo Cat');
+      expect(app.querySelector('.account-op')).toBeNull();
+      submit('123456789', 'pw');
+      expect(sessions[0]!.o.token).toBe('TOKEN');
+      app.querySelector<HTMLButtonElement>('.account-logout')!.click();
+      expect(account.logout).toHaveBeenCalled();
+    });
+
+    test('a sign-in button opens the window from the click, waits, then reports the account', async () => {
+      const win = {} as Window;
+      (account.openBlank as ReturnType<typeof vi.fn>).mockReturnValue(win);
+      let finish!: (u: { name: string; displayName: string }) => void;
+      account.login.mockReturnValue(new Promise((r) => (finish = r)));
+      mountRuster(app, deps);
+      app.querySelector<HTMLButtonElement>('[data-op="github"]')!.click();
+      expect(account.login).toHaveBeenCalledWith('github', win, expect.any(AbortSignal));
+      expect(accountText()).toContain('Đang chờ đăng nhập');
+      account.token.mockReturnValue('T');
+      (account.user as ReturnType<typeof vi.fn>).mockReturnValue({ name: 'octo', displayName: '' });
+      finish({ name: 'octo', displayName: '' });
+      await flush();
+      expect(accountText()).toContain('Đã đăng nhập RustDesk: octo');
+      expect(status()).toContain('Bấm Enter');
+    });
+
+    test('Huỷ aborts the wait and a failed login shows its message', async () => {
+      let signal!: AbortSignal;
+      account.login.mockImplementation((_op, _win, s: AbortSignal) => new Promise((_r, reject) => {
+        signal = s;
+        s.addEventListener('abort', () => reject({ name: 'LoginError', kind: 'cancelled', message: 'Đã huỷ đăng nhập.' }));
+      }));
+      mountRuster(app, deps);
+      app.querySelector<HTMLButtonElement>('[data-op="google"]')!.click();
+      app.querySelector<HTMLButtonElement>('.account-cancel')!.click();
+      expect(signal.aborted).toBe(true);
+      await flush();
+      expect(app.querySelector('.account-op')).not.toBeNull();
+      expect(status()).toContain('Đăng nhập không được');
+    });
+
+    test('the server asking for a login brings the buttons back; an expired token is dropped', () => {
+      mountRuster(app, deps);
+      submit('123456789', 'pw');
+      sessions[0]!.events.closed({ kind: 'auth', message: 'The connection is not allowed… log in first', name: 'SessionError' });
+      expect(status()).toContain('yêu cầu đăng nhập');
+      expect(account.logout).not.toHaveBeenCalled();
+
+      account.token.mockReturnValue('OLD');
+      submit('123456789', 'pw');
+      sessions[1]!.events.closed({ kind: 'auth', message: 'log in', name: 'SessionError' });
+      expect(account.logout).toHaveBeenCalledTimes(1);
+      expect(status()).toContain('hết hạn');
+    });
   });
 });

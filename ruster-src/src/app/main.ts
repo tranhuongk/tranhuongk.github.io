@@ -2,13 +2,13 @@ import './fonts.css';
 import { checkPeers, isValidPeerId } from '../net/rendezvous';
 import { RustSession, type SessionError, type SessionEvents, type SessionOptions } from '../net/session';
 import type { PeerSummary } from '../proto/message';
-import { attachInput, type Geometry } from './input';
 import {
   avatarHue, avatarLetter, displayName, formatId, loadPeers, MAX_NAME_LENGTH, relativeTime, rememberPeer, removePeer,
   renamePeer, type SavedPeer,
 } from './saved-peers';
+import { clearLogin, defaultLoginDeps, loadToken, loadUser, login, LoginError, OP_LABEL, OPS, type AccountUser, type Op } from '../auth/account';
 import { loadServer } from './server-setting';
-import { VideoPlayer } from './video';
+import { Stage, STAGE_HTML, type StageSession } from './stage';
 
 const LAYOUT = `
   <header class="top">
@@ -24,28 +24,42 @@ const LAYOUT = `
     <section id="saved" aria-label="Máy đã kết nối" hidden>
       <ul id="saved-list"></ul>
     </section>
+    <div id="account" class="account"></div>
     <p id="status" role="status"></p>
   </header>
-  <section id="stage">
-    <div id="bar">
-      <span id="bar-title"></span>
-      <button id="disconnect" type="button">Ngắt</button>
-    </div>
-    <div id="screen-wrap"><canvas id="screen" tabindex="0" width="16" height="9"></canvas></div>
-  </section>
+  <section id="stage">${STAGE_HTML}</section>
 `;
 
 export interface RusterDeps {
-  createSession: (o: SessionOptions) => { run(): Promise<void>; close(): void; submitPassword(p: string): void;
-    sendMouse(t: number, b: number, x: number, y: number): void; sendKey(k: import('../proto/message').KeyInput): void; requestKeyFrame(): void };
+  createSession: (o: SessionOptions) => StageSession & { run(): Promise<void>; submitPassword(p: string): void };
   checkPeers: typeof checkPeers;
   now: () => number;
+  account: AccountApi;
 }
+
+/** RustDesk account login as the page uses it (swapped out in tests). */
+export interface AccountApi {
+  token(): string;
+  user(): AccountUser | null;
+  /** Opens the blank sign-in window from the click, so popup blockers let it through. */
+  openBlank(): Window | null;
+  login(op: Op, win: Window | null, signal: AbortSignal): Promise<AccountUser>;
+  logout(): void;
+}
+
+const defaultAccount = (): AccountApi => ({
+  token: loadToken,
+  user: loadUser,
+  openBlank: () => window.open('', '_blank', 'width=420,height=640'),
+  login: (op, win, signal) => login(op, defaultLoginDeps(), win, signal),
+  logout: clearLogin,
+});
 
 const DEFAULT_DEPS: RusterDeps = {
   createSession: (o) => new RustSession(o),
   checkPeers,
   now: () => Date.now(),
+  account: defaultAccount(),
 };
 
 export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS): () => void {
@@ -58,17 +72,13 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
   const savedSection = $('saved');
   const savedList = $<HTMLUListElement>('saved-list');
   const status = $<HTMLParagraphElement>('status');
-  const stage = $('stage');
-  const barTitle = $('bar-title');
-  const canvas = $<HTMLCanvasElement>('screen');
-  const disconnect = $<HTMLButtonElement>('disconnect');
+  const stageEl = $('stage');
+  const accountEl = $('account');
   /** The ID server: RustDesk's public one unless a `ruster.server` override is stored on the device. */
   const serverUrl = () => loadServer();
 
   let session: ReturnType<RusterDeps['createSession']> | null = null;
-  let player: VideoPlayer | null = null;
-  let detachInput: (() => void) | null = null;
-  let geometry: Geometry = { width: 0, height: 0, originX: 0, originY: 0 };
+  let stage: Stage | null = null;
   let onlineById = new Map<string, boolean>();
   let alive = true;
   /** Why the page closed the session itself (shown instead of the plain "Đã ngắt."). */
@@ -161,6 +171,74 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     }
   };
 
+  // --- RustDesk account (the public server only serves logged-in controllers) ---------------------
+  let loginAbort: AbortController | null = null;
+
+  const renderAccount = () => {
+    accountEl.replaceChildren();
+    const label = document.createElement('span');
+    label.className = 'account-label';
+    if (loginAbort) {
+      label.textContent = 'Đang chờ đăng nhập…';
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'text account-cancel';
+      cancel.textContent = 'Huỷ';
+      accountEl.append(label, cancel);
+      return;
+    }
+    const user = deps.account.token() ? deps.account.user() ?? { name: '', displayName: '' } : null;
+    if (user) {
+      label.textContent = `Đã đăng nhập RustDesk${user.displayName || user.name ? `: ${user.displayName || user.name}` : ''}`;
+      const out = document.createElement('button');
+      out.type = 'button';
+      out.className = 'text account-logout';
+      out.textContent = 'Đăng xuất';
+      accountEl.append(label, out);
+      return;
+    }
+    label.textContent = 'Đăng nhập RustDesk';
+    accountEl.append(label);
+    for (const op of OPS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'account-op';
+      b.dataset.op = op;
+      b.textContent = OP_LABEL[op];
+      accountEl.append(b);
+    }
+  };
+
+  accountEl.addEventListener('click', (event) => {
+    const target = (event.target as HTMLElement).closest<HTMLButtonElement>('button');
+    if (!target) return;
+    if (target.classList.contains('account-logout')) {
+      deps.account.logout();
+      renderAccount();
+      say('Đã đăng xuất RustDesk.');
+    } else if (target.classList.contains('account-cancel')) {
+      loginAbort?.abort();
+    } else if (target.dataset.op) {
+      const win = deps.account.openBlank();
+      const controller = new AbortController();
+      loginAbort = controller;
+      renderAccount();
+      say('Đăng nhập trong cửa sổ vừa mở…');
+      deps.account.login(target.dataset.op as Op, win, controller.signal).then(
+        (user) => {
+          loginAbort = null;
+          renderAccount();
+          say(`Đã đăng nhập RustDesk${user.displayName || user.name ? `: ${user.displayName || user.name}` : ''}. Bấm Enter để kết nối.`);
+        },
+        (e: unknown) => {
+          loginAbort = null;
+          renderAccount();
+          say(e instanceof LoginError ? e.message : `Đăng nhập không được: ${(e as Error).message}`);
+        },
+      );
+    }
+  });
+
   const refreshOnline = () => {
     const ids = loadPeers().map((p) => p.id);
     if (ids.length === 0) return;
@@ -176,41 +254,33 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
   };
 
   const endSession = () => {
-    detachInput?.();
-    detachInput = null;
-    player?.close();
-    player = null;
+    stage?.destroy();
+    stage = null;
     session = null;
     showStage(false);
     connect.disabled = false;
   };
 
-  const startScreen = (p: PeerSummary) => {
-    geometry = { width: p.width, height: p.height, originX: p.originX, originY: p.originY };
-    barTitle.textContent = `${p.hostname || peer.value.trim()} · ${p.platform}`.trim();
-    showStage(true);
-    const ctx = canvas.getContext('2d');
+  const startScreen = (id: string, p: PeerSummary) => {
     const current = session;
     if (!current) return;
-    if (!VideoPlayer.isSupported() || !ctx) {
+    const titleOf = (saved?: SavedPeer) => (saved ? displayName(saved) : '') || p.hostname || formatId(id);
+    showStage(true);
+    stage = new Stage(stageEl, current, {
+      peer: p,
+      title: titleOf(loadPeers().find((x) => x.id === id)),
+      rename: (name) => {
+        const list = renamePeer(id, name);
+        renderSaved(list);
+        return titleOf(list.find((x) => x.id === id));
+      },
+      onError: (m) => say(m),
+    });
+    if (!stage.start()) {
+      stage = null;
       closingNote = 'Trình duyệt này chưa hỗ trợ giải mã video (WebCodecs).';
       current.close();
-      return;
     }
-    player = new VideoPlayer(
-      {
-        resize: (w, h) => {
-          canvas.width = w;
-          canvas.height = h;
-          geometry = { ...geometry, width: w, height: h };
-        },
-        draw: (frame) => ctx.drawImage(frame, 0, 0),
-      },
-      () => current.requestKeyFrame(),
-      (m) => say(m),
-    );
-    detachInput = attachInput(canvas, current, () => geometry);
-    canvas.focus();
   };
 
   const events = (id: string): SessionEvents => ({
@@ -224,12 +294,19 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     ready: (p) => {
       say('');
       renderSaved(rememberPeer(id, deps.now(), p.hostname));
-      startScreen(p);
+      startScreen(id, p);
     },
-    video: (frames) => player?.feed(frames),
+    video: (frames) => stage?.feed(frames),
+    delay: (ms) => stage?.setDelay(ms),
     closed: (error: SessionError | null) => {
       endSession();
-      say(error ? error.message : (closingNote ?? 'Đã ngắt.'));
+      if (error?.kind === 'auth') {
+        // A stored token that the server no longer accepts is dropped so the login buttons come back.
+        const expired = Boolean(deps.account.token());
+        if (expired) deps.account.logout();
+        renderAccount();
+        say(expired ? 'Phiên đăng nhập RustDesk đã hết hạn. Đăng nhập lại rồi bấm Enter.' : 'Máy chủ RustDesk yêu cầu đăng nhập trước khi kết nối. Chọn một tài khoản ở trên rồi bấm Enter.');
+      } else say(error ? error.message : (closingNote ?? 'Đã ngắt.'));
       closingNote = null;
       refreshOnline();
     },
@@ -270,7 +347,6 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     event.preventDefault();
     finishEdit(false, editingId, '');
   });
-  disconnect.addEventListener('click', () => session?.close());
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -287,13 +363,15 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     }
     connect.disabled = true;
     say('Đang kết nối…');
-    session = deps.createSession({ peerId: id, server: serverUrl(), password: password.value, events: events(id) });
+    session = deps.createSession({ peerId: id, server: serverUrl(), token: deps.account.token(), password: password.value, events: events(id) });
     void session.run();
   });
 
   renderSaved();
+  renderAccount();
   refreshOnline();
   return () => {
+    loginAbort?.abort();
     alive = false;
     session?.close();
     endSession();

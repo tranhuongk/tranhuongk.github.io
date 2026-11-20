@@ -2,8 +2,8 @@
 //   ID server  ──PunchHoleRequest(force_relay)──▶  RelayResponse {uuid, relay, signed peer key}
 //   relay      ──RequestRelay(uuid)──▶  peer's SignedId ──▶ our sealed key ──▶ secretbox frames
 //   peer       ──Hash──▶ LoginRequest(proof) ──▶ LoginResponse ──▶ VideoFrame...
-import { decodeIdPk, decodeMessage, encodeKey, encodeLoginRequest, encodeMouse, encodePublicKey,
-  encodeRefreshVideo, encodeTestDelayEcho, encodeVideoReceived, type KeyInput, type PeerSummary, type VideoChunk } from '../proto/message';
+import { CONTROL_KEY, decodeIdPk, decodeMessage, encodeKey, encodeLoginRequest, encodeMouse, encodePublicKey,
+  encodeRefreshVideo, encodeShowRemoteCursor, encodeTestDelayEcho, encodeVideoReceived, type KeyInput, type PeerSummary, type VideoChunk } from '../proto/message';
 import { CLIENT_VERSION, decodeConnectReply, encodeIceCandidate, encodePunchHoleRequest, encodeRequestRelay, type RelayOffer } from '../proto/rendezvous';
 import { fromBase64, loginProof, makeKeyOffer, openSigned, PUBLIC_SERVER_KEY, SecretStream } from './crypto';
 import { Pipe, PipeError } from './pipe';
@@ -12,7 +12,7 @@ import type { Transport } from './transport';
 import { DEFAULT_ICE_SERVERS, isMdnsCandidate, WebRtcTransport, type PeerConnectionFactory } from './webrtc';
 
 export class SessionError extends Error {
-  constructor(readonly kind: 'offline' | 'refused' | 'old' | 'handshake' | 'login' | 'transport' | 'codec', message: string) {
+  constructor(readonly kind: 'offline' | 'refused' | 'auth' | 'old' | 'handshake' | 'login' | 'transport' | 'codec', message: string) {
     super(message);
     this.name = 'SessionError';
   }
@@ -24,6 +24,8 @@ export interface SessionEvents {
   needPassword(reason: string | null): void;
   ready(peer: PeerSummary): void;
   video(frames: VideoChunk[]): void;
+  /** Round-trip time in ms measured by the peer (sent about once a second). */
+  delay?(ms: number): void;
   closed(error: SessionError | null): void;
 }
 
@@ -42,10 +44,16 @@ export interface SessionOptions {
   webrtc?: boolean;
   peerConnection?: PeerConnectionFactory;
   iceServers?: RTCIceServer[];
+  /** RustDesk account access token; the public server only serves logged-in controllers. */
+  token?: string;
+  /** Have the peer draw its cursor into the video (default on). */
+  showRemoteCursor?: boolean;
   /** How long the relay waits for WebRTC to open before being used (ms). */
   webrtcGraceMs?: number;
 }
 
+/** The public server refuses controllers that are not logged in with a message that says so. */
+const LOGIN_REQUIRED = /log ?in/i;
 const STEP_TIMEOUT_MS = 30_000;
 export const WEBRTC_OPEN_MS = 10_000;
 export const WEBRTC_GRACE_MS = 3_000;
@@ -140,12 +148,12 @@ export class RustSession {
       }
     }
 
-    id.send(encodePunchHoleRequest(this.o.peerId, '', offerEnvelope));
+    id.send(encodePunchHoleRequest(this.o.peerId, '', offerEnvelope, this.o.token ?? ''));
     const offer = await this.awaitRelayOffer(id, rtc);
     step('Máy chủ đã trả lời');
     // Keep feeding the peer's ICE candidates to WebRTC while the transports race.
     void this.pumpIce(id, rtc);
-    if (offer.refuseReason) throw new SessionError('refused', offer.refuseReason);
+    if (offer.refuseReason) throw new SessionError(LOGIN_REQUIRED.test(offer.refuseReason) ? 'auth' : 'refused', offer.refuseReason);
     if (!offer.version) throw new SessionError('old', 'Phiên bản RustDesk bên máy đích quá cũ, không hỗ trợ web.');
 
     if (rtc && offer.webrtcAnswer) {
@@ -175,6 +183,7 @@ export class RustSession {
       const reply = decodeConnectReply(await id.next(STEP_TIMEOUT_MS));
       if (reply.kind === 'relay') return reply.offer;
       if (reply.kind === 'failure') {
+        if (LOGIN_REQUIRED.test(reply.detail)) throw new SessionError('auth', reply.detail);
         throw new SessionError('offline', reply.detail || 'Máy đích không trực tuyến hoặc ID không tồn tại.');
       }
       if (reply.kind === 'ice') {
@@ -292,6 +301,7 @@ export class RustSession {
         sessionId,
         version: CLIENT_VERSION,
         platform: 'Web',
+        showRemoteCursor: this.o.showRemoteCursor ?? true,
       }),
     );
   }
@@ -328,6 +338,7 @@ export class RustSession {
           break;
         case 'testDelay':
           relay.send(encodeTestDelayEcho(msg.raw));
+          if (msg.lastDelay > 0) this.o.events.delay?.(msg.lastDelay);
           break;
         default:
           break;
@@ -347,6 +358,16 @@ export class RustSession {
 
   sendKey(key: KeyInput): void {
     if (this.canSend()) this.relay!.send(encodeKey(key));
+  }
+
+  setShowRemoteCursor(on: boolean): void {
+    if (this.canSend()) this.relay!.send(encodeShowRemoteCursor(on));
+  }
+
+  /** Ctrl+Alt+Del the way the official client sends it (Windows has its own key, others Alt+Ctrl+Delete). */
+  sendCtrlAltDel(platform: string): void {
+    if (platform === 'Windows') this.sendKey({ down: true, controlKey: CONTROL_KEY.CtrlAltDel });
+    else this.sendKey({ down: true, controlKey: CONTROL_KEY.Delete, modifiers: [CONTROL_KEY.Alt, CONTROL_KEY.Control] });
   }
 
   requestKeyFrame(): void {
