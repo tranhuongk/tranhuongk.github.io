@@ -63,11 +63,13 @@ describe('ruster page', () => {
     app.querySelector<HTMLFormElement>('#connect-form')!.dispatchEvent(new Event('submit', { cancelable: true }));
   };
   const status = () => app.querySelector('#status')!.textContent;
+  const picked = () => app.querySelector<HTMLButtonElement>('#server [aria-checked="true"]')?.dataset.choice;
 
-  test('shows ID, password, the Enter button and the server select: no title, no description, no list heading', () => {
+  test('shows ID, password, the Enter button and the server pick: no title, no description, no list heading', () => {
     mountRuster(app, deps);
     expect(app.querySelector('h1')).toBeNull();
-    expect([...app.querySelectorAll('label')].map((l) => l.firstChild?.textContent?.trim())).toEqual(['ID', 'Mật khẩu', 'Máy chủ']);
+    expect([...app.querySelectorAll('label')].map((l) => l.firstChild?.textContent?.trim())).toEqual(['ID', 'Mật khẩu']);
+    expect(app.textContent).not.toContain('RustDesk');
     expect(app.querySelector('#connect')?.textContent).toBe('Enter');
     expect(app.querySelector('.saved-title')).toBeNull();
     expect(app.querySelector('#saved')?.getAttribute('aria-label')).toBe('Máy đã kết nối');
@@ -226,7 +228,7 @@ describe('ruster page', () => {
     mountRuster(app, deps);
     expect(app.querySelector('details')).toBeNull();
     expect(app.querySelector('#log')).toBeNull();
-    expect(app.querySelector<HTMLSelectElement>('#server')!.value).toBe('custom');
+    expect(picked()).toBe('custom');
     expect(app.querySelector<HTMLFormElement>('#server-custom')!.hidden).toBe(false);
     expect(app.querySelector<HTMLInputElement>('#server-host')!.value).toBe('wss://relay.example.com');
     submit('123456789', 'pw');
@@ -234,15 +236,11 @@ describe('ruster page', () => {
   });
 
   describe('server select', () => {
-    const pick = (value: string) => {
-      const select = app.querySelector<HTMLSelectElement>('#server')!;
-      select.value = value;
-      select.dispatchEvent(new Event('change'));
-    };
+    const pick = (value: string) => app.querySelector<HTMLButtonElement>(`#server [data-choice="${value}"]`)!.click();
 
     test('defaults to our own server and hides the RustDesk sign-in row', () => {
       mountRuster(app, deps);
-      expect(app.querySelector<HTMLSelectElement>('#server')!.value).toBe('self');
+      expect(picked()).toBe('self');
       expect(app.querySelector<HTMLElement>('#account')!.hidden).toBe(true);
       expect(app.querySelector<HTMLFormElement>('#server-custom')!.hidden).toBe(true);
     });
@@ -252,6 +250,8 @@ describe('ruster page', () => {
       pick('public');
       expect(app.querySelector<HTMLElement>('#account')!.hidden).toBe(false);
       expect(localStorage.getItem(SERVER_KEY)).toBe('wss://rs-ny.rustdesk.com');
+      expect(picked()).toBe('public');
+      expect(app.textContent).not.toContain('RustDesk');
       submit('123456789', 'pw');
       expect(sessions[0]!.o).toMatchObject({ server: 'wss://rs-ny.rustdesk.com', serverKey: 'OeVuKk5nlHiXp+APNn0Y3pC1Iwpwn44JGqrQCsWqmBw=' });
       pick('self');

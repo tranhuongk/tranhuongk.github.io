@@ -25,12 +25,14 @@ const LAYOUT = `
       <ul id="saved-list"></ul>
     </section>
     <div class="server-row">
-      <label class="server-pick">Máy chủ
-        <select id="server">
-          <option value="self">Riêng · Hà Nội</option>
-          <option value="public">RustDesk công cộng</option>
-          <option value="custom">Tuỳ chỉnh…</option>
-        </select></label>
+      <div class="server-pick">
+        <span id="server-label" class="server-label">Máy chủ</span>
+        <div id="server" class="segmented" role="radiogroup" aria-labelledby="server-label">
+          <button type="button" role="radio" data-choice="self">Hà Nội</button>
+          <button type="button" role="radio" data-choice="public">Công cộng</button>
+          <button type="button" role="radio" data-choice="custom">Tuỳ chỉnh</button>
+        </div>
+      </div>
       <form id="server-custom" class="server-custom" hidden>
         <input id="server-host" placeholder="Máy chủ ID" aria-label="Máy chủ ID" autocomplete="off" autocapitalize="off" spellcheck="false" required>
         <input id="server-pubkey" placeholder="Key" aria-label="Key của máy chủ" autocomplete="off" autocapitalize="off" spellcheck="false">
@@ -87,7 +89,7 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
   const status = $<HTMLParagraphElement>('status');
   const stageEl = $('stage');
   const accountEl = $('account');
-  const serverSelect = $<HTMLSelectElement>('server');
+  const serverPick = $('server');
   const serverCustom = $<HTMLFormElement>('server-custom');
   const serverHost = $<HTMLInputElement>('server-host');
   const serverPubkey = $<HTMLInputElement>('server-pubkey');
@@ -388,7 +390,11 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
   renderSaved();
   // --- ID server choice ----------------------------------------------------------------------------
   const syncServerForm = (choice: ServerChoice) => {
-    serverSelect.value = choice;
+    for (const b of serverPick.querySelectorAll<HTMLButtonElement>('button')) {
+      const on = b.dataset.choice === choice;
+      b.setAttribute('aria-checked', String(on));
+      b.tabIndex = on ? 0 : -1;
+    }
     serverCustom.hidden = choice !== 'custom';
     if (choice === 'custom' && serverChoice() === 'custom') {
       serverHost.value = loadServer();
@@ -401,8 +407,7 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     renderAccount();
     refreshOnline();
   };
-  serverSelect.addEventListener('change', () => {
-    const choice = serverSelect.value as ServerChoice;
+  const pickServer = (choice: ServerChoice) => {
     syncServerForm(choice);
     if (choice === 'custom') {
       serverHost.focus();
@@ -410,7 +415,22 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     }
     saveServer(choice);
     serverChanged();
-    say(choice === 'self' ? 'Đã chuyển sang máy chủ riêng.' : 'Đã chuyển sang máy chủ công cộng của RustDesk.');
+    say(choice === 'self' ? 'Đã chuyển sang máy chủ Hà Nội.' : 'Đã chuyển sang máy chủ công cộng.');
+  };
+  serverPick.addEventListener('click', (event) => {
+    const choice = (event.target as HTMLElement).closest<HTMLButtonElement>('button')?.dataset.choice as ServerChoice | undefined;
+    if (choice && serverPick.querySelector(`[data-choice="${choice}"]`)?.getAttribute('aria-checked') !== 'true') pickServer(choice);
+  });
+  // Arrow keys move between the options, like a native radio group.
+  serverPick.addEventListener('keydown', (event) => {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+    event.preventDefault();
+    const buttons = [...serverPick.querySelectorAll<HTMLButtonElement>('button')];
+    const at = buttons.findIndex((b) => b.getAttribute('aria-checked') === 'true');
+    const step = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1;
+    const next = buttons[(at + step + buttons.length) % buttons.length]!;
+    next.focus();
+    pickServer(next.dataset.choice as ServerChoice);
   });
   serverCustom.addEventListener('submit', (event) => {
     event.preventDefault();
