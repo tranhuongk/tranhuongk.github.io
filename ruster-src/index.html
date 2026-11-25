@@ -165,6 +165,13 @@
          the local cursor is a small dot so pointing feels instant next to the remote cursor in the video. */
       #screen { flex: none; margin: auto; outline: none; touch-action: none; user-select: none;
                 cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Ccircle cx='6' cy='6' r='3' fill='%23ffffff' fill-opacity='.85' stroke='%23000000' stroke-opacity='.6'/%3E%3C/svg%3E") 6 6, default; }
+      /* Touch: the whole stage is a touchpad; our cursor is drawn on top (tip = the click point). */
+      #screen-wrap { touch-action: none; }
+      #vcursor { position: fixed; left: 0; top: 0; z-index: 1; pointer-events: none; width: 24px; height: 24px; margin: -2px 0 0 -3px; }
+      #vcursor svg { display: block; fill: #FFFFFF; stroke: #0E1117; stroke-width: 1.4; stroke-linejoin: round;
+                     transition: transform 0.08s ease; transform-origin: 3px 2px; }
+      #vcursor.pressed svg { fill: var(--accent); transform: scale(0.88); }
+      #soft-kbd { position: fixed; left: 0; bottom: 0; width: 1px; height: 1px; min-height: 0; padding: 0; opacity: 0; font-size: 16px; pointer-events: none; }
       #hud { position: absolute; top: 0; left: 0; right: 0; z-index: 2; display: flex; justify-content: center; padding: 8px; pointer-events: none;
              transition: transform 0.18s ease, opacity 0.18s ease; }
       #hud.hidden { transform: translateY(-110%); opacity: 0; }

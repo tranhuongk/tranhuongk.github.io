@@ -1,0 +1,110 @@
+// The phone's on-screen keyboard: a hidden text field that is focused to open it. Mobile keyboards
+// rarely send usable keydown events (Android reports "Unidentified"), and Vietnamese Telex/VNI types
+// through IME composition, so the field's value is diffed instead: removed characters become
+// Backspace, added ones are typed as text. Enter / arrows from a hardware keyboard still go as keys.
+import { CONTROL_KEY, type KeyInput } from '../proto/message';
+import { keyInputFor } from './input';
+
+/** Kept in the field so Backspace on an "empty" field still has something to delete. */
+const SENTINEL = '​​';
+
+/** What turning `before` into `after` types on the remote: backspaces, then text. */
+export function diffTyping(before: string, after: string): { backspaces: number; text: string } {
+  let i = 0;
+  while (i < before.length && i < after.length && before[i] === after[i]) i++;
+  return { backspaces: [...before.slice(i)].length, text: after.slice(i) };
+}
+
+export class SoftKeyboard {
+  readonly field: HTMLInputElement;
+  private last = SENTINEL;
+  private composing = false;
+  private readonly cleanups: (() => void)[] = [];
+
+  constructor(host: HTMLElement, private readonly send: (k: KeyInput) => void, private readonly onOpenChange: (open: boolean) => void) {
+    const f = document.createElement('input');
+    f.id = 'soft-kbd';
+    f.type = 'text';
+    f.autocomplete = 'off';
+    f.setAttribute('autocapitalize', 'off');
+    f.setAttribute('autocorrect', 'off');
+    f.spellcheck = false;
+    f.setAttribute('enterkeyhint', 'enter');
+    f.setAttribute('aria-label', 'Bàn phím');
+    f.value = SENTINEL;
+    host.append(f);
+    this.field = f;
+    const on = <K extends keyof HTMLElementEventMap>(type: K, h: (e: HTMLElementEventMap[K]) => void) => {
+      f.addEventListener(type, h);
+      this.cleanups.push(() => f.removeEventListener(type, h));
+    };
+    on('compositionstart', () => {
+      this.composing = true;
+    });
+    on('compositionend', () => {
+      this.composing = false;
+      this.flush();
+    });
+    on('input', (e) => {
+      if (!this.composing && !(e as InputEvent).isComposing) this.flush();
+    });
+    on('keydown', (e) => {
+      if (e.isComposing || e.key === 'Unidentified' || e.keyCode === 229) return;
+      const k = keyInputFor(e);
+      // Printable characters arrive through `input`; only control keys and chords are sent here.
+      if (!k || ('text' in k && k.text !== undefined)) return;
+      this.send(k);
+      e.preventDefault();
+    });
+    on('focus', () => this.onOpenChange(true));
+    on('blur', () => this.onOpenChange(false));
+  }
+
+  isOpen(): boolean {
+    return document.activeElement === this.field;
+  }
+
+  open(): void {
+    this.reset();
+    this.field.focus();
+    this.onOpenChange(true);
+  }
+
+  close(): void {
+    this.field.blur();
+    this.onOpenChange(false);
+  }
+
+  toggle(): void {
+    if (this.isOpen()) this.close();
+    else this.open();
+  }
+
+  private flush(): void {
+    const now = this.field.value;
+    const { backspaces, text } = diffTyping(this.last, now);
+    for (let i = 0; i < backspaces; i++) this.send({ controlKey: CONTROL_KEY.Backspace });
+    for (const part of text.split('\n')) {
+      if (part) this.send({ text: part });
+    }
+    if (text.includes('\n')) this.send({ controlKey: CONTROL_KEY.Return });
+    this.last = now;
+    // Start over once the field drifts, so the diff stays short and Backspace always has a sentinel.
+    if (!now.startsWith(SENTINEL) || now.length > 64) this.reset();
+  }
+
+  private reset(): void {
+    this.field.value = SENTINEL;
+    this.last = SENTINEL;
+    try {
+      this.field.setSelectionRange(SENTINEL.length, SENTINEL.length);
+    } catch {
+      // not focusable yet
+    }
+  }
+
+  destroy(): void {
+    for (const c of this.cleanups.splice(0)) c();
+    this.field.remove();
+  }
+}

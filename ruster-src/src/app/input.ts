@@ -59,14 +59,22 @@ export function keyInputFor(e: Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 
   return null;
 }
 
-/** Wires pointer and keyboard events on `canvas` to `target`; returns the cleanup. */
-export function attachInput(canvas: HTMLCanvasElement, target: InputTarget, geometry: () => Geometry): () => void {
+/**
+ * Wires mouse/pen and keyboard events on `canvas` to `target`; returns the cleanup. Touch is left to
+ * the touchpad (touch.ts); `onMouse` hears where a real mouse put the cursor.
+ */
+export function attachInput(
+  canvas: HTMLCanvasElement, target: InputTarget, geometry: () => Geometry, onMouse?: (x: number, y: number) => void,
+): () => void {
   const point = (e: MouseEvent) => toRemote(e.clientX, e.clientY, canvas.getBoundingClientRect(), geometry());
   const move = (e: PointerEvent) => {
+    if (e.pointerType === 'touch') return;
     const p = point(e);
+    onMouse?.(p.x, p.y);
     target.sendMouse(MOUSE.move, 0, p.x, p.y);
   };
   const down = (e: PointerEvent) => {
+    if (e.pointerType === 'touch') return;
     canvas.focus();
     canvas.setPointerCapture?.(e.pointerId);
     const p = point(e);
@@ -74,6 +82,7 @@ export function attachInput(canvas: HTMLCanvasElement, target: InputTarget, geom
     e.preventDefault();
   };
   const up = (e: PointerEvent) => {
+    if (e.pointerType === 'touch') return;
     const p = point(e);
     target.sendMouse(MOUSE.up, BUTTON_OF[e.button] ?? BUTTON.left, p.x, p.y);
     e.preventDefault();
