@@ -238,6 +238,22 @@ describe('ruster page', () => {
   describe('server select', () => {
     const pick = (value: string) => app.querySelector<HTMLButtonElement>(`#server [data-choice="${value}"]`)!.click();
 
+    test('our server offers the setup code to copy; the public server does not', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      mountRuster(app, deps);
+      const code = app.querySelector<HTMLElement>('#server-code')!;
+      expect(code.hidden).toBe(false);
+      app.querySelector<HTMLButtonElement>('#copy-config')!.click();
+      await flush();
+      expect(writeText).toHaveBeenCalledWith(expect.stringMatching(/^=0nI9sW/));
+      expect(status()).toContain('Đã sao chép mã');
+      pick('public');
+      expect(code.hidden).toBe(true);
+      pick('custom');
+      expect(code.hidden).toBe(true);
+    });
+
     test('defaults to our own server and hides the RustDesk sign-in row', () => {
       mountRuster(app, deps);
       expect(picked()).toBe('self');

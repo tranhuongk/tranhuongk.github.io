@@ -7,7 +7,7 @@ import {
   renamePeer, type SavedPeer,
 } from './saved-peers';
 import { clearLogin, defaultLoginDeps, loadToken, loadUser, login, LoginError, OP_LABEL, OPS, type AccountUser, type Op } from '../auth/account';
-import { loadServer, loadServerKey, saveServer, serverChoice, type ServerChoice } from './server-setting';
+import { loadServer, loadServerKey, saveServer, serverChoice, serverConfigCode, type ServerChoice } from './server-setting';
 import { Stage, STAGE_HTML, type StageSession } from './stage';
 
 const LAYOUT = `
@@ -38,6 +38,10 @@ const LAYOUT = `
         <input id="server-pubkey" placeholder="Key" aria-label="Key của máy chủ" autocomplete="off" autocapitalize="off" spellcheck="false">
         <button type="submit">Lưu</button>
       </form>
+      <div id="server-code" class="server-code" hidden>
+        <span>Máy được điều khiển: dán mã vào Cài đặt → Mạng → ID/Relay server → 📋</span>
+        <button id="copy-config" type="button">Sao chép mã</button>
+      </div>
     </div>
     <div id="account" class="account"></div>
     <p id="status" role="status"></p>
@@ -93,6 +97,7 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
   const serverCustom = $<HTMLFormElement>('server-custom');
   const serverHost = $<HTMLInputElement>('server-host');
   const serverPubkey = $<HTMLInputElement>('server-pubkey');
+  const serverCode = $('server-code');
   /** The ID server picked in "Máy chủ" (our own hbbs by default). */
   const serverUrl = () => loadServer();
 
@@ -396,6 +401,8 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
       b.tabIndex = on ? 0 : -1;
     }
     serverCustom.hidden = choice !== 'custom';
+    // The setup code belongs to the saved server, so a Tuỳ chỉnh not yet saved shows none.
+    serverCode.hidden = !serverConfigCode() || choice !== serverChoice();
     if (choice === 'custom' && serverChoice() === 'custom') {
       serverHost.value = loadServer();
       serverPubkey.value = loadServerKey() ?? '';
@@ -431,6 +438,15 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     const next = buttons[(at + step + buttons.length) % buttons.length]!;
     next.focus();
     pickServer(next.dataset.choice as ServerChoice);
+  });
+  $('copy-config').addEventListener('click', () => {
+    const code = serverConfigCode();
+    if (!code) return;
+    const copied = () => say('Đã sao chép mã. Trên máy được điều khiển: Cài đặt → Mạng → ID/Relay server → bấm 📋 → OK.');
+    // No clipboard access (old browser, http): show the code to copy by hand.
+    const manual = () => window.prompt('Sao chép mã này:', code);
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(code).then(copied, manual);
+    else manual();
   });
   serverCustom.addEventListener('submit', (event) => {
     event.preventDefault();

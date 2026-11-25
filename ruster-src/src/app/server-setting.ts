@@ -63,3 +63,17 @@ export function saveServer(choice: ServerChoice, host = '', key = ''): void {
     store(SERVER_PUBKEY_KEY, key.trim() || undefined);
   }
 }
+
+/**
+ * One-paste setup code for the machines being controlled (their ID/Relay server dialog → paste icon):
+ * JSON {host, relay, api, key} → base64url (padded) → reversed, the same as the desktop app's export.
+ * Undefined when there is nothing to paste (the public server, or a custom host without a key).
+ */
+export function serverConfigCode(server: string = loadServer(), key: string | undefined = loadServerKey(server)): string | undefined {
+  if (!key || trimUrl(server) === PUBLIC_SERVER) return undefined;
+  const host = trimUrl(server).replace(/^wss?:\/\//, '').replace(/\/ws\/id$/, '');
+  if (!host) return undefined;
+  const json = JSON.stringify({ host, relay: '', api: '', key });
+  const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(json))).replace(/\+/g, '-').replace(/\//g, '_');
+  return [...b64].reverse().join('');
+}
