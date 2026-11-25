@@ -9,6 +9,8 @@ import { concat } from '../proto/wire';
 
 /** Ed25519 key of the public RustDesk ID servers (base64); custom servers publish their own. */
 export const PUBLIC_SERVER_KEY = 'OeVuKk5nlHiXp+APNn0Y3pC1Iwpwn44JGqrQCsWqmBw=';
+/** Public key of our own hbbs (/opt/rustdesk/id_ed25519.pub on the VPS). */
+export const SELF_SERVER_KEY = 'ZFEjVb8vuQm0wUCb2in01n8iq9U3a09MRlvcFByFemk=';
 
 export function fromBase64(text: string): Uint8Array {
   const raw = atob(text);

@@ -2,7 +2,10 @@
 // online. The socket is injected so tests need no network.
 import { decodeRendezvous, encodeOnlineRequest, isPeerOnline } from '../proto/rendezvous';
 
-export const DEFAULT_SERVER = 'wss://rs-ny.rustdesk.com';
+/** Our own hbbs/hbbr (iNET VPS, Hà Nội) behind Caddy: /ws/id → 21118, /ws/relay → 21119. */
+export const DEFAULT_SERVER = 'wss://103-75-184-121.sslip.io';
+/** RustDesk's public demo server. */
+export const PUBLIC_SERVER = 'wss://rs-ny.rustdesk.com';
 export const ID_PATH = '/ws/id';
 const PEER_ID = /^[0-9A-Za-z_-]{1,32}$/;
 export const LOOKUP_TIMEOUT_MS = 8_000;

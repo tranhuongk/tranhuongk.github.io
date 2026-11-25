@@ -1,14 +1,65 @@
-// The ID server the page talks to: RustDesk's public one, unless `ruster.server` is set in
-// localStorage (a self-hosted hbbs, e.g. wss://relay.example.com).
-import { DEFAULT_SERVER } from '../net/rendezvous';
+// The ID server the page talks to, picked in the "Máy chủ" select and kept per device:
+// our own hbbs (default), RustDesk's public server, or a custom host + key.
+import { PUBLIC_SERVER_KEY, SELF_SERVER_KEY } from '../net/crypto';
+import { DEFAULT_SERVER, PUBLIC_SERVER } from '../net/rendezvous';
 
 export const SERVER_KEY = 'ruster.server';
+export const SERVER_PUBKEY_KEY = 'ruster.serverKey';
+
+export type ServerChoice = 'self' | 'public' | 'custom';
+
+const KNOWN_KEYS: Record<string, string> = {
+  [DEFAULT_SERVER]: SELF_SERVER_KEY,
+  [PUBLIC_SERVER]: PUBLIC_SERVER_KEY,
+};
+
+const trimUrl = (server: string) => server.trim().replace(/\/+$/, '');
+
+function stored(key: string): string | undefined {
+  try {
+    return localStorage.getItem(key)?.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function store(key: string, value: string | undefined): void {
+  try {
+    if (value) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
+  } catch {
+    // storage blocked: nothing is kept
+  }
+}
 
 export function loadServer(): string {
-  try {
-    const v = localStorage.getItem(SERVER_KEY)?.trim();
-    return v ? v : DEFAULT_SERVER;
-  } catch {
-    return DEFAULT_SERVER;
+  return stored(SERVER_KEY) ?? DEFAULT_SERVER;
+}
+
+/** Ed25519 key that signs the ID server's relay answers; undefined for an unknown server. */
+export function loadServerKey(server: string = loadServer()): string | undefined {
+  return stored(SERVER_PUBKEY_KEY) ?? KNOWN_KEYS[trimUrl(server)];
+}
+
+/** Which option of the "Máy chủ" select the stored setting matches. */
+export function serverChoice(): ServerChoice {
+  if (stored(SERVER_PUBKEY_KEY)) return 'custom';
+  const s = trimUrl(loadServer());
+  if (s === DEFAULT_SERVER) return 'self';
+  if (s === PUBLIC_SERVER) return 'public';
+  return 'custom';
+}
+
+/** Stores the choice; `custom` takes a host (wss://… or a bare domain) and an optional key. */
+export function saveServer(choice: ServerChoice, host = '', key = ''): void {
+  if (choice === 'self') {
+    store(SERVER_KEY, undefined);
+    store(SERVER_PUBKEY_KEY, undefined);
+  } else if (choice === 'public') {
+    store(SERVER_KEY, PUBLIC_SERVER);
+    store(SERVER_PUBKEY_KEY, undefined);
+  } else {
+    store(SERVER_KEY, trimUrl(host) || undefined);
+    store(SERVER_PUBKEY_KEY, key.trim() || undefined);
   }
 }

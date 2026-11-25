@@ -54,6 +54,8 @@ export interface SessionOptions {
 
 /** The public server refuses controllers that are not logged in with a message that says so. */
 const LOGIN_REQUIRED = /log ?in/i;
+/** PunchHoleResponse.Failure.LICENSE_MISMATCH */
+const LICENSE_MISMATCH = 3;
 const STEP_TIMEOUT_MS = 30_000;
 export const WEBRTC_OPEN_MS = 10_000;
 export const WEBRTC_GRACE_MS = 3_000;
@@ -148,7 +150,7 @@ export class RustSession {
       }
     }
 
-    id.send(encodePunchHoleRequest(this.o.peerId, '', offerEnvelope, this.o.token ?? ''));
+    id.send(encodePunchHoleRequest(this.o.peerId, this.o.serverKey ?? '', offerEnvelope, this.o.token ?? ''));
     const offer = await this.awaitRelayOffer(id, rtc);
     step('Máy chủ đã trả lời');
     // Keep feeding the peer's ICE candidates to WebRTC while the transports race.
@@ -184,6 +186,8 @@ export class RustSession {
       if (reply.kind === 'relay') return reply.offer;
       if (reply.kind === 'failure') {
         if (LOGIN_REQUIRED.test(reply.detail)) throw new SessionError('auth', reply.detail);
+        // A self-hosted hbbs (-k / id_ed25519) rejects requests whose licence_key isn't its public key.
+        if (reply.failure === LICENSE_MISMATCH) throw new SessionError('refused', 'Khoá máy chủ không khớp — kiểm tra lại key trong cài đặt máy chủ.');
         throw new SessionError('offline', reply.detail || 'Máy đích không trực tuyến hoặc ID không tồn tại.');
       }
       if (reply.kind === 'ice') {
@@ -216,7 +220,7 @@ export class RustSession {
       relay.close();
       throw e;
     }
-    relay.send(encodeRequestRelay(offer.uuid));
+    relay.send(encodeRequestRelay(offer.uuid, this.o.serverKey ?? ''));
     return relay;
   }
 

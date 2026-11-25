@@ -139,6 +139,13 @@
       .peer-edit-input { flex: 1; min-width: 0; min-height: 40px; background: var(--surface); }
       .peer-save { min-height: 40px; }
 
+      /* Server row: the ID server select; Tuỳ chỉnh… opens host + key fields. */
+      .server-row { display: flex; flex-direction: column; gap: 8px; }
+      label.server-pick { flex-direction: row; align-items: center; gap: 10px; }
+      label.server-pick select { flex: 1; min-width: 0; min-height: 32px; font-size: 13px; }
+      .server-custom { flex-direction: row; flex-wrap: wrap; gap: 6px; }
+      .server-custom input { flex: 1 1 140px; min-width: 0; min-height: 36px; padding: 6px 10px; }
+      .server-custom button { min-height: 32px; font-size: 13px; }
       /* Account row: sign-in buttons while logged out, the name and Đăng xuất while logged in. */
       .account { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
       .account-label { margin-right: 4px; }

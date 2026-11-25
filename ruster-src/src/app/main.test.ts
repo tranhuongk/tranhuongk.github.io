@@ -3,7 +3,7 @@ import type { SessionEvents, SessionOptions } from '../net/session';
 import type { PeerSummary } from '../proto/message';
 import { mountRuster, type AccountApi, type RusterDeps } from './main';
 import { PEERS_KEY } from './saved-peers';
-import { SERVER_KEY } from './server-setting';
+import { SERVER_KEY, SERVER_PUBKEY_KEY } from './server-setting';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 const PEER: PeerSummary = { hostname: 'MAC', platform: 'Mac OS', username: 'u', version: '1.5.3', width: 1920, height: 1080, originX: 0, originY: 0 };
@@ -64,10 +64,10 @@ describe('ruster page', () => {
   };
   const status = () => app.querySelector('#status')!.textContent;
 
-  test('shows only ID, password and the Enter button: no title, no description, no list heading', () => {
+  test('shows ID, password, the Enter button and the server select: no title, no description, no list heading', () => {
     mountRuster(app, deps);
     expect(app.querySelector('h1')).toBeNull();
-    expect([...app.querySelectorAll('label')].map((l) => l.firstChild?.textContent?.trim())).toEqual(['ID', 'Mật khẩu']);
+    expect([...app.querySelectorAll('label')].map((l) => l.firstChild?.textContent?.trim())).toEqual(['ID', 'Mật khẩu', 'Máy chủ']);
     expect(app.querySelector('#connect')?.textContent).toBe('Enter');
     expect(app.querySelector('.saved-title')).toBeNull();
     expect(app.querySelector('#saved')?.getAttribute('aria-label')).toBe('Máy đã kết nối');
@@ -80,7 +80,7 @@ describe('ruster page', () => {
       sessions[0]!.events.status(text);
     }
     expect(status()).toBe('Đang kết nối…');
-    expect(app.textContent).not.toContain('RustDesk');
+    expect(app.textContent).not.toContain('Nối relay');
   });
 
   test('connect starts a session with the id, password and server; an invalid id never does', () => {
@@ -89,7 +89,7 @@ describe('ruster page', () => {
     expect(sessions).toHaveLength(0);
     expect(status()).toBe('ID không hợp lệ.');
     submit('123456789', 'secret');
-    expect(sessions[0]!.o).toMatchObject({ peerId: '123456789', password: 'secret', server: 'wss://rs-ny.rustdesk.com' });
+    expect(sessions[0]!.o).toMatchObject({ peerId: '123456789', password: 'secret', server: 'wss://103-75-184-121.sslip.io', serverKey: 'ZFEjVb8vuQm0wUCb2in01n8iq9U3a09MRlvcFByFemk=' });
     expect(app.querySelector<HTMLButtonElement>('#connect')!.disabled).toBe(true);
   });
 
@@ -146,7 +146,7 @@ describe('ruster page', () => {
     deps.checkPeers = vi.fn().mockResolvedValue({ ok: true, online: new Map([['111222333', true], ['444555666', false]]) });
     mountRuster(app, deps);
     await flush();
-    expect(deps.checkPeers).toHaveBeenCalledWith(['111222333', '444555666'], 'wss://rs-ny.rustdesk.com');
+    expect(deps.checkPeers).toHaveBeenCalledWith(['111222333', '444555666'], 'wss://103-75-184-121.sslip.io');
     expect([...app.querySelectorAll('.peer-name')].map((e) => e.textContent)).toEqual(['Mac nhà', 'PC-VP']);
     expect([...app.querySelectorAll('.peer-meta')].map((e) => e.textContent)).toEqual(['111 222 333 · vừa xong', '444 555 666 · vừa xong']);
     expect([...app.querySelectorAll('.peer-avatar')].map((e) => e.textContent)).toEqual(['M', 'P']);
@@ -221,14 +221,56 @@ describe('ruster page', () => {
     vi.restoreAllMocks();
   });
 
-  test('there is no Diagnostics section, and a stored server override is used', () => {
+  test('there is no Diagnostics section, and a stored server override shows as Tuỳ chỉnh and is used', () => {
     localStorage.setItem(SERVER_KEY, 'wss://relay.example.com');
     mountRuster(app, deps);
     expect(app.querySelector('details')).toBeNull();
     expect(app.querySelector('#log')).toBeNull();
-    expect(app.querySelector('#server')).toBeNull();
+    expect(app.querySelector<HTMLSelectElement>('#server')!.value).toBe('custom');
+    expect(app.querySelector<HTMLFormElement>('#server-custom')!.hidden).toBe(false);
+    expect(app.querySelector<HTMLInputElement>('#server-host')!.value).toBe('wss://relay.example.com');
     submit('123456789', 'pw');
     expect(sessions[0]!.o.server).toBe('wss://relay.example.com');
+  });
+
+  describe('server select', () => {
+    const pick = (value: string) => {
+      const select = app.querySelector<HTMLSelectElement>('#server')!;
+      select.value = value;
+      select.dispatchEvent(new Event('change'));
+    };
+
+    test('defaults to our own server and hides the RustDesk sign-in row', () => {
+      mountRuster(app, deps);
+      expect(app.querySelector<HTMLSelectElement>('#server')!.value).toBe('self');
+      expect(app.querySelector<HTMLElement>('#account')!.hidden).toBe(true);
+      expect(app.querySelector<HTMLFormElement>('#server-custom')!.hidden).toBe(true);
+    });
+
+    test('the public server shows the sign-in row, is remembered and is used', () => {
+      mountRuster(app, deps);
+      pick('public');
+      expect(app.querySelector<HTMLElement>('#account')!.hidden).toBe(false);
+      expect(localStorage.getItem(SERVER_KEY)).toBe('wss://rs-ny.rustdesk.com');
+      submit('123456789', 'pw');
+      expect(sessions[0]!.o).toMatchObject({ server: 'wss://rs-ny.rustdesk.com', serverKey: 'OeVuKk5nlHiXp+APNn0Y3pC1Iwpwn44JGqrQCsWqmBw=' });
+      pick('self');
+      expect(localStorage.getItem(SERVER_KEY)).toBeNull();
+      expect(app.querySelector<HTMLElement>('#account')!.hidden).toBe(true);
+    });
+
+    test('Tuỳ chỉnh keeps the host and key only once Lưu is pressed', () => {
+      mountRuster(app, deps);
+      pick('custom');
+      expect(localStorage.getItem(SERVER_KEY)).toBeNull();
+      app.querySelector<HTMLInputElement>('#server-host')!.value = 'rd.example.com/';
+      app.querySelector<HTMLInputElement>('#server-pubkey')!.value = ' KEY= ';
+      app.querySelector<HTMLFormElement>('#server-custom')!.dispatchEvent(new Event('submit', { cancelable: true }));
+      expect(localStorage.getItem(SERVER_KEY)).toBe('rd.example.com');
+      expect(localStorage.getItem(SERVER_PUBKEY_KEY)).toBe('KEY=');
+      submit('123456789', 'pw');
+      expect(sessions[0]!.o).toMatchObject({ server: 'rd.example.com', serverKey: 'KEY=' });
+    });
   });
 
   describe('RustDesk account', () => {

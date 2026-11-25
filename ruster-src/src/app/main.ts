@@ -7,7 +7,7 @@ import {
   renamePeer, type SavedPeer,
 } from './saved-peers';
 import { clearLogin, defaultLoginDeps, loadToken, loadUser, login, LoginError, OP_LABEL, OPS, type AccountUser, type Op } from '../auth/account';
-import { loadServer } from './server-setting';
+import { loadServer, loadServerKey, saveServer, serverChoice, type ServerChoice } from './server-setting';
 import { Stage, STAGE_HTML, type StageSession } from './stage';
 
 const LAYOUT = `
@@ -24,6 +24,19 @@ const LAYOUT = `
     <section id="saved" aria-label="Máy đã kết nối" hidden>
       <ul id="saved-list"></ul>
     </section>
+    <div class="server-row">
+      <label class="server-pick">Máy chủ
+        <select id="server">
+          <option value="self">Riêng · Hà Nội</option>
+          <option value="public">RustDesk công cộng</option>
+          <option value="custom">Tuỳ chỉnh…</option>
+        </select></label>
+      <form id="server-custom" class="server-custom" hidden>
+        <input id="server-host" placeholder="Máy chủ ID" aria-label="Máy chủ ID" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+        <input id="server-pubkey" placeholder="Key" aria-label="Key của máy chủ" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button type="submit">Lưu</button>
+      </form>
+    </div>
     <div id="account" class="account"></div>
     <p id="status" role="status"></p>
   </header>
@@ -74,7 +87,11 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
   const status = $<HTMLParagraphElement>('status');
   const stageEl = $('stage');
   const accountEl = $('account');
-  /** The ID server: RustDesk's public one unless a `ruster.server` override is stored on the device. */
+  const serverSelect = $<HTMLSelectElement>('server');
+  const serverCustom = $<HTMLFormElement>('server-custom');
+  const serverHost = $<HTMLInputElement>('server-host');
+  const serverPubkey = $<HTMLInputElement>('server-pubkey');
+  /** The ID server picked in "Máy chủ" (our own hbbs by default). */
   const serverUrl = () => loadServer();
 
   let session: ReturnType<RusterDeps['createSession']> | null = null;
@@ -176,6 +193,8 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
 
   const renderAccount = () => {
     accountEl.replaceChildren();
+    // Only RustDesk's public server asks controllers to sign in; a self-hosted hbbs never does.
+    accountEl.hidden = serverChoice() !== 'public';
     const label = document.createElement('span');
     label.className = 'account-label';
     if (loginAbort) {
@@ -362,11 +381,46 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     }
     connect.disabled = true;
     say('Đang kết nối…');
-    session = deps.createSession({ peerId: id, server: serverUrl(), token: deps.account.token(), password: password.value, events: events(id) });
+    session = deps.createSession({ peerId: id, server: serverUrl(), serverKey: loadServerKey(serverUrl()), token: deps.account.token(), password: password.value, events: events(id) });
     void session.run();
   });
 
   renderSaved();
+  // --- ID server choice ----------------------------------------------------------------------------
+  const syncServerForm = (choice: ServerChoice) => {
+    serverSelect.value = choice;
+    serverCustom.hidden = choice !== 'custom';
+    if (choice === 'custom' && serverChoice() === 'custom') {
+      serverHost.value = loadServer();
+      serverPubkey.value = loadServerKey() ?? '';
+    }
+  };
+  const serverChanged = () => {
+    onlineById = new Map();
+    renderSaved();
+    renderAccount();
+    refreshOnline();
+  };
+  serverSelect.addEventListener('change', () => {
+    const choice = serverSelect.value as ServerChoice;
+    syncServerForm(choice);
+    if (choice === 'custom') {
+      serverHost.focus();
+      return; // kept only once Lưu is pressed
+    }
+    saveServer(choice);
+    serverChanged();
+    say(choice === 'self' ? 'Đã chuyển sang máy chủ riêng.' : 'Đã chuyển sang máy chủ công cộng của RustDesk.');
+  });
+  serverCustom.addEventListener('submit', (event) => {
+    event.preventDefault();
+    saveServer('custom', serverHost.value, serverPubkey.value);
+    syncServerForm(serverChoice());
+    serverChanged();
+    say(`Đã lưu máy chủ ${loadServer()}.`);
+  });
+
+  syncServerForm(serverChoice());
   renderAccount();
   refreshOnline();
   return () => {
