@@ -130,6 +130,26 @@ describe('Stage', () => {
     expect(s.calls).toEqual([`key:${JSON.stringify({ controlKey: 30, modifiers: [4] })}`]);
   });
 
+  test('a touch tap with the peer showing the I-beam opens the phone keyboard', () => {
+    vi.stubGlobal('ImageData', class {});
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage: vi.fn(), putImageData: vi.fn() } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue('data:image/png;base64,');
+    stage.start();
+    const rows = ['#######', ...Array(10).fill('...#...'), '#######'];
+    const colors = new Uint8Array(7 * 12 * 4);
+    rows.forEach((r, y) => [...r].forEach((c, x) => (colors[(y * 7 + x) * 4 + 3] = c === '#' ? 255 : 0)));
+    const wrap = $('screen-wrap');
+    const touch = (type: string) => wrap.dispatchEvent(Object.assign(new Event(type, { cancelable: true }), { pointerType: 'touch', pointerId: 1, clientX: 50, clientY: 50 }));
+    (document.activeElement as HTMLElement | null)?.blur();
+    touch('pointerdown');
+    touch('pointerup');
+    expect(document.activeElement?.id).not.toBe('soft-kbd');
+    stage.cursorEvent({ shape: { id: '7', hotx: 3, hoty: 6, width: 7, height: 12, colors } });
+    touch('pointerdown');
+    touch('pointerup');
+    expect(document.activeElement?.id).toBe('soft-kbd');
+  });
+
   test('a cursor id never received is asked for once', () => {
     stage.start();
     stage.cursorEvent({ id: '42' });

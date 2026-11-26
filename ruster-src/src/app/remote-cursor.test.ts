@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { BUTTON, CONTROL_KEY, decodeMessage, encodeMouse, encodeRequestCursorData, FIELD, MOUSE } from '../proto/message';
 import { lengthDelimited, readFields, sintField, varintField } from '../proto/wire';
 import { zstdRaw } from './zstd-fixture';
-import { drawScale, shapePixels } from './remote-cursor';
+import { drawScale, isTextBeam, shapePixels } from './remote-cursor';
 
 describe('cursor messages', () => {
   test('CursorData: id, signed hot spot, size, compressed pixels', () => {
@@ -54,5 +54,27 @@ describe('mouse messages', () => {
     expect(f.map((x) => x.field)).toEqual([1, 2, 3, 4]);
     expect(Array.from(f[3]!.value as Uint8Array)).toEqual([CONTROL_KEY.Shift]);
     expect(readFields(readFields(encodeMouse(MOUSE.move, 0, 1, 1))[0]!.value as Uint8Array)).toHaveLength(3);
+  });
+});
+
+describe('isTextBeam', () => {
+  /** RGBA picture from rows of '#' (solid) and '.' (clear). */
+  const pic = (rows: string[]) => {
+    const w = rows[0]!.length;
+    const px = new Uint8Array(w * rows.length * 4);
+    rows.forEach((r, y) => [...r].forEach((c, x) => (px[(y * w + x) * 4 + 3] = c === '#' ? 255 : 0)));
+    return { px, w, h: rows.length };
+  };
+  const beam = pic(['#######', '...#...', '...#...', '...#...', '...#...', '...#...', '...#...', '...#...', '...#...', '...#...', '...#...', '#######']);
+  const nsResize = pic(['...#...', '..###..', '.#####.', '...#...', '...#...', '...#...', '...#...', '...#...', '...#...', '.#####.', '..###..', '...#...']);
+  const arrow = pic(['#......', '##.....', '###....', '####...', '#####..', '######.', '#######', '###....', '#.##...', '..##...', '...##..', '...##..']);
+
+  test('the I-beam, hot spot in the middle', () => {
+    expect(isTextBeam(beam.px, beam.w, beam.h, 3, 6)).toBe(true);
+  });
+  test('not the vertical resize arrows, the arrow, or an I-beam pointing from its corner', () => {
+    expect(isTextBeam(nsResize.px, nsResize.w, nsResize.h, 3, 6)).toBe(false);
+    expect(isTextBeam(arrow.px, arrow.w, arrow.h, 0, 0)).toBe(false);
+    expect(isTextBeam(beam.px, beam.w, beam.h, 0, 0)).toBe(false);
   });
 });

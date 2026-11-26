@@ -1,7 +1,7 @@
 // The remote screen while controlling: full-window canvas, an auto-hiding toolbar (fit / 100 %,
 // remote cursor, Ctrl+Alt+Del, full screen, rename, disconnect), a connection chip and a banner when
 // the peer stops answering.
-import { CONTROL_KEY, type ClipItem, type CursorShape, type KeyInput, type PeerSummary, type VideoChunk } from '../proto/message';
+import { BUTTON, CONTROL_KEY, type ClipItem, type CursorShape, type KeyInput, type PeerSummary, type VideoChunk } from '../proto/message';
 import { ClipboardSync } from './clipboard';
 import { AutoHide } from './hud';
 import { attachInput, localIsApple, swapCommandControl, type Geometry, type InputTarget } from './input';
@@ -99,6 +99,8 @@ export class Stage {
   private readonly swapMods: boolean;
   private pendingPaste: KeyInput | null = null;
   private pasteTimer: ReturnType<typeof setTimeout> | null = null;
+  /** When the last touch tap clicked: an I-beam arriving just after it still opens the keyboard. */
+  private tapAt = 0;
 
   constructor(private readonly root: HTMLElement, private readonly session: StageSession, private readonly o: StageOptions) {
     const $ = <T extends HTMLElement>(id: string) => root.querySelector<T>(`#${id}`)!;
@@ -190,6 +192,12 @@ export class Stage {
         this.vcursor.classList.toggle('pressed', pressed);
       },
       toggleKeyboard: () => this.keyboard?.toggle(),
+      clicked: (button) => {
+        if (button !== BUTTON.left) return;
+        this.tapAt = Date.now();
+        // The cursor already sits on the field it tapped; opening now, inside the tap, works on iOS too.
+        if (this.cursor.textBeam()) this.openKeyboard();
+      },
       buzz: () => navigator.vibrate?.(15),
     };
     const pad = new TouchPad(this.target!, () => this.geometry, view);
@@ -229,6 +237,42 @@ export class Stage {
     // Keep the field focused through the tap, so the button closes an open keyboard instead of reopening it.
     this.on(kbdButton, 'pointerdown', (e) => e.preventDefault());
     this.on(kbdButton, 'click', () => this.keyboard?.toggle());
+    this.followVisibleArea();
+  }
+
+  private openKeyboard(): void {
+    if (this.keyboard && !this.keyboard.isOpen()) this.keyboard.open();
+  }
+
+  /**
+   * The phone keyboard covers the bottom of the window without resizing it: the stage shrinks to the
+   * part still visible, so the picture fits above the keyboard and the cursor stays in sight.
+   */
+  private followVisibleArea(): void {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const style = this.root.style;
+    const fit = () => {
+      const full = Math.max(document.documentElement.clientHeight, window.innerHeight);
+      if (full - vv.height > 80) {
+        style.top = `${vv.offsetTop}px`;
+        style.height = `${vv.height}px`;
+        style.bottom = 'auto';
+      } else {
+        style.top = style.height = style.bottom = '';
+      }
+      requestAnimationFrame(() => {
+        this.layout();
+        const c = this.touch?.cursorClient();
+        if (c && this.keyboard?.isOpen()) this.reveal(c.x, c.y);
+        this.touch?.redraw();
+      });
+    };
+    this.on(vv, 'resize', fit);
+    this.on(vv, 'scroll', fit);
+    this.cleanups.push(() => {
+      style.top = style.height = style.bottom = '';
+    });
   }
 
   private zoomBy(factor: number, clientX: number, clientY: number): void {
@@ -350,6 +394,11 @@ export class Stage {
       if (this.cursor.use(e.id)) this.applyCursor();
       else if (this.cursor.shouldAsk(e.id)) this.session.requestCursorData(e.id);
     } else this.touch?.remoteMoved(e.x, e.y);
+    // The I-beam came just after a tap (the cursor had not changed yet): Android still opens it.
+    if (!('x' in e) && Date.now() - this.tapAt < 1000 && this.cursor.textBeam()) {
+      this.tapAt = 0;
+      this.openKeyboard();
+    }
   }
 
   /** Puts the peer's current shape on the picture (mouse) and on the touchpad cursor. */

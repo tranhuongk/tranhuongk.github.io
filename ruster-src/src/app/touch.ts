@@ -17,6 +17,8 @@ export interface TouchView {
   /** Draws our cursor at a client point (null hides it); `pressed` while the left button is held. */
   drawCursor(at: { x: number; y: number } | null, pressed: boolean): void;
   toggleKeyboard(): void;
+  /** A tap clicked `button` (called inside the touch event, where a keyboard may still be opened). */
+  clicked?(button: number): void;
   /** Short buzz when a hold turns into a drag. */
   buzz(): void;
 }
@@ -237,6 +239,7 @@ export class TouchPad {
     const p = this.cursor();
     this.target.sendMouse(MOUSE.down, button, p.x, p.y);
     this.target.sendMouse(MOUSE.up, button, p.x, p.y);
+    this.view.clicked?.(button);
   }
 
   /** Finger travel → cursor travel: 1:1 with the screen as shown, up to 2.2× for quick flicks. */

@@ -77,7 +77,8 @@ export class SoftKeyboard {
 
   open(): void {
     this.reset();
-    this.field.focus();
+    // No page scroll: the stage follows the visible area itself.
+    this.field.focus({ preventScroll: true });
     this.onOpenChange(true);
   }
 

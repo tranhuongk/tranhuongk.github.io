@@ -11,6 +11,35 @@ export interface CursorImage {
   height: number;
   hotx: number;
   hoty: number;
+  /** The text I-beam: a tap with it on a touch screen opens the keyboard. */
+  textBeam?: boolean;
+}
+
+/**
+ * Whether RGBA cursor pixels look like the text I-beam: a tall narrow shape, hot spot in its middle,
+ * a wide bar on top and a thin stem — the vertical resize arrows are as tall but end in a point.
+ */
+export function isTextBeam(px: Uint8Array, w: number, h: number, hotx: number, hoty: number): boolean {
+  const solid = (x: number, y: number) => px[(y * w + x) * 4 + 3]! > 0x40;
+  let x0 = w, x1 = -1, y0 = h, y1 = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!solid(x, y)) continue;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    }
+  }
+  const bw = x1 - x0 + 1;
+  const bh = y1 - y0 + 1;
+  if (x1 < 0 || bh < 8 || bh < 1.6 * bw) return false;
+  if (Math.abs(hotx - (x0 + x1) / 2) > bw * 0.35 + 1 || Math.abs(hoty - (y0 + y1) / 2) > bh * 0.3) return false;
+  const rowWidth = (y: number) => {
+    let n = 0;
+    for (let x = x0; x <= x1; x++) if (solid(x, y)) n++;
+    return n;
+  };
+  const top = rowWidth(y0);
+  const mid = rowWidth(Math.round((y0 + y1) / 2));
+  return top >= 0.5 * bw && mid <= 0.5 * bw;
 }
 
 /** Rendered size bounds (CSS px, longest side): readable on a phone, not huge at 200 %. */
@@ -42,7 +71,7 @@ export function decodeShape(s: CursorShape): CursorImage | null {
   const ctx = c.getContext('2d');
   if (!ctx) return null;
   ctx.putImageData(new ImageData(new Uint8ClampedArray(px), s.width, s.height), 0, 0);
-  return { source: c, width: s.width, height: s.height, hotx: s.hotx, hoty: s.hoty };
+  return { source: c, width: s.width, height: s.height, hotx: s.hotx, hoty: s.hoty, textBeam: isTextBeam(px, s.width, s.height, s.hotx, s.hoty) };
 }
 
 /** CSS px per remote pixel → the scale actually drawn, kept within MIN_PX..MAX_PX. */
@@ -128,6 +157,11 @@ export class RemoteCursor {
     const out = url ? { css, url: density > 1 ? render(img, s, density) : url, width, height, hotx, hoty } : null;
     this.cache = { img, key, out };
     return out;
+  }
+
+  /** The peer's cursor is the text I-beam (over a field it can type in). */
+  textBeam(): boolean {
+    return this.current?.textBeam === true;
   }
 
   /** The peer hid its cursor. */
