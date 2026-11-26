@@ -144,9 +144,15 @@ describe('Stage', () => {
     touch('pointerdown');
     touch('pointerup');
     expect(document.activeElement?.id).not.toBe('soft-kbd');
+    vi.advanceTimersByTime(2000);
     stage.cursorEvent({ shape: { id: '7', hotx: 3, hoty: 6, width: 7, height: 12, colors } });
     touch('pointerdown');
     touch('pointerup');
+    // iOS: the focus waits for the touchend that follows the pointerup.
+    if ('ontouchend' in window) {
+      expect(document.activeElement?.id).not.toBe('soft-kbd');
+      wrap.dispatchEvent(new Event('touchend'));
+    }
     expect(document.activeElement?.id).toBe('soft-kbd');
   });
 

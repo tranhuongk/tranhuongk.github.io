@@ -66,6 +66,11 @@ export interface StageOptions {
 
 const SILENCE_MS = 5000;
 
+/** iPhone / iPad (an iPad says "MacIntel" but has touch). */
+function isIOS(): boolean {
+  return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints ?? 0) > 1);
+}
+
 export class Stage {
   private readonly canvas: HTMLCanvasElement;
   private readonly wrap: HTMLElement;
@@ -101,6 +106,8 @@ export class Stage {
   private pasteTimer: ReturnType<typeof setTimeout> | null = null;
   /** When the last touch tap clicked: an I-beam arriving just after it still opens the keyboard. */
   private tapAt = 0;
+  /** A tap clicked on the I-beam: the next touchend opens the keyboard. */
+  private beamTapAt = 0;
 
   constructor(private readonly root: HTMLElement, private readonly session: StageSession, private readonly o: StageOptions) {
     const $ = <T extends HTMLElement>(id: string) => root.querySelector<T>(`#${id}`)!;
@@ -195,8 +202,11 @@ export class Stage {
       clicked: (button) => {
         if (button !== BUTTON.left) return;
         this.tapAt = Date.now();
-        // The cursor already sits on the field it tapped; opening now, inside the tap, works on iOS too.
-        if (this.cursor.textBeam()) this.openKeyboard();
+        if (!this.cursor.textBeam()) return;
+        // The cursor already sits on the field it tapped. iOS shows a keyboard only for a focus made
+        // inside touchend (not pointerup, which comes first), so there it opens on the touchend.
+        if ('ontouchend' in window) this.beamTapAt = this.tapAt;
+        else this.openKeyboard();
       },
       buzz: () => navigator.vibrate?.(15),
     };
@@ -220,6 +230,11 @@ export class Stage {
     this.on(this.wrap, 'pointerup', touchOnly((e) => pad.up(e.pointerId, e.timeStamp)));
     this.on(this.wrap, 'pointercancel', touchOnly((e) => pad.up(e.pointerId, e.timeStamp, true)));
     this.on(this.wrap, 'scroll', () => pad.redraw());
+    this.on(this.wrap, 'touchend', () => {
+      if (Date.now() - this.beamTapAt > 500) return;
+      this.beamTapAt = 0;
+      this.openKeyboard();
+    });
 
     const kbdButton = this.root.querySelector<HTMLButtonElement>('#btn-kbd')!;
     this.keyboard = new SoftKeyboard(this.root, (k) => this.keys(k), (open) => kbdButton.setAttribute('aria-pressed', String(open)),
@@ -394,8 +409,9 @@ export class Stage {
       if (this.cursor.use(e.id)) this.applyCursor();
       else if (this.cursor.shouldAsk(e.id)) this.session.requestCursorData(e.id);
     } else this.touch?.remoteMoved(e.x, e.y);
-    // The I-beam came just after a tap (the cursor had not changed yet): Android still opens it.
-    if (!('x' in e) && Date.now() - this.tapAt < 1000 && this.cursor.textBeam()) {
+    // The I-beam came just after a tap (the cursor had not changed yet): Android still opens it. iOS
+    // would only focus the field without a keyboard, and then a later tap could not open it.
+    if (!('x' in e) && !isIOS() && Date.now() - this.tapAt < 1000 && this.cursor.textBeam()) {
       this.tapAt = 0;
       this.openKeyboard();
     }
