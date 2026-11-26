@@ -63,3 +63,19 @@ export function saveServer(choice: ServerChoice, host = '', key = ''): void {
     store(SERVER_PUBKEY_KEY, key.trim() || undefined);
   }
 }
+
+/**
+ * The code RustDesk's own apps import from the clipboard (Settings → Network → ID/Relay server → paste
+ * icon): JSON {host, relay, api, key} → base64url → reversed.
+ */
+export function rustdeskConfigCode(server: string, key: string): string {
+  const host = trimUrl(server).replace(/^wss?:\/\//, '');
+  const json = JSON.stringify({ host, relay: '', api: '', key });
+  const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(json))).replace(/\+/g, '-').replace(/\//g, '_');
+  return [...b64].reverse().join('');
+}
+
+/** The config code of our own Hà Nội server. */
+export function selfConfigCode(): string {
+  return rustdeskConfigCode(DEFAULT_SERVER, SELF_SERVER_KEY);
+}

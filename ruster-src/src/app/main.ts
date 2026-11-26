@@ -7,7 +7,7 @@ import {
   renamePeer, type SavedPeer,
 } from './saved-peers';
 import { clearLogin, defaultLoginDeps, loadToken, loadUser, login, LoginError, OP_LABEL, OPS, type AccountUser, type Op } from '../auth/account';
-import { loadServer, loadServerKey, saveServer, serverChoice, type ServerChoice } from './server-setting';
+import { loadServer, loadServerKey, saveServer, selfConfigCode, serverChoice, type ServerChoice } from './server-setting';
 import { Stage, STAGE_HTML, type StageSession } from './stage';
 
 const LAYOUT = `
@@ -32,6 +32,10 @@ const LAYOUT = `
           <button type="button" role="radio" data-choice="public">Công cộng</button>
           <button type="button" role="radio" data-choice="custom">Tuỳ chỉnh</button>
         </div>
+      </div>
+      <div id="server-self" class="server-self" hidden>
+        <button id="server-copy" type="button" title="Dán vào app trên máy tính: Cài đặt → Mạng → Máy chủ ID/Relay → biểu tượng dán">Sao chép config máy chủ</button>
+        <span class="server-hint">Dán vào app trên máy tính: Cài đặt → Mạng → biểu tượng dán</span>
       </div>
       <form id="server-custom" class="server-custom" hidden>
         <input id="server-host" placeholder="Máy chủ ID" aria-label="Máy chủ ID" autocomplete="off" autocapitalize="off" spellcheck="false" required>
@@ -91,6 +95,8 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
   const accountEl = $('account');
   const serverPick = $('server');
   const serverCustom = $<HTMLFormElement>('server-custom');
+  const serverSelf = $('server-self');
+  const serverCopy = $<HTMLButtonElement>('server-copy');
   const serverHost = $<HTMLInputElement>('server-host');
   const serverPubkey = $<HTMLInputElement>('server-pubkey');
   /** The ID server picked in "Máy chủ" (our own hbbs by default). */
@@ -398,6 +404,7 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
       b.tabIndex = on ? 0 : -1;
     }
     serverCustom.hidden = choice !== 'custom';
+    serverSelf.hidden = choice !== 'self';
     if (choice === 'custom' && serverChoice() === 'custom') {
       serverHost.value = loadServer();
       serverPubkey.value = loadServerKey() ?? '';
@@ -433,6 +440,17 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     const next = buttons[(at + step + buttons.length) % buttons.length]!;
     next.focus();
     pickServer(next.dataset.choice as ServerChoice);
+  });
+  serverCopy.addEventListener('click', async () => {
+    const code = selfConfigCode();
+    try {
+      await navigator.clipboard.writeText(code);
+      serverCopy.textContent = 'Đã sao chép';
+      say('Đã sao chép config máy chủ Hà Nội. Dán vào app trên máy tính: Cài đặt → Mạng → biểu tượng dán.');
+    } catch {
+      window.prompt('Trình duyệt không cho chép tự động. Chép mã này:', code);
+    }
+    setTimeout(() => (serverCopy.textContent = 'Sao chép config máy chủ'), 2000);
   });
   serverCustom.addEventListener('submit', (event) => {
     event.preventDefault();
