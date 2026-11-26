@@ -37,13 +37,12 @@ export class ClipboardSync {
   private last: string | null = null;
   private pending: string | null = null;
   /** Texts we put on the remote clipboard only to type them: their echo is not a copy. */
-  private readonly echoes = new Set<string>();
 
   constructor(private readonly host: ClipboardHost, private readonly api: () => ClipboardApi | undefined = () => navigator.clipboard) {}
 
   async fromRemote(items: ClipItem[]): Promise<void> {
     const text = clipText(items);
-    if (text === null || text === this.last || this.echoes.delete(text)) return;
+    if (text === null || text === this.last) return;
     this.last = text;
     await this.write(text);
   }
@@ -65,22 +64,6 @@ export class ClipboardSync {
       this.host.offer(text);
       return false;
     }
-  }
-
-  /** The text both clipboards hold, as far as we know (null: not known yet). */
-  known(): string | null {
-    return this.last;
-  }
-
-  /** Records that the remote clipboard now holds `text` (sent by another path). */
-  setKnown(text: string): void {
-    this.last = text;
-  }
-
-  /** The peer may send `text` back after we set it to type it: ignore that once. */
-  ignoreEcho(text: string): void {
-    this.echoes.add(text);
-    if (this.echoes.size > 50) this.echoes.delete(this.echoes.values().next().value as string);
   }
 
   /** Sends local text to the peer; false when it already has it (`force` sends anyway: an explicit paste). */

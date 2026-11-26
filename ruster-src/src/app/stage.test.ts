@@ -92,12 +92,12 @@ describe('Stage', () => {
     expect(s.calls).toEqual([`key:${JSON.stringify({ chr: 0x76, modifiers: [4] })}`]);
   });
 
-  test('typing directly: the hidden field takes the keys, so Telex can type Vietnamese', () => {
+  test('typing: the hidden field takes the keys, so Telex can type Vietnamese; text goes as keys', () => {
     stage.start();
-    $('btn-typing').click();
-    expect($('btn-typing').textContent).toBe('Gõ: Trực tiếp');
     const field = root.querySelector('#soft-kbd') as HTMLInputElement;
+    $('btn-ime').click();
     expect(document.activeElement).toBe(field);
+    s.calls.length = 0;
     const start = field.value;
     for (const v of ['a', 'â', 'ấ']) {
       field.value = start + v;
@@ -106,27 +106,9 @@ describe('Stage', () => {
     expect(s.calls).toEqual(['key:{"text":"a"}', 'key:{"controlKey":2}', 'key:{"text":"â"}', 'key:{"controlKey":2}', 'key:{"text":"ấ"}']);
   });
 
-  test('typing through the clipboard: text is pasted, keys keep their order, the old clipboard comes back', async () => {
-    stage.start();
-    stage.remoteClipboard([{ format: 0, compress: false, content: new TextEncoder().encode('cũ') }]);
-    const field = root.querySelector('#soft-kbd') as HTMLInputElement;
-    const start = field.value;
-    for (const v of ['a', 'â']) {
-      field.value = start + v;
-      field.dispatchEvent(new Event('input'));
-    }
-    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', cancelable: true }));
-    await vi.advanceTimersByTimeAsync(1000);
-    const paste = `key:${JSON.stringify({ chr: 0x76, modifiers: [23] })}`;
-    expect(s.calls).toEqual(['clip:a', paste, 'key:{"controlKey":2}', 'clip:â', paste, 'key:{"controlKey":27}']);
-    await vi.advanceTimersByTimeAsync(2000);
-    expect(s.calls.at(-1)).toBe('clip:cũ');
-  });
-
   test('"Đổi bộ gõ" sends Ctrl+Space to a Mac', async () => {
     stage.start();
     $('btn-ime').click();
-    await vi.advanceTimersByTimeAsync(10);
     expect(s.calls).toEqual([`key:${JSON.stringify({ controlKey: 30, modifiers: [4] })}`]);
   });
 
