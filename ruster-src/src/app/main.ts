@@ -3,8 +3,8 @@ import { checkPeers, isValidPeerId } from '../net/rendezvous';
 import { RustSession, type SessionError, type SessionEvents, type SessionOptions } from '../net/session';
 import type { PeerSummary } from '../proto/message';
 import {
-  avatarHue, avatarLetter, displayName, formatId, loadPeers, MAX_NAME_LENGTH, relativeTime, rememberPeer, removePeer,
-  renamePeer, type SavedPeer,
+  avatarHue, avatarLetter, displayName, forgetPassword, formatId, loadPeers, loadSavePassword, MAX_NAME_LENGTH, relativeTime,
+  rememberPeer, removePeer, renamePeer, storeSavePassword, type SavedPeer,
 } from './saved-peers';
 import { clearLogin, defaultLoginDeps, loadToken, loadUser, login, LoginError, OP_LABEL, OPS, type AccountUser, type Op } from '../auth/account';
 import { loadServer, loadServerKey, saveServer, selfConfigCode, serverChoice, type ServerChoice } from './server-setting';
@@ -17,6 +17,7 @@ const LAYOUT = `
         <input id="peer" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" required></label>
       <label>Mật khẩu
         <input id="password" type="password" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <label class="check"><input id="save-pw" type="checkbox"> Lưu mật khẩu</label>
       <div class="row">
         <button id="connect" type="submit" class="primary">Enter</button>
       </div>
@@ -88,6 +89,11 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
   const peer = $<HTMLInputElement>('peer');
   const password = $<HTMLInputElement>('password');
   const connect = $<HTMLButtonElement>('connect');
+  const savePw = $<HTMLInputElement>('save-pw');
+  savePw.checked = loadSavePassword();
+  savePw.addEventListener('change', () => storeSavePassword(savePw.checked));
+  /** The password last sent and whether to save it once the machine accepts it. */
+  let sent = { password: '', save: false, fromStore: false };
   const savedSection = $('saved');
   const savedList = $<HTMLUListElement>('saved-list');
   const status = $<HTMLParagraphElement>('status');
@@ -170,7 +176,8 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     name.textContent = displayName(p) || formatId(p.id);
     const meta = document.createElement('span');
     meta.className = 'peer-meta';
-    meta.textContent = displayName(p) ? `${formatId(p.id)} · ${relativeTime(p.lastUsed, deps.now())}` : relativeTime(p.lastUsed, deps.now());
+    meta.textContent = (p.password ? '🔑 ' : '') + (displayName(p) ? `${formatId(p.id)} · ${relativeTime(p.lastUsed, deps.now())}` : relativeTime(p.lastUsed, deps.now()));
+    if (p.password) meta.title = 'Đã lưu mật khẩu';
     text.append(name, meta);
     const state = document.createElement('span');
     state.className = 'saved-status';
@@ -313,13 +320,17 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     status: () => {}, // the page only says "Đang kết nối…"; step-by-step progress is not shown
     needPassword: (reason) => {
       connect.disabled = false;
+      // A saved password the machine refused is dropped, so the next pick asks instead of failing again.
+      if (reason && sent.fromStore) renderSaved(forgetPassword(id));
+      sent.fromStore = false;
       password.value = '';
       password.focus();
       say(reason ? `Mật khẩu bị từ chối: ${reason}` : 'Máy đích yêu cầu mật khẩu.');
     },
     ready: (p) => {
       say('');
-      renderSaved(rememberPeer(id, deps.now(), p.hostname));
+      renderSaved(rememberPeer(id, deps.now(), p.hostname, sent.save && sent.password ? sent.password : sent.save ? undefined : null));
+      password.value = '';
       startScreen(id, p);
     },
     video: (frames) => stage?.feed(frames),
@@ -359,7 +370,13 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
       finishEdit(false, id, '');
     } else if (target.classList.contains('saved-pick')) {
       peer.value = id;
-      password.focus();
+      const saved = loadPeers().find((p) => p.id === id)?.password;
+      password.value = saved ?? '';
+      if (saved && !session) {
+        savePw.checked = true;
+        storeSavePassword(true);
+        submit(true);
+      } else password.focus();
     }
   });
   savedList.addEventListener('submit', (event) => {
@@ -376,8 +393,8 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     finishEdit(false, editingId, '');
   });
 
-  form.addEventListener('submit', (event) => {
-    event.preventDefault();
+  const submit = (fromStore = false) => {
+    sent = { password: password.value, save: savePw.checked, fromStore };
     if (session) {
       // Already connecting and waiting for a password: send it on the live session.
       session.submitPassword(password.value);
@@ -393,6 +410,10 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     say('Đang kết nối…');
     session = deps.createSession({ peerId: id, server: serverUrl(), serverKey: loadServerKey(serverUrl()), token: deps.account.token(), password: password.value, events: events(id) });
     void session.run();
+  };
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    submit();
   });
 
   renderSaved();

@@ -70,7 +70,7 @@ describe('ruster page', () => {
   test('shows ID, password, the Enter button and the server pick: no title, no description, no list heading', () => {
     mountRuster(app, deps);
     expect(app.querySelector('h1')).toBeNull();
-    expect([...app.querySelectorAll('label')].map((l) => l.firstChild?.textContent?.trim())).toEqual(['ID', 'Mật khẩu']);
+    expect([...app.querySelectorAll('label')].map((l) => l.textContent?.trim())).toEqual(['ID', 'Mật khẩu', 'Lưu mật khẩu']);
     expect(app.textContent).not.toContain('RustDesk');
     expect(app.querySelector('#connect')?.textContent).toBe('Enter');
     expect(app.querySelector('.saved-title')).toBeNull();
@@ -159,6 +159,37 @@ describe('ruster page', () => {
     expect(app.querySelector<HTMLInputElement>('#peer')!.value).toBe('111222333');
     app.querySelector<HTMLButtonElement>('.saved-del')!.click();
     expect(JSON.parse(localStorage.getItem(PEERS_KEY)!).map((p: { id: string }) => p.id)).toEqual(['444555666']);
+  });
+
+  test('"Lưu mật khẩu": saved once the machine accepts it, a pick connects with it, a refusal forgets it', () => {
+    const stored = () => JSON.parse(localStorage.getItem(PEERS_KEY)!)[0];
+    mountRuster(app, deps);
+    const box = app.querySelector<HTMLInputElement>('#save-pw')!;
+    expect(box.checked).toBe(false);
+    box.checked = true;
+    box.dispatchEvent(new Event('change'));
+    submit('123456789', 'secret');
+    sessions[0]!.events.ready({ ...PEER, width: 0 });
+    expect(stored()).toMatchObject({ id: '123456789', password: 'secret' });
+    expect(app.querySelector('.peer-meta')!.textContent).toContain('🔑');
+    sessions[0]!.close();
+    // Next visit: the box is still ticked, a pick connects at once with the saved password.
+    document.body.innerHTML = '<div id="app"></div>';
+    app = document.getElementById('app')!;
+    mountRuster(app, deps);
+    expect(app.querySelector<HTMLInputElement>('#save-pw')!.checked).toBe(true);
+    app.querySelector<HTMLButtonElement>('.saved-pick')!.click();
+    expect(sessions[1]!.o).toMatchObject({ peerId: '123456789', password: 'secret' });
+    sessions[1]!.events.needPassword('Wrong Password');
+    expect(stored().password).toBeUndefined();
+  });
+
+  test('unticked, a connection drops the saved password', () => {
+    localStorage.setItem(PEERS_KEY, JSON.stringify([{ id: '123456789', lastUsed: 1000, password: 'old' }]));
+    mountRuster(app, deps);
+    submit('123456789', 'old');
+    sessions[0]!.events.ready({ ...PEER, width: 0 });
+    expect(JSON.parse(localStorage.getItem(PEERS_KEY)!)[0].password).toBeUndefined();
   });
 
   test('a machine without any name shows its formatted id as the title', () => {

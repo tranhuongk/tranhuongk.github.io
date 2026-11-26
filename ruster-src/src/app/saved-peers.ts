@@ -1,6 +1,7 @@
 // Remembered RustDesk machines ("Máy đã kết nối"), kept in localStorage under `ruster.peers`.
 // Stored per machine: the id, when it was last used, the name the user gave it and the host name the
-// machine reported. Never a password.
+// machine reported, and its password when the user ticked "Lưu mật khẩu" (plain text in this browser's
+// storage, like the official client's saved passwords).
 export const PEERS_KEY = 'ruster.peers';
 export const MAX_PEERS = 20;
 export const MAX_NAME_LENGTH = 40;
@@ -12,6 +13,8 @@ export interface SavedPeer {
   name?: string;
   /** Host name the machine reported when we last connected. */
   hostname?: string;
+  /** Saved with "Lưu mật khẩu": picking the machine connects without asking. */
+  password?: string;
 }
 
 const isPeer = (v: unknown): v is SavedPeer => {
@@ -21,7 +24,8 @@ const isPeer = (v: unknown): v is SavedPeer => {
     typeof p.id === 'string' && /^[0-9A-Za-z_-]{1,32}$/.test(p.id) &&
     typeof p.lastUsed === 'number' && Number.isFinite(p.lastUsed) &&
     (p.name === undefined || typeof p.name === 'string') &&
-    (p.hostname === undefined || typeof p.hostname === 'string')
+    (p.hostname === undefined || typeof p.hostname === 'string') &&
+    (p.password === undefined || typeof p.password === 'string')
   );
 };
 
@@ -46,14 +50,19 @@ function write(list: SavedPeer[]): SavedPeer[] {
   return next;
 }
 
-/** Adds or refreshes a machine; the user's name and an earlier host name survive a refresh. */
-export function rememberPeer(id: string, now: number, hostname?: string): SavedPeer[] {
+/**
+ * Adds or refreshes a machine; the user's name and an earlier host name survive a refresh. `password`:
+ * a string saves it, null drops the saved one, undefined keeps it.
+ */
+export function rememberPeer(id: string, now: number, hostname?: string, password?: string | null): SavedPeer[] {
   const old = loadPeers().find((p) => p.id === id);
   const entry: SavedPeer = { id, lastUsed: now };
   const name = old?.name;
   const host = clean(hostname) || old?.hostname;
+  const pw = password === undefined ? old?.password : password;
   if (name) entry.name = name;
   if (host) entry.hostname = host;
+  if (pw) entry.password = pw;
   return write([...loadPeers().filter((p) => p.id !== id), entry]);
 }
 
@@ -65,6 +74,32 @@ export function renamePeer(id: string, name: string): SavedPeer[] {
     const { name: _old, ...rest } = p;
     return label ? { ...rest, name: label } : rest;
   }));
+}
+
+/** Drops a machine's saved password (it was refused). */
+export function forgetPassword(id: string): SavedPeer[] {
+  return write(loadPeers().map((p) => {
+    if (p.id !== id) return p;
+    const { password: _old, ...rest } = p;
+    return rest;
+  }));
+}
+
+/** Whether "Lưu mật khẩu" is ticked (remembered across visits). */
+export const SAVE_PASSWORD_KEY = 'ruster.savePassword';
+export function loadSavePassword(): boolean {
+  try {
+    return localStorage.getItem(SAVE_PASSWORD_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+export function storeSavePassword(on: boolean): void {
+  try {
+    localStorage.setItem(SAVE_PASSWORD_KEY, on ? '1' : '0');
+  } catch {
+    // storage blocked
+  }
 }
 
 export function removePeer(id: string): SavedPeer[] {
