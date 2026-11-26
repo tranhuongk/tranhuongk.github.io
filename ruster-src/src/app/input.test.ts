@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import { BUTTON, CONTROL_KEY, MOUSE } from '../proto/message';
-import { attachInput, keyInputFor, toRemote } from './input';
+import { attachInput, keyInputFor, localIsApple, swapCommandControl, toRemote } from './input';
 
 const rect = { left: 100, top: 50, width: 640, height: 360 };
 const geo = { width: 1920, height: 1080, originX: 0, originY: 0 };
@@ -46,5 +46,13 @@ describe('input', () => {
     detach();
     canvas.dispatchEvent(Object.assign(new Event('pointermove'), { clientX: 1, clientY: 1 }));
     expect(sent).toHaveLength(5);
+  });
+
+  test('⌘ ↔ Ctrl swap and Apple detection', () => {
+    expect(swapCommandControl({ chr: 0x63, modifiers: [CONTROL_KEY.Meta, CONTROL_KEY.Shift] })).toEqual({ chr: 0x63, modifiers: [CONTROL_KEY.Control, CONTROL_KEY.Shift] });
+    expect(swapCommandControl({ controlKey: CONTROL_KEY.Tab, modifiers: [CONTROL_KEY.Control] })).toEqual({ controlKey: CONTROL_KEY.Tab, modifiers: [CONTROL_KEY.Meta] });
+    expect(swapCommandControl({ text: 'a' })).toEqual({ text: 'a' });
+    expect(localIsApple({ platform: 'MacIntel', userAgent: '' })).toBe(true);
+    expect(localIsApple({ platform: 'Win32', userAgent: '' })).toBe(false);
   });
 });

@@ -4,7 +4,7 @@
 import { CONTROL_KEY, type ClipItem, type CursorShape, type KeyInput, type PeerSummary, type VideoChunk } from '../proto/message';
 import { ClipboardSync } from './clipboard';
 import { AutoHide } from './hud';
-import { attachInput, type Geometry, type InputTarget } from './input';
+import { attachInput, localIsApple, swapCommandControl, type Geometry, type InputTarget } from './input';
 import { canvasSize, type FitMode } from './layout';
 import { FpsMeter, linkText, quality } from './stats';
 import { RemoteCursor } from './remote-cursor';
@@ -95,6 +95,8 @@ export class Stage {
   private readonly clip: ClipboardSync;
   private lastPointer = '';
   private target: InputTarget | null = null;
+  /** A Mac driving a non-Mac: ⌘ is sent as Ctrl and Ctrl as the Windows key. */
+  private readonly swapMods: boolean;
   private pendingPaste: KeyInput | null = null;
   private pasteTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -103,6 +105,7 @@ export class Stage {
     this.canvas = $<HTMLCanvasElement>('screen');
     this.wrap = $('screen-wrap');
     this.vcursor = $('vcursor');
+    this.swapMods = localIsApple() && !/mac|ios/i.test(o.peer.platform);
     this.vimg = this.vcursor.querySelector('img')!;
     this.clip = new ClipboardSync({
       send: (text) => this.session.sendClipboardText(text),
@@ -401,9 +404,9 @@ export class Stage {
     if (k) this.keys(k);
   }
 
-  /** Every key from the keyboard code goes straight to the peer. */
+  /** Every key from the keyboard code goes to the peer (⌘/Ctrl swapped for a Mac driving Windows). */
   private keys(k: KeyInput): void {
-    this.session.sendKey(k);
+    this.session.sendKey(this.swapMods ? swapCommandControl(k) : k);
   }
 
   /** Local text pasted on the peer. */
@@ -464,7 +467,7 @@ export class Stage {
     void this.clip.pullLocal(false);
 
     this.on($('btn-ime'), 'click', () => {
-      this.keys(this.imeKey());
+      this.session.sendKey(this.imeKey());
       this.refocus();
     });
   }

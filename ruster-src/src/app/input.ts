@@ -62,6 +62,18 @@ export function keyInputFor(e: Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 
   return null;
 }
 
+/** This browser runs on an Apple machine (its shortcuts use ⌘ where others use Ctrl). */
+export function localIsApple(nav: Pick<Navigator, 'platform' | 'userAgent'> = navigator): boolean {
+  return /mac|iphone|ipad/i.test(nav.platform || nav.userAgent);
+}
+
+/** ⌘ ↔ Ctrl in a key's modifiers: a Mac driving Windows/Linux keeps its own shortcuts (⌘C → Ctrl+C). */
+export function swapCommandControl(k: KeyInput): KeyInput {
+  if (!k.modifiers?.length) return k;
+  const swap = (m: number) => (m === CONTROL_KEY.Meta ? CONTROL_KEY.Control : m === CONTROL_KEY.Control ? CONTROL_KEY.Meta : m);
+  return { ...k, modifiers: k.modifiers.map(swap) };
+}
+
 /** Ctrl+V / ⌘+V (no Alt): a paste the local clipboard should follow. */
 export function isPasteChord(k: KeyInput): boolean {
   const mods = k.modifiers ?? [];

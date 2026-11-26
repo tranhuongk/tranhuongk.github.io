@@ -106,6 +106,24 @@ describe('Stage', () => {
     expect(s.calls).toEqual(['key:{"text":"a"}', 'key:{"controlKey":2}', 'key:{"text":"â"}', 'key:{"controlKey":2}', 'key:{"text":"ấ"}']);
   });
 
+  test('a Mac driving Windows: ⌘C goes as Ctrl+C, Ctrl+X as Win+X; "Đổi bộ gõ" stays Ctrl+Shift', () => {
+    stage.destroy();
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel');
+    document.body.innerHTML = `<section id="stage">${STAGE_HTML}</section>`;
+    root = document.getElementById('stage')!;
+    stage = new Stage(root, s, { peer: { ...PEER, platform: 'Windows' }, title: 'PC', rename: (n) => n, onError: () => {}, silenceMs: 2000 });
+    stage.start();
+    const canvas = $('screen') as HTMLCanvasElement;
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', code: 'KeyC', metaKey: true, bubbles: true, cancelable: true }));
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', code: 'KeyX', ctrlKey: true, bubbles: true, cancelable: true }));
+    $('btn-ime').click();
+    expect(s.calls).toEqual([
+      `key:${JSON.stringify({ chr: 0x63, modifiers: [4] })}`,
+      `key:${JSON.stringify({ chr: 0x78, modifiers: [23] })}`,
+      `key:${JSON.stringify({ controlKey: 29, modifiers: [4] })}`,
+    ]);
+  });
+
   test('"Đổi bộ gõ" sends Ctrl+Space to a Mac', async () => {
     stage.start();
     $('btn-ime').click();
