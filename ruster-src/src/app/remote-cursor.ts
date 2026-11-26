@@ -13,6 +13,8 @@ export interface CursorImage {
   hoty: number;
   /** The text I-beam: a tap with it on a touch screen opens the keyboard. */
   textBeam?: boolean;
+  /** How the shape measured (for ?debug). */
+  beamNote?: string;
 }
 
 /**
@@ -20,6 +22,11 @@ export interface CursorImage {
  * a wide bar on top and a thin stem — the vertical resize arrows are as tall but end in a point.
  */
 export function isTextBeam(px: Uint8Array, w: number, h: number, hotx: number, hoty: number): boolean {
+  return beamFacts(px, w, h, hotx, hoty).beam;
+}
+
+/** isTextBeam with the measures behind it (shown by ?debug). */
+export function beamFacts(px: Uint8Array, w: number, h: number, hotx: number, hoty: number): { beam: boolean; note: string } {
   const solid = (x: number, y: number) => px[(y * w + x) * 4 + 3]! > 0x40;
   let x0 = w, x1 = -1, y0 = h, y1 = -1;
   for (let y = 0; y < h; y++) {
@@ -30,16 +37,17 @@ export function isTextBeam(px: Uint8Array, w: number, h: number, hotx: number, h
   }
   const bw = x1 - x0 + 1;
   const bh = y1 - y0 + 1;
-  if (x1 < 0 || bh < 8 || bh < 1.6 * bw) return false;
-  if (Math.abs(hotx - (x0 + x1) / 2) > bw * 0.35 + 1 || Math.abs(hoty - (y0 + y1) / 2) > bh * 0.3) return false;
   const rowWidth = (y: number) => {
     let n = 0;
     for (let x = x0; x <= x1; x++) if (solid(x, y)) n++;
     return n;
   };
-  const top = rowWidth(y0);
-  const mid = rowWidth(Math.round((y0 + y1) / 2));
-  return top >= 0.5 * bw && mid <= 0.5 * bw;
+  const top = x1 < 0 ? 0 : rowWidth(y0);
+  const mid = x1 < 0 ? 0 : rowWidth(Math.round((y0 + y1) / 2));
+  const note = `${w}x${h} hot ${hotx},${hoty} box ${x0},${y0} ${bw}x${bh} top ${top} mid ${mid}`;
+  const tall = x1 >= 0 && bh >= 8 && bh >= 1.6 * bw;
+  const centred = Math.abs(hotx - (x0 + x1) / 2) <= bw * 0.35 + 1 && Math.abs(hoty - (y0 + y1) / 2) <= bh * 0.3;
+  return { beam: tall && centred && top >= 0.5 * bw && mid <= 0.5 * bw, note };
 }
 
 /** Rendered size bounds (CSS px, longest side): readable on a phone, not huge at 200 %. */
@@ -71,7 +79,8 @@ export function decodeShape(s: CursorShape): CursorImage | null {
   const ctx = c.getContext('2d');
   if (!ctx) return null;
   ctx.putImageData(new ImageData(new Uint8ClampedArray(px), s.width, s.height), 0, 0);
-  return { source: c, width: s.width, height: s.height, hotx: s.hotx, hoty: s.hoty, textBeam: isTextBeam(px, s.width, s.height, s.hotx, s.hoty) };
+  const facts = beamFacts(px, s.width, s.height, s.hotx, s.hoty);
+  return { source: c, width: s.width, height: s.height, hotx: s.hotx, hoty: s.hoty, textBeam: facts.beam, beamNote: facts.note };
 }
 
 /** CSS px per remote pixel → the scale actually drawn, kept within MIN_PX..MAX_PX. */

@@ -66,6 +66,9 @@ export interface StageOptions {
 
 const SILENCE_MS = 5000;
 
+/** `?debug` in the address: a corner of the stage lists cursor shapes and taps. */
+const DEBUG = /[?&]debug\b/.test(location.search);
+
 /** iPhone / iPad (an iPad says "MacIntel" but has touch). */
 function isIOS(): boolean {
   return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints ?? 0) > 1);
@@ -108,6 +111,7 @@ export class Stage {
   private tapAt = 0;
   /** A tap clicked on the I-beam: the next touchend opens the keyboard. */
   private beamTapAt = 0;
+  private debugLines: string[] = [];
 
   constructor(private readonly root: HTMLElement, private readonly session: StageSession, private readonly o: StageOptions) {
     const $ = <T extends HTMLElement>(id: string) => root.querySelector<T>(`#${id}`)!;
@@ -202,6 +206,7 @@ export class Stage {
       clicked: (button) => {
         if (button !== BUTTON.left) return;
         this.tapAt = Date.now();
+        this.debug(`tap beam=${this.cursor.textBeam()} touchend=${'ontouchend' in window} ios=${isIOS()}`);
         if (!this.cursor.textBeam()) return;
         // The cursor already sits on the field it tapped. iOS shows a keyboard only for a focus made
         // inside touchend (not pointerup, which comes first), so there it opens on the touchend.
@@ -231,6 +236,7 @@ export class Stage {
     this.on(this.wrap, 'pointercancel', touchOnly((e) => pad.up(e.pointerId, e.timeStamp, true)));
     this.on(this.wrap, 'scroll', () => pad.redraw());
     this.on(this.wrap, 'touchend', () => {
+      this.debug(`touchend ${Date.now() - this.beamTapAt} ms after beam tap`);
       if (Date.now() - this.beamTapAt > 500) return;
       this.beamTapAt = 0;
       this.openKeyboard();
@@ -257,6 +263,22 @@ export class Stage {
 
   private openKeyboard(): void {
     if (this.keyboard && !this.keyboard.isOpen()) this.keyboard.open();
+    this.debug(`open → active=${(document.activeElement as HTMLElement | null)?.id || document.activeElement?.tagName}`);
+  }
+
+  private debug(line: string): void {
+    if (!DEBUG) return;
+    let box = this.root.querySelector<HTMLElement>('#ruster-debug');
+    if (!box) {
+      box = document.createElement('pre');
+      box.id = 'ruster-debug';
+      box.style.cssText = 'position:absolute;left:4px;bottom:4px;z-index:5;margin:0;padding:4px 6px;max-width:calc(100% - 8px);'
+        + 'font:11px/1.35 ui-monospace,monospace;white-space:pre-wrap;background:rgb(0 0 0/.75);color:#9f9;pointer-events:none;border-radius:4px';
+      this.root.append(box);
+    }
+    const t = new Date();
+    this.debugLines = [...this.debugLines, `${t.getSeconds()}.${String(t.getMilliseconds()).padStart(3, '0')} ${line}`].slice(-10);
+    box.textContent = this.debugLines.join('\n');
   }
 
   /**
@@ -405,8 +427,12 @@ export class Stage {
   cursorEvent(e: { shape: CursorShape } | { id: string } | { x: number; y: number }): void {
     if ('shape' in e) {
       if (this.cursor.add(e.shape)) this.applyCursor();
+      this.debug(`shape ${e.shape.id} ${this.cursor.current?.beamNote ?? 'unreadable'} beam=${this.cursor.textBeam()}`);
     } else if ('id' in e) {
-      if (this.cursor.use(e.id)) this.applyCursor();
+      if (this.cursor.use(e.id)) {
+        this.applyCursor();
+        this.debug(`cursor ${e.id} beam=${this.cursor.textBeam()}`);
+      }
       else if (this.cursor.shouldAsk(e.id)) this.session.requestCursorData(e.id);
     } else this.touch?.remoteMoved(e.x, e.y);
     // The I-beam came just after a tap (the cursor had not changed yet): Android still opens it. iOS
