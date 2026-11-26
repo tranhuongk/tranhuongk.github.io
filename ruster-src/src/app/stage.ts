@@ -235,7 +235,10 @@ export class Stage {
     this.on(this.wrap, 'pointerup', touchOnly((e) => pad.up(e.pointerId, e.timeStamp)));
     this.on(this.wrap, 'pointercancel', touchOnly((e) => pad.up(e.pointerId, e.timeStamp, true)));
     this.on(this.wrap, 'scroll', () => pad.redraw());
-    this.on(this.wrap, 'touchend', () => {
+    this.on(this.wrap, 'touchend', (e) => {
+      // The pad handles touches itself; without this iOS follows with a mouse click that focuses the
+      // canvas and closes the keyboard just opened (or already open).
+      e.preventDefault();
       this.debug(`touchend ${Date.now() - this.beamTapAt} ms after beam tap`);
       if (Date.now() - this.beamTapAt > 500) return;
       this.beamTapAt = 0;
