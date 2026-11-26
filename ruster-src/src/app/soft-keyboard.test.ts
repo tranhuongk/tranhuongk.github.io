@@ -25,7 +25,7 @@ describe('soft keyboard', () => {
     kb.destroy();
   });
 
-  test('IME composition is typed once it ends', () => {
+  test('IME composition is typed as it changes and corrected when it ends', () => {
     const host = document.createElement('div');
     const sent: unknown[] = [];
     const kb = new SoftKeyboard(host, (k) => sent.push(k), vi.fn());
@@ -36,7 +36,52 @@ describe('soft keyboard', () => {
     f.dispatchEvent(new Event('input'));
     f.value = start + 'việt';
     f.dispatchEvent(new Event('compositionend'));
-    expect(sent).toEqual([{ text: 'việt' }]);
+    expect(sent).toEqual([{ text: 'vie' }, { controlKey: CONTROL_KEY.Backspace }, { text: 'ệt' }]);
+    kb.destroy();
+  });
+
+  test('macOS Telex: "aas" turns into "ấ" on the remote as it is typed', () => {
+    const host = document.createElement('div');
+    const sent: unknown[] = [];
+    const kb = new SoftKeyboard(host, (k) => sent.push(k), vi.fn());
+    const f = kb.field;
+    const start = f.value;
+    f.dispatchEvent(new Event('compositionstart'));
+    for (const v of ['a', 'â', 'ấ']) {
+      f.value = start + v;
+      f.dispatchEvent(new Event('input'));
+    }
+    f.dispatchEvent(new Event('compositionend'));
+    const bs = { controlKey: CONTROL_KEY.Backspace };
+    expect(sent).toEqual([{ text: 'a' }, bs, { text: 'â' }, bs, { text: 'ấ' }]);
+    kb.destroy();
+  });
+
+  test('Unikey-style rewrite: Backspace key, then the accented letter', () => {
+    const host = document.createElement('div');
+    const sent: unknown[] = [];
+    const kb = new SoftKeyboard(host, (k) => sent.push(k), vi.fn());
+    const f = kb.field;
+    const start = f.value;
+    f.value = start + 'a';
+    f.dispatchEvent(new Event('input'));
+    f.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', code: 'Backspace', cancelable: true }));
+    f.value = start + 'aá';
+    f.dispatchEvent(new Event('input'));
+    expect(sent).toEqual([{ text: 'a' }, { controlKey: CONTROL_KEY.Backspace, modifiers: undefined }, { text: 'á' }]);
+    kb.destroy();
+  });
+
+  test('a paste shortcut is handed over, not typed or sent as keys', () => {
+    const host = document.createElement('div');
+    const sent: unknown[] = [];
+    const chords: unknown[] = [];
+    const kb = new SoftKeyboard(host, (k) => sent.push(k), vi.fn(), (k) => chords.push(k));
+    const e = new KeyboardEvent('keydown', { key: 'v', code: 'KeyV', metaKey: true, cancelable: true });
+    kb.field.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(false);
+    expect(sent).toEqual([]);
+    expect(chords).toEqual([{ chr: 0x76, modifiers: [CONTROL_KEY.Meta] }]);
     kb.destroy();
   });
 });

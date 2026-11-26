@@ -20,6 +20,7 @@ describe('Stage', () => {
   let renamed: string[];
   let stage: Stage;
   beforeEach(() => {
+    localStorage.clear();
     vi.useFakeTimers();
     vi.stubGlobal('VideoDecoder', class { state = 'configured'; configure() {} decode() {} close() {} });
     vi.stubGlobal('EncodedVideoChunk', class {});
@@ -68,7 +69,7 @@ describe('Stage', () => {
     expect(s.calls).toEqual(['cad:Mac OS', 'close']);
   });
 
-  test('⌘V on the picture sends the pasted text first, then the keys', () => {
+  test('⌘V on the picture sends the pasted text first, then the keys', async () => {
     stage.start();
     const canvas = $('screen') as HTMLCanvasElement;
     canvas.focus();
@@ -79,7 +80,7 @@ describe('Stage', () => {
     canvas.dispatchEvent(paste);
     expect(paste.defaultPrevented).toBe(true);
     expect(s.calls).toEqual(['clip:xin chào']);
-    vi.advanceTimersByTime(100);
+    await vi.advanceTimersByTimeAsync(100);
     expect(s.calls).toEqual(['clip:xin chào', `key:${JSON.stringify({ chr: 0x76, modifiers: [23] })}`]);
   });
 
@@ -89,6 +90,44 @@ describe('Stage', () => {
     canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', code: 'KeyV', ctrlKey: true, bubbles: true, cancelable: true }));
     vi.advanceTimersByTime(200);
     expect(s.calls).toEqual([`key:${JSON.stringify({ chr: 0x76, modifiers: [4] })}`]);
+  });
+
+  test('typing directly: the hidden field takes the keys, so Telex can type Vietnamese', () => {
+    stage.start();
+    $('btn-typing').click();
+    expect($('btn-typing').textContent).toBe('Gõ: Trực tiếp');
+    const field = root.querySelector('#soft-kbd') as HTMLInputElement;
+    expect(document.activeElement).toBe(field);
+    const start = field.value;
+    for (const v of ['a', 'â', 'ấ']) {
+      field.value = start + v;
+      field.dispatchEvent(new Event('input'));
+    }
+    expect(s.calls).toEqual(['key:{"text":"a"}', 'key:{"controlKey":2}', 'key:{"text":"â"}', 'key:{"controlKey":2}', 'key:{"text":"ấ"}']);
+  });
+
+  test('typing through the clipboard: text is pasted, keys keep their order, the old clipboard comes back', async () => {
+    stage.start();
+    stage.remoteClipboard([{ format: 0, compress: false, content: new TextEncoder().encode('cũ') }]);
+    const field = root.querySelector('#soft-kbd') as HTMLInputElement;
+    const start = field.value;
+    for (const v of ['a', 'â']) {
+      field.value = start + v;
+      field.dispatchEvent(new Event('input'));
+    }
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', cancelable: true }));
+    await vi.advanceTimersByTimeAsync(1000);
+    const paste = `key:${JSON.stringify({ chr: 0x76, modifiers: [23] })}`;
+    expect(s.calls).toEqual(['clip:a', paste, 'key:{"controlKey":2}', 'clip:â', paste, 'key:{"controlKey":27}']);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(s.calls.at(-1)).toBe('clip:cũ');
+  });
+
+  test('"Đổi bộ gõ" sends Ctrl+Space to a Mac', async () => {
+    stage.start();
+    $('btn-ime').click();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(s.calls).toEqual([`key:${JSON.stringify({ controlKey: 30, modifiers: [4] })}`]);
   });
 
   test('a cursor id never received is asked for once', () => {

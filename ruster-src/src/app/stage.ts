@@ -2,6 +2,7 @@
 // remote cursor, Ctrl+Alt+Del, full screen, rename, disconnect), a connection chip and a banner when
 // the peer stops answering.
 import { CONTROL_KEY, type ClipItem, type CursorShape, type KeyInput, type PeerSummary, type VideoChunk } from '../proto/message';
+import { ClipTyper } from './clip-typer';
 import { ClipboardSync } from './clipboard';
 import { AutoHide } from './hud';
 import { attachInput, type Geometry } from './input';
@@ -27,6 +28,8 @@ export const STAGE_HTML = `
       <span class="spacer"></span>
       <button id="btn-kbd" type="button" aria-pressed="false" title="Mở bàn phím" hidden>Bàn phím</button>
       <button id="btn-paste" type="button" title="Dán nội dung đang copy ở máy này sang máy đích">Dán</button>
+      <button id="btn-typing" type="button" title="Gõ qua clipboard: chữ luôn đúng dù máy đích bật tiếng Việt hay tiếng Anh. Gõ trực tiếp: nhanh hơn, cho game / app không nhận dán">Gõ: Clipboard</button>
+      <button id="btn-ime" type="button" title="Đổi bộ gõ của máy đích (Ctrl+Space trên Mac, Ctrl+Shift trên Windows)">Đổi bộ gõ</button>
       <button id="btn-fit" type="button" title="Đổi giữa vừa khung và 100%">100%</button>
       <button id="btn-cursor" type="button" aria-pressed="true" title="Dùng hình con trỏ của máy đích">Con trỏ</button>
       <button id="btn-cad" type="button" title="Gửi Ctrl+Alt+Del">Ctrl+Alt+Del</button>
@@ -63,6 +66,7 @@ export interface StageOptions {
 }
 
 const SILENCE_MS = 5000;
+const TYPING_KEY = 'ruster.typing';
 
 export class Stage {
   private readonly canvas: HTMLCanvasElement;
@@ -91,6 +95,10 @@ export class Stage {
   /** Hot spot of the shape on the touchpad cursor (CSS px), null while the plain arrow is shown. */
   private hot: { x: number; y: number } | null = null;
   private readonly clip: ClipboardSync;
+  private lastPointer = '';
+  /** `clip`: text is pasted through the remote clipboard (immune to its input method); `direct`: typed. */
+  private typing: 'clip' | 'direct' = 'clip';
+  private readonly typer: ClipTyper;
   private pendingPaste: KeyInput | null = null;
   private pasteTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -106,6 +114,23 @@ export class Stage {
         $('clip-offer').hidden = text === null;
       },
     });
+    this.typer = new ClipTyper({
+      clip: (text) => {
+        this.clip.ignoreEcho(text);
+        this.session.sendClipboardText(text);
+      },
+      key: (k) => this.session.sendKey(k),
+      pasteKey: () => this.pasteKey(),
+      restore: () => {
+        const old = this.clip.known();
+        if (old !== null) this.session.sendClipboardText(old);
+      },
+    });
+    try {
+      if (localStorage.getItem(TYPING_KEY) === 'direct') this.typing = 'direct';
+    } catch {
+      // storage blocked: default mode
+    }
     this.geometry = { width: o.peer.width, height: o.peer.height, originX: o.peer.originX, originY: o.peer.originY };
     this.fps = new FpsMeter((n) => {
       this.fpsNow = n;
@@ -136,7 +161,8 @@ export class Stage {
       () => this.session.requestKeyFrame(),
       (m) => this.o.onError(m),
     );
-    this.detachInput = attachInput(this.canvas, this.session, () => this.geometry, (x, y) => this.touch?.mouseAt(x, y), (k) => this.pasteChord(k));
+    const target = { sendMouse: (t: number, b: number, x: number, y: number) => this.session.sendMouse(t, b, x, y), sendKey: (k: KeyInput) => this.keys(k) };
+    this.detachInput = attachInput(this.canvas, target, () => this.geometry, (x, y) => this.touch?.mouseAt(x, y), (k) => this.pasteChord(k));
     this.wireClipboard();
     this.wireTouch();
     this.fps.start();
@@ -199,7 +225,16 @@ export class Stage {
     this.on(this.wrap, 'scroll', () => pad.redraw());
 
     const kbdButton = this.root.querySelector<HTMLButtonElement>('#btn-kbd')!;
-    this.keyboard = new SoftKeyboard(this.root, (k) => this.session.sendKey(k), (open) => kbdButton.setAttribute('aria-pressed', String(open)));
+    this.keyboard = new SoftKeyboard(this.root, (k) => this.keys(k), (open) => kbdButton.setAttribute('aria-pressed', String(open)),
+      (k) => this.pasteChord(k));
+    // With a mouse, the keys go through the hidden field too, so the computer's input method (Telex,
+    // Unikey…) works; a canvas cannot host one. With touch the field stays closed until asked for.
+    this.on(this.root, 'pointerdown', (e) => {
+      this.lastPointer = (e as PointerEvent).pointerType;
+    }, { capture: true });
+    this.on(this.canvas, 'focus', () => {
+      if (this.typesInField()) this.keyboard?.focus();
+    });
     const touchScreen = (navigator.maxTouchPoints ?? 0) > 0 || Boolean(window.matchMedia?.('(pointer: coarse)').matches);
     kbdButton.hidden = !touchScreen;
     // Keep the field focused through the tap, so the button closes an open keyboard instead of reopening it.
@@ -355,6 +390,12 @@ export class Stage {
     void this.clip.fromRemote(items);
   }
 
+  /** A computer (mouse, no coarse pointer) types through the hidden field; a touch screen only when opened. */
+  private typesInField(): boolean {
+    if (this.lastPointer) return this.lastPointer !== 'touch';
+    return !window.matchMedia?.('(pointer: coarse)').matches;
+  }
+
   /** The keys that paste on the peer: ⌘V on a Mac, Ctrl+V elsewhere. */
   private pasteKey(): KeyInput {
     return { chr: 0x76, modifiers: [/mac/i.test(this.o.peer.platform) ? CONTROL_KEY.Meta : CONTROL_KEY.Control] };
@@ -372,7 +413,33 @@ export class Stage {
     this.pasteTimer = null;
     const k = this.pendingPaste;
     this.pendingPaste = null;
-    if (k) this.session.sendKey(k);
+    if (k) this.keys(k);
+  }
+
+  /** Every key from the keyboard code: through the clipboard typer, or straight to the peer. */
+  private keys(k: KeyInput): void {
+    if (this.typing === 'clip') this.typer.push(k);
+    else this.session.sendKey(k);
+  }
+
+  /** Local text pasted on the peer. */
+  private pasteLocal(text: string): void {
+    if (this.typing === 'clip') {
+      // The typer pastes it; afterwards the remote clipboard keeps it, as after any paste.
+      this.clip.setKnown(text);
+      this.typer.pasteText(text);
+    } else {
+      this.clip.toRemote(text, true);
+      setTimeout(() => this.session.sendKey(this.pasteKey()), 60);
+    }
+  }
+
+  /** The shortcut that switches the remote input method (shown on its screen; we cannot read it). */
+  private imeKey(): KeyInput {
+    const p = this.o.peer.platform;
+    if (/mac/i.test(p)) return { controlKey: CONTROL_KEY.Space, modifiers: [CONTROL_KEY.Control] };
+    if (/windows/i.test(p)) return { controlKey: CONTROL_KEY.Shift, modifiers: [CONTROL_KEY.Control] };
+    return { controlKey: CONTROL_KEY.Space, modifiers: [CONTROL_KEY.Meta] };
   }
 
   private wireClipboard(): void {
@@ -380,14 +447,21 @@ export class Stage {
     this.on(document, 'paste', (ev) => {
       const e = ev as ClipboardEvent;
       // A paste meant for the picture (keys or the browser menu); the phone keyboard field types its own.
-      if (!this.pendingPaste && document.activeElement !== this.canvas) return;
+      const active = document.activeElement;
+      const forPicture = active === this.canvas || (active === this.keyboard?.field && this.typesInField());
+      if (!this.pendingPaste && !forPicture) return;
       e.preventDefault();
       const text = e.clipboardData?.getData('text/plain') ?? '';
-      if (text) this.clip.toRemote(text, true);
-      this.pendingPaste ??= this.pasteKey();
       if (this.pasteTimer !== null) clearTimeout(this.pasteTimer);
-      // A beat for the peer to set its clipboard before the keys arrive.
-      this.pasteTimer = setTimeout(() => this.flushPaste(), text ? 60 : 0);
+      this.pasteTimer = null;
+      if (text) {
+        this.pendingPaste = null;
+        this.pasteLocal(text);
+        return;
+      }
+      // Nothing textual here (an image, a file): the keys still go, the peer pastes what it has.
+      this.pendingPaste ??= this.pasteKey();
+      this.flushPaste();
     });
     this.on(window, 'focus', () => {
       void this.clip.retry();
@@ -400,16 +474,41 @@ export class Stage {
     });
     const paste = $<HTMLButtonElement>('btn-paste');
     this.on(paste, 'click', async () => {
-      const sent = await this.clip.pullLocal(true);
-      if (sent) {
-        setTimeout(() => this.session.sendKey(this.pasteKey()), 60);
+      const text = await this.clip.readLocal();
+      if (text) {
+        this.pasteLocal(text);
       } else {
         paste.textContent = 'Chưa đọc được clipboard';
         setTimeout(() => (paste.textContent = 'Dán'), 2000);
       }
-      if (!this.keyboard?.isOpen()) this.canvas.focus();
+      this.refocus();
     });
     void this.clip.pullLocal(false);
+
+    const typing = $<HTMLButtonElement>('btn-typing');
+    const showTyping = () => {
+      typing.textContent = this.typing === 'clip' ? 'Gõ: Clipboard' : 'Gõ: Trực tiếp';
+    };
+    showTyping();
+    this.on(typing, 'click', () => {
+      this.typing = this.typing === 'clip' ? 'direct' : 'clip';
+      try {
+        localStorage.setItem(TYPING_KEY, this.typing);
+      } catch {
+        // not kept
+      }
+      showTyping();
+      this.refocus();
+    });
+    this.on($('btn-ime'), 'click', () => {
+      this.keys(this.imeKey());
+      this.refocus();
+    });
+  }
+
+  /** Back to typing on the picture after a toolbar button (the phone keyboard stays as it was). */
+  private refocus(): void {
+    if (!this.keyboard?.isOpen()) this.canvas.focus();
   }
 
   private renderLink(): void {
@@ -440,6 +539,7 @@ export class Stage {
     this.vcursor.classList.remove('img');
     this.canvas.style.cursor = '';
     if (this.pasteTimer !== null) clearTimeout(this.pasteTimer);
+    this.typer.destroy();
     this.root.querySelector<HTMLElement>('#clip-offer')!.hidden = true;
     this.player?.close();
     this.player = null;

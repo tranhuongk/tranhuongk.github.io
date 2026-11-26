@@ -1,9 +1,11 @@
-// The phone's on-screen keyboard: a hidden text field that is focused to open it. Mobile keyboards
-// rarely send usable keydown events (Android reports "Unidentified"), and Vietnamese Telex/VNI types
-// through IME composition, so the field's value is diffed instead: removed characters become
-// Backspace, added ones are typed as text. Enter / arrows from a hardware keyboard still go as keys.
+// Typing goes through a hidden text field, so the local input method works: the phone's on-screen
+// keyboard, and Vietnamese Telex/VNI on a computer (macOS Telex, Unikey, EVKey) — none of which can
+// type into a canvas. Mobile keyboards rarely send usable keydown events (Android reports
+// "Unidentified") and IMEs rewrite what was typed, so the field's value is diffed instead: removed
+// characters become Backspace, added ones are typed as text, as each change happens (Telex turning
+// "a" into "â" sends Backspace + "â"). Enter, arrows and shortcuts still go as keys.
 import { CONTROL_KEY, type KeyInput } from '../proto/message';
-import { keyInputFor } from './input';
+import { isPasteChord, keyInputFor } from './input';
 
 /** Kept in the field so Backspace on an "empty" field still has something to delete. */
 const SENTINEL = '​​';
@@ -21,7 +23,13 @@ export class SoftKeyboard {
   private composing = false;
   private readonly cleanups: (() => void)[] = [];
 
-  constructor(host: HTMLElement, private readonly send: (k: KeyInput) => void, private readonly onOpenChange: (open: boolean) => void) {
+  constructor(
+    host: HTMLElement,
+    private readonly send: (k: KeyInput) => void,
+    private readonly onOpenChange: (open: boolean) => void,
+    /** Ctrl/⌘+V: left to the browser's `paste` (the stage sends the text before the keys). */
+    private readonly onPasteChord?: (k: KeyInput) => void,
+  ) {
     const f = document.createElement('input');
     f.id = 'soft-kbd';
     f.type = 'text';
@@ -45,14 +53,17 @@ export class SoftKeyboard {
       this.composing = false;
       this.flush();
     });
-    on('input', (e) => {
-      if (!this.composing && !(e as InputEvent).isComposing) this.flush();
-    });
+    // Every change is typed at once, mid-composition too, so the remote shows letters as they come.
+    on('input', () => this.flush());
     on('keydown', (e) => {
       if (e.isComposing || e.key === 'Unidentified' || e.keyCode === 229) return;
       const k = keyInputFor(e);
       // Printable characters arrive through `input`; only control keys and chords are sent here.
       if (!k || ('text' in k && k.text !== undefined)) return;
+      if (this.onPasteChord && isPasteChord(k)) {
+        this.onPasteChord(k);
+        return;
+      }
       this.send(k);
       e.preventDefault();
     });
@@ -75,6 +86,13 @@ export class SoftKeyboard {
     this.onOpenChange(false);
   }
 
+  /** Takes the keyboard focus (a computer's keys) without resetting what an IME is composing. */
+  focus(): void {
+    if (this.isOpen()) return;
+    this.reset();
+    this.field.focus({ preventScroll: true });
+  }
+
   toggle(): void {
     if (this.isOpen()) this.close();
     else this.open();
@@ -89,8 +107,9 @@ export class SoftKeyboard {
     }
     if (text.includes('\n')) this.send({ controlKey: CONTROL_KEY.Return });
     this.last = now;
-    // Start over once the field drifts, so the diff stays short and Backspace always has a sentinel.
-    if (!now.startsWith(SENTINEL) || now.length > 64) this.reset();
+    // Start over once the field drifts, so the diff stays short and Backspace always has a sentinel —
+    // never mid-composition, which would break the word the IME is building.
+    if (!this.composing && (!now.startsWith(SENTINEL) || now.length > 64)) this.reset();
   }
 
   private reset(): void {
