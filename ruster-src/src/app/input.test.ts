@@ -34,18 +34,20 @@ describe('input', () => {
     canvas.dispatchEvent(Object.assign(new Event('pointermove'), { clientX: 420, clientY: 230 }));
     canvas.dispatchEvent(Object.assign(new Event('pointerdown'), { clientX: 420, clientY: 230, button: 2, pointerId: 1 }));
     canvas.dispatchEvent(Object.assign(new Event('pointerup'), { clientX: 420, clientY: 230, button: 2 }));
+    canvas.dispatchEvent(Object.assign(new Event('pointerdown'), { clientX: 420, clientY: 230, button: 0, pointerId: 1, shiftKey: true }));
     canvas.dispatchEvent(Object.assign(new Event('wheel', { cancelable: true }), { deltaX: 0, deltaY: 120, deltaMode: 0 }));
     canvas.dispatchEvent(Object.assign(new Event('wheel', { cancelable: true }), { deltaX: 0, deltaY: -3, deltaMode: 1 }));
     expect(sent).toEqual([
       [MOUSE.move, 0, 960, 540],
-      [MOUSE.down, BUTTON.right, 960, 540],
-      [MOUSE.up, BUTTON.right, 960, 540],
+      [MOUSE.down, BUTTON.right, 960, 540, undefined],
+      [MOUSE.up, BUTTON.right, 960, 540, undefined],
+      [MOUSE.down, BUTTON.left, 960, 540, [CONTROL_KEY.Shift]],
       ['scroll', 0, 120],
       ['scroll', 0, -100],
     ]);
     detach();
     canvas.dispatchEvent(Object.assign(new Event('pointermove'), { clientX: 1, clientY: 1 }));
-    expect(sent).toHaveLength(5);
+    expect(sent).toHaveLength(6);
   });
 
   test('⌘ ↔ Ctrl swap and Apple detection', () => {

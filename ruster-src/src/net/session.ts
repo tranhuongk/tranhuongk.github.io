@@ -373,8 +373,8 @@ export class RustSession {
     return !this.done && this.relay !== null;
   }
 
-  sendMouse(type: number, button: number, x: number, y: number): void {
-    if (this.canSend()) this.relay!.send(encodeMouse(type, button, x, y));
+  sendMouse(type: number, button: number, x: number, y: number, modifiers?: number[]): void {
+    if (this.canSend()) this.relay!.send(encodeMouse(type, button, x, y, modifiers));
   }
 
   sendKey(key: KeyInput): void {

@@ -18,7 +18,7 @@ describe('TouchPad (AnyDesk-style touchpad)', () => {
       zoomBy: vi.fn(), reveal: vi.fn(), drawCursor: vi.fn(), toggleKeyboard: vi.fn(), buzz: vi.fn(),
     } as unknown as typeof view;
     scrolled = [];
-    pad = new TouchPad({ sendMouse: (...a) => sent.push(a), sendKey: vi.fn(), scroll: (x, y) => scrolled.push([x, y]) }, () => geo, view);
+    pad = new TouchPad({ sendMouse: (t, b, x, y) => sent.push([t, b, x, y]), sendKey: vi.fn(), scroll: (x, y) => scrolled.push([x, y]) }, () => geo, view);
   });
   afterEach(() => vi.useRealTimers());
   const types = () => sent.map(([t, b]) => `${t}:${b}`);

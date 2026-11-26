@@ -3,7 +3,8 @@ import { BUTTON, CONTROL_KEY, MOUSE, type KeyInput } from '../proto/message';
 import { wheelPixels } from './scroll';
 
 export interface InputTarget {
-  sendMouse(type: number, button: number, x: number, y: number): void;
+  /** `modifiers`: keys held with the mouse (Shift+click, Ctrl+click…). */
+  sendMouse(type: number, button: number, x: number, y: number, modifiers?: number[]): void;
   sendKey(key: KeyInput): void;
   /** Scrolls by a distance in local pixels, wheel-event sense (positive = right / down). */
   scroll(dx: number, dy: number): void;
@@ -41,6 +42,16 @@ const CONTROL_OF_CODE: Record<string, number> = {
 };
 
 const MODIFIER_CODES = new Set(['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight']);
+
+/** The modifier keys held during a mouse event, as ControlKey values (undefined when none). */
+export function heldModifiers(e: Pick<MouseEvent, 'ctrlKey' | 'altKey' | 'metaKey' | 'shiftKey'>): number[] | undefined {
+  const m: number[] = [];
+  if (e.ctrlKey) m.push(CONTROL_KEY.Control);
+  if (e.altKey) m.push(CONTROL_KEY.Alt);
+  if (e.metaKey) m.push(CONTROL_KEY.Meta);
+  if (e.shiftKey) m.push(CONTROL_KEY.Shift);
+  return m.length ? m : undefined;
+}
 
 /** The KeyInput for one keydown, or null for keys that need no message (bare modifiers, IME). */
 export function keyInputFor(e: Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'altKey' | 'metaKey' | 'shiftKey' | 'isComposing'>): KeyInput | null {
@@ -100,13 +111,13 @@ export function attachInput(
     canvas.focus();
     canvas.setPointerCapture?.(e.pointerId);
     const p = point(e);
-    target.sendMouse(MOUSE.down, BUTTON_OF[e.button] ?? BUTTON.left, p.x, p.y);
+    target.sendMouse(MOUSE.down, BUTTON_OF[e.button] ?? BUTTON.left, p.x, p.y, heldModifiers(e));
     e.preventDefault();
   };
   const up = (e: PointerEvent) => {
     if (e.pointerType === 'touch') return;
     const p = point(e);
-    target.sendMouse(MOUSE.up, BUTTON_OF[e.button] ?? BUTTON.left, p.x, p.y);
+    target.sendMouse(MOUSE.up, BUTTON_OF[e.button] ?? BUTTON.left, p.x, p.y, heldModifiers(e));
     e.preventDefault();
   };
   const wheel = (e: WheelEvent) => {

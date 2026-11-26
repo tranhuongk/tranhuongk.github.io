@@ -80,10 +80,15 @@ export const encodeTestDelayEcho = (raw: Uint8Array): Uint8Array<ArrayBuffer> =>
 export const MOUSE = { move: 0, down: 1, up: 2, wheel: 3 } as const;
 export const BUTTON = { left: 1, right: 2, middle: 4, back: 8, forward: 16 } as const;
 
-/** mask = (button << 3) | type; x/y are remote desktop pixels (sint32). */
-export function encodeMouse(type: number, button: number, x: number, y: number): Uint8Array<ArrayBuffer> {
+/**
+ * mask = (button << 3) | type; x/y are remote desktop pixels (sint32). `modifiers` (field 4) are the keys
+ * held with the click: the peer presses them for a mouse-down, so Shift+click extends a selection.
+ */
+export function encodeMouse(type: number, button: number, x: number, y: number, modifiers?: number[]): Uint8Array<ArrayBuffer> {
   const mask = (button << 3) | type;
-  return wrap(FIELD.mouseEvent, [...varintField(1, mask), ...sintField(2, Math.round(x)), ...sintField(3, Math.round(y))]);
+  const body = [...varintField(1, mask), ...sintField(2, Math.round(x)), ...sintField(3, Math.round(y))];
+  if (modifiers?.length) body.push(...lengthDelimited(4, modifiers));
+  return wrap(FIELD.mouseEvent, body);
 }
 
 /** ControlKey enum values the keyboard code sends. */

@@ -42,7 +42,7 @@ export const STAGE_HTML = `
 `;
 
 export interface StageSession {
-  sendMouse(type: number, button: number, x: number, y: number): void;
+  sendMouse(type: number, button: number, x: number, y: number, modifiers?: number[]): void;
   sendKey(key: KeyInput): void;
   requestKeyFrame(): void;
   setShowRemoteCursor(on: boolean): void;
@@ -145,7 +145,8 @@ export class Stage {
     );
     const scroller = new Scroller((t, x, y) => this.session.sendMouse(t, 0, x, y), scrollWay(this.o.peer.platform, this.o.peer.version));
     const target = {
-      sendMouse: (t: number, b: number, x: number, y: number) => this.session.sendMouse(t, b, x, y),
+      sendMouse: (t: number, b: number, x: number, y: number, mods?: number[]) =>
+        this.session.sendMouse(t, b, x, y, mods && this.swapMods ? swapCommandControl({ modifiers: mods }).modifiers : mods),
       sendKey: (k: KeyInput) => this.keys(k),
       scroll: (dx: number, dy: number) => scroller.by(dx, dy),
     };

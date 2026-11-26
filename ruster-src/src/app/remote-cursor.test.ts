@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { decodeMessage, encodeRequestCursorData, FIELD } from '../proto/message';
+import { BUTTON, CONTROL_KEY, decodeMessage, encodeMouse, encodeRequestCursorData, FIELD, MOUSE } from '../proto/message';
 import { lengthDelimited, readFields, sintField, varintField } from '../proto/wire';
 import { zstdRaw } from './zstd-fixture';
 import { drawScale, shapePixels } from './remote-cursor';
@@ -43,5 +43,16 @@ describe('drawScale', () => {
     expect(drawScale({ width: 32, height: 32 }, 1)).toBe(1);
     expect(drawScale({ width: 32, height: 32 }, 0.2)).toBe(0.5); // 16 px at least
     expect(drawScale({ width: 32, height: 32 }, 4)).toBe(2); // 64 px at most
+  });
+});
+
+describe('mouse messages', () => {
+  test('keys held with a click ride along as MouseEvent field 4', () => {
+    const outer = readFields(encodeMouse(MOUSE.down, BUTTON.left, 10, 20, [CONTROL_KEY.Shift]))[0]!;
+    expect(outer.field).toBe(FIELD.mouseEvent);
+    const f = readFields(outer.value as Uint8Array);
+    expect(f.map((x) => x.field)).toEqual([1, 2, 3, 4]);
+    expect(Array.from(f[3]!.value as Uint8Array)).toEqual([CONTROL_KEY.Shift]);
+    expect(readFields(readFields(encodeMouse(MOUSE.move, 0, 1, 1))[0]!.value as Uint8Array)).toHaveLength(3);
   });
 });
