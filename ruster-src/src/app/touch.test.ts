@@ -9,6 +9,7 @@ describe('TouchPad (AnyDesk-style touchpad)', () => {
   let sent: [number, number, number, number][];
   let view: TouchView & { zoomBy: ReturnType<typeof vi.fn>; toggleKeyboard: ReturnType<typeof vi.fn>; drawCursor: ReturnType<typeof vi.fn> };
   let pad: TouchPad;
+  let scrolled: number[][];
   beforeEach(() => {
     vi.useFakeTimers();
     sent = [];
@@ -16,7 +17,8 @@ describe('TouchPad (AnyDesk-style touchpad)', () => {
       rect: () => ({ left: 0, top: 0, width: 960, height: 540 }),
       zoomBy: vi.fn(), reveal: vi.fn(), drawCursor: vi.fn(), toggleKeyboard: vi.fn(), buzz: vi.fn(),
     } as unknown as typeof view;
-    pad = new TouchPad({ sendMouse: (...a) => sent.push(a), sendKey: vi.fn() }, () => geo, view);
+    scrolled = [];
+    pad = new TouchPad({ sendMouse: (...a) => sent.push(a), sendKey: vi.fn(), scroll: (x, y) => scrolled.push([x, y]) }, () => geo, view);
   });
   afterEach(() => vi.useRealTimers());
   const types = () => sent.map(([t, b]) => `${t}:${b}`);
@@ -71,7 +73,7 @@ describe('TouchPad (AnyDesk-style touchpad)', () => {
     expect(types()).toEqual([`${MOUSE.down}:${BUTTON.right}`, `${MOUSE.up}:${BUTTON.right}`]);
   });
 
-  test('two fingers moving up scroll down, one notch per step', () => {
+  test('two fingers moving up scroll down, as far as they travel on the picture', () => {
     pad.down(1, 100, 300, 0);
     pad.down(2, 200, 300, 0);
     for (let y = 300; y >= 200; y -= 10) {
@@ -80,9 +82,10 @@ describe('TouchPad (AnyDesk-style touchpad)', () => {
     }
     pad.up(1, 500);
     pad.up(2, 500);
-    const wheels = sent.filter(([t]) => t === MOUSE.wheel);
-    expect(wheels.length).toBeGreaterThanOrEqual(4);
-    expect(wheels.every(([, , x, y]) => x === 0 && y === -1)).toBe(true);
+    const k = geo.width / 960;
+    expect(scrolled.every(([x, y]) => x === -0 && y! > 0)).toBe(true);
+    // Travel after the slop that started the scroll, in remote pixels.
+    expect(scrolled.reduce((a, [, y]) => a + y!, 0)).toBeCloseTo(90 * k);
     expect(sent.some(([t]) => t === MOUSE.down)).toBe(false);
   });
 

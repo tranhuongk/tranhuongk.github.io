@@ -25,8 +25,6 @@ export const TAP_MS = 280;
 export const HOLD_MS = 450;
 /** Finger travel (client px) that still counts as a tap. */
 export const SLOP_PX = 8;
-/** Two-finger travel per wheel notch (client px). */
-export const NOTCH_PX = 18;
 
 type Mode = 'idle' | 'pending' | 'moving' | 'dragging' | 'two' | 'scroll' | 'pinch' | 'three' | 'done';
 
@@ -49,7 +47,6 @@ export class TouchPad {
   private shown = false;
   private pinchDist = 0;
   private mid = { x: 0, y: 0 };
-  private scrollRest = { x: 0, y: 0 };
 
   constructor(private readonly target: InputTarget, private readonly geometry: () => Geometry, private readonly view: TouchView) {
     const g = geometry();
@@ -113,7 +110,6 @@ export class TouchPad {
       this.startT = Math.min(...[...this.fingers.values()].map((f) => f.t));
       this.pinchDist = this.spread();
       this.mid = this.middle();
-      this.scrollRest = { x: 0, y: 0 };
     } else if (n === 3 && (this.mode === 'two' || this.mode === 'pending')) {
       this.mode = 'three';
     } else if (this.mode !== 'dragging') {
@@ -158,18 +154,11 @@ export class TouchPad {
       }
       case 'scroll': {
         const m = this.middle();
-        this.scrollRest.x += m.x - this.mid.x;
-        this.scrollRest.y += m.y - this.mid.y;
+        // Content follows the fingers (fingers up = scroll down), by the distance they travel on the picture.
+        const r = this.view.rect();
+        const k = r.width > 0 ? this.geometry().width / r.width : 1;
+        this.target.scroll(-(m.x - this.mid.x) * k, -(m.y - this.mid.y) * k);
         this.mid = m;
-        const nx = Math.trunc(this.scrollRest.x / NOTCH_PX);
-        const ny = Math.trunc(this.scrollRest.y / NOTCH_PX);
-        if (nx === 0 && ny === 0) return;
-        this.scrollRest.x -= nx * NOTCH_PX;
-        this.scrollRest.y -= ny * NOTCH_PX;
-        // Content follows the fingers: fingers up = wheel down (y −1), fingers left = wheel right (x +1).
-        for (let i = 0; i < Math.max(Math.abs(nx), Math.abs(ny)); i++) {
-          this.target.sendMouse(MOUSE.wheel, 0, i < Math.abs(nx) ? -Math.sign(nx) : 0, i < Math.abs(ny) ? Math.sign(ny) : 0);
-        }
         return;
       }
       case 'pinch': {

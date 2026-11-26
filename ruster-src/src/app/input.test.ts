@@ -29,20 +29,22 @@ describe('input', () => {
     const canvas = document.createElement('canvas');
     canvas.getBoundingClientRect = () => ({ ...rect, right: 740, bottom: 410, x: 100, y: 50, toJSON() {} });
     const sent: unknown[][] = [];
-    const target = { sendMouse: (...a: unknown[]) => sent.push(a), sendKey: vi.fn() };
+    const target = { sendMouse: (...a: unknown[]) => sent.push(a), sendKey: vi.fn(), scroll: (...a: unknown[]) => sent.push(['scroll', ...a]) };
     const detach = attachInput(canvas, target, () => geo);
     canvas.dispatchEvent(Object.assign(new Event('pointermove'), { clientX: 420, clientY: 230 }));
     canvas.dispatchEvent(Object.assign(new Event('pointerdown'), { clientX: 420, clientY: 230, button: 2, pointerId: 1 }));
     canvas.dispatchEvent(Object.assign(new Event('pointerup'), { clientX: 420, clientY: 230, button: 2 }));
-    canvas.dispatchEvent(Object.assign(new Event('wheel', { cancelable: true }), { deltaX: 0, deltaY: 120 }));
+    canvas.dispatchEvent(Object.assign(new Event('wheel', { cancelable: true }), { deltaX: 0, deltaY: 120, deltaMode: 0 }));
+    canvas.dispatchEvent(Object.assign(new Event('wheel', { cancelable: true }), { deltaX: 0, deltaY: -3, deltaMode: 1 }));
     expect(sent).toEqual([
       [MOUSE.move, 0, 960, 540],
       [MOUSE.down, BUTTON.right, 960, 540],
       [MOUSE.up, BUTTON.right, 960, 540],
-      [MOUSE.wheel, 0, 0, -1],
+      ['scroll', 0, 120],
+      ['scroll', 0, -100],
     ]);
     detach();
     canvas.dispatchEvent(Object.assign(new Event('pointermove'), { clientX: 1, clientY: 1 }));
-    expect(sent).toHaveLength(4);
+    expect(sent).toHaveLength(5);
   });
 });

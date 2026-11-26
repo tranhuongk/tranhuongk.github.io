@@ -1,9 +1,12 @@
 // Browser mouse and keyboard events → RustDesk input messages.
 import { BUTTON, CONTROL_KEY, MOUSE, type KeyInput } from '../proto/message';
+import { wheelPixels } from './scroll';
 
 export interface InputTarget {
   sendMouse(type: number, button: number, x: number, y: number): void;
   sendKey(key: KeyInput): void;
+  /** Scrolls by a distance in local pixels, wheel-event sense (positive = right / down). */
+  scroll(dx: number, dy: number): void;
 }
 
 export interface Geometry {
@@ -95,8 +98,9 @@ export function attachInput(
     e.preventDefault();
   };
   const wheel = (e: WheelEvent) => {
-    // One notch per event, in the direction of the scroll (negative deltaY scrolls up).
-    target.sendMouse(MOUSE.wheel, 0, Math.sign(e.deltaX), -Math.sign(e.deltaY));
+    // The distance this machine would scroll, so its scroll speed setting carries over.
+    const d = wheelPixels(e, canvas.clientHeight || window.innerHeight);
+    target.scroll(d.x, d.y);
     e.preventDefault();
   };
   const keydown = (e: KeyboardEvent) => {

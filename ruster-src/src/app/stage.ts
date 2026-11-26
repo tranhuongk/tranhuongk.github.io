@@ -4,10 +4,11 @@
 import { CONTROL_KEY, type ClipItem, type CursorShape, type KeyInput, type PeerSummary, type VideoChunk } from '../proto/message';
 import { ClipboardSync } from './clipboard';
 import { AutoHide } from './hud';
-import { attachInput, type Geometry } from './input';
+import { attachInput, type Geometry, type InputTarget } from './input';
 import { canvasSize, type FitMode } from './layout';
 import { FpsMeter, linkText, quality } from './stats';
 import { RemoteCursor } from './remote-cursor';
+import { Scroller, scrollWay } from './scroll';
 import { MAX_NAME_LENGTH } from './saved-peers';
 import { SoftKeyboard } from './soft-keyboard';
 import { TouchPad, type TouchView } from './touch';
@@ -93,6 +94,7 @@ export class Stage {
   private hot: { x: number; y: number } | null = null;
   private readonly clip: ClipboardSync;
   private lastPointer = '';
+  private target: InputTarget | null = null;
   private pendingPaste: KeyInput | null = null;
   private pasteTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -138,7 +140,13 @@ export class Stage {
       () => this.session.requestKeyFrame(),
       (m) => this.o.onError(m),
     );
-    const target = { sendMouse: (t: number, b: number, x: number, y: number) => this.session.sendMouse(t, b, x, y), sendKey: (k: KeyInput) => this.keys(k) };
+    const scroller = new Scroller((t, x, y) => this.session.sendMouse(t, 0, x, y), scrollWay(this.o.peer.platform, this.o.peer.version));
+    const target = {
+      sendMouse: (t: number, b: number, x: number, y: number) => this.session.sendMouse(t, b, x, y),
+      sendKey: (k: KeyInput) => this.keys(k),
+      scroll: (dx: number, dy: number) => scroller.by(dx, dy),
+    };
+    this.target = target;
     this.detachInput = attachInput(this.canvas, target, () => this.geometry, (x, y) => this.touch?.mouseAt(x, y), (k) => this.pasteChord(k));
     this.wireClipboard();
     this.wireTouch();
@@ -180,7 +188,7 @@ export class Stage {
       toggleKeyboard: () => this.keyboard?.toggle(),
       buzz: () => navigator.vibrate?.(15),
     };
-    const pad = new TouchPad(this.session, () => this.geometry, view);
+    const pad = new TouchPad(this.target!, () => this.geometry, view);
     this.touch = pad;
     const touchOnly = (h: (e: PointerEvent) => void) => (e: Event) => {
       const pe = e as PointerEvent;
