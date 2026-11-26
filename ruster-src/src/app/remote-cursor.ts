@@ -115,6 +115,7 @@ export class RemoteCursor {
   private readonly asked = new Set<string>();
   private cache: { img: CursorImage; key: string; out: Rendered | null } | null = null;
   current: CursorImage | null = null;
+  private lastShown: CursorImage | null = null;
 
   /** Stores a shape and shows it. False when its pixels cannot be read. */
   add(shape: CursorShape): boolean {
@@ -123,6 +124,7 @@ export class RemoteCursor {
     if (this.shapes.size > 64) this.shapes.delete(this.shapes.keys().next().value as string);
     this.shapes.set(shape.id, img);
     this.current = img;
+    if (img.source) this.lastShown = img;
     return true;
   }
 
@@ -131,6 +133,7 @@ export class RemoteCursor {
     const img = this.shapes.get(id);
     if (img) {
       this.current = img;
+      if (img.source) this.lastShown = img;
       return true;
     }
     return false;
@@ -168,9 +171,13 @@ export class RemoteCursor {
     return out;
   }
 
-  /** The peer's cursor is the text I-beam (over a field it can type in). */
+  /**
+   * The peer's cursor is the text I-beam (over a field it can type in). While the peer hides its cursor
+   * (Windows does as soon as one types) the last shape shown still counts.
+   */
   textBeam(): boolean {
-    return this.current?.textBeam === true;
+    const img = this.current?.source ? this.current : this.lastShown;
+    return img?.textBeam === true;
   }
 
   /** The peer hid its cursor. */

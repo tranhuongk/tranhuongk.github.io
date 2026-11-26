@@ -154,6 +154,18 @@ describe('Stage', () => {
       wrap.dispatchEvent(new Event('touchend'));
     }
     expect(document.activeElement?.id).toBe('soft-kbd');
+    // Typing hides the peer's cursor: a tap on the same field keeps the keyboard.
+    stage.cursorEvent({ shape: { id: '8', hotx: 0, hoty: 0, width: 0, height: 0, colors: new Uint8Array() } });
+    touch('pointerdown');
+    touch('pointerup');
+    if ('ontouchend' in window) wrap.dispatchEvent(new Event('touchend'));
+    expect(document.activeElement?.id).toBe('soft-kbd');
+    // A tap off any field (the arrow) puts the keyboard away.
+    const arrow = new Uint8Array(7 * 12 * 4).fill(255);
+    stage.cursorEvent({ shape: { id: '9', hotx: 0, hoty: 0, width: 7, height: 12, colors: arrow } });
+    touch('pointerdown');
+    touch('pointerup');
+    expect(document.activeElement?.id).not.toBe('soft-kbd');
   });
 
   test('a cursor id never received is asked for once', () => {

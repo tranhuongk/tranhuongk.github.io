@@ -207,7 +207,11 @@ export class Stage {
         if (button !== BUTTON.left) return;
         this.tapAt = Date.now();
         this.debug(`tap beam=${this.cursor.textBeam()} touchend=${'ontouchend' in window} ios=${isIOS()}`);
-        if (!this.cursor.textBeam()) return;
+        // Off any field: the keyboard goes away; it is only up while a field takes the typing.
+        if (!this.cursor.textBeam()) {
+          if (this.keyboard?.isOpen()) this.keyboard.close();
+          return;
+        }
         // The cursor already sits on the field it tapped. iOS shows a keyboard only for a focus made
         // inside touchend (not pointerup, which comes first), so there it opens on the touchend.
         if ('ontouchend' in window) this.beamTapAt = this.tapAt;
@@ -265,7 +269,11 @@ export class Stage {
   }
 
   private openKeyboard(): void {
-    if (this.keyboard && !this.keyboard.isOpen()) this.keyboard.open();
+    const kb = this.keyboard;
+    if (!kb) return;
+    // iOS can put the keyboard away (its ✓) and leave the field focused: focus it again to bring it back.
+    if (kb.isOpen() && this.keyboardShown() === false) kb.field.blur();
+    if (!kb.isOpen()) kb.open();
     this.debug(`open → active=${(document.activeElement as HTMLElement | null)?.id || document.activeElement?.tagName}`);
   }
 
@@ -282,6 +290,13 @@ export class Stage {
     const t = new Date();
     this.debugLines = [...this.debugLines, `${t.getSeconds()}.${String(t.getMilliseconds()).padStart(3, '0')} ${line}`].slice(-10);
     box.textContent = this.debugLines.join('\n');
+  }
+
+  /** Whether the phone keyboard takes part of the window (null when the browser cannot tell). */
+  private keyboardShown(): boolean | null {
+    const vv = window.visualViewport;
+    if (!vv) return null;
+    return Math.max(document.documentElement.clientHeight, window.innerHeight) - vv.height > 80;
   }
 
   /**
