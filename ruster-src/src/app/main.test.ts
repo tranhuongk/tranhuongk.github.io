@@ -26,6 +26,8 @@ class FakeSession {
   requestKeyFrame = vi.fn();
   setShowRemoteCursor = vi.fn();
   sendCtrlAltDel = vi.fn();
+  requestCursorData = vi.fn();
+  sendClipboardText = vi.fn();
   get events(): SessionEvents {
     return this.o.events;
   }

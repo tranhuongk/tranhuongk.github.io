@@ -7,8 +7,12 @@ import {
 
 export const FIELD = {
   signedId: 3, publicKey: 4, testDelay: 5, videoFrame: 6, loginRequest: 7, loginResponse: 8, hash: 9,
-  mouseEvent: 10, keyEvent: 15, misc: 19, peerInfo: 25,
+  mouseEvent: 10, cursorData: 12, cursorPosition: 13, cursorId: 14, keyEvent: 15, clipboard: 16, misc: 19,
+  peerInfo: 25, multiClipboards: 28,
 } as const;
+
+/** ClipboardFormat values. */
+export const CLIP_FORMAT = { text: 0, rtf: 1, html: 2, imageRgba: 21, imagePng: 22, imageSvg: 23, special: 31 } as const;
 
 const wrap = (field: number, body: number[]): Uint8Array<ArrayBuffer> => new Uint8Array(lengthDelimited(field, body));
 
@@ -60,6 +64,16 @@ export const encodeShowRemoteCursor = (on: boolean): Uint8Array<ArrayBuffer> =>
 
 export const encodeRefreshVideo = (): Uint8Array<ArrayBuffer> => wrap(FIELD.misc, boolField(10, true));
 
+/** Misc.request_cursor_data: asks again for a cursor shape we only know by id (newer peers answer). */
+export const encodeRequestCursorData = (id: string): Uint8Array<ArrayBuffer> => {
+  const n = Number(id);
+  return wrap(FIELD.misc, Number.isSafeInteger(n) && n >= 0 ? varintField(39, n) : []);
+};
+
+/** Clipboard {compress: false, content, format: Text}: every peer version accepts this one. */
+export const encodeClipboardText = (text: string): Uint8Array<ArrayBuffer> =>
+  wrap(FIELD.clipboard, [...boolField(1, false), ...stringField(2, text), ...varintField(5, CLIP_FORMAT.text)]);
+
 /** Echo of a TestDelay the peer sent: same payload, returned unchanged. */
 export const encodeTestDelayEcho = (raw: Uint8Array): Uint8Array<ArrayBuffer> => wrap(FIELD.testDelay, Array.from(raw));
 
@@ -109,7 +123,33 @@ export type Incoming =
   | { kind: 'loginResponse'; error: string; peer: PeerSummary | null }
   | { kind: 'video'; codec: string; frames: VideoChunk[] }
   | { kind: 'testDelay'; raw: Uint8Array; /** Round-trip time the peer measured (ms). */ lastDelay: number }
+  | { kind: 'cursorData'; cursor: CursorShape }
+  | { kind: 'cursorId'; id: string }
+  | { kind: 'cursorPosition'; x: number; y: number }
+  | { kind: 'clipboard'; items: ClipItem[] }
   | { kind: 'other'; field: number };
+
+export interface CursorShape {
+  /** Content id; later `cursorId` messages name the shape by it. */
+  id: string;
+  hotx: number;
+  hoty: number;
+  width: number;
+  height: number;
+  /** zstd-compressed RGBA, width × height × 4 once decompressed; empty = hidden cursor. */
+  colors: Uint8Array;
+}
+
+export interface ClipItem {
+  format: number;
+  compress: boolean;
+  content: Uint8Array;
+}
+
+function decodeClip(bytes: Uint8Array): ClipItem {
+  const f = readFields(bytes);
+  return { compress: numberOf(f, 1) !== 0, content: bytesOf(f, 2) ?? new Uint8Array(), format: numberOf(f, 5) };
+}
 
 export interface PeerSummary {
   hostname: string;
@@ -146,11 +186,29 @@ function decodePeer(bytes: Uint8Array): PeerSummary {
 
 export function decodeMessage(bytes: Uint8Array): Incoming {
   // The peer also sends messages whose only field is a number (cursor_id, field 14) or nothing at
-  // all; those carry nothing we act on and must not end the session.
+  // all; the rest carry nothing we act on and must not end the session.
   const top = readFields(bytes)[0];
+  if (top?.field === FIELD.cursorId && typeof top.value === 'number') return { kind: 'cursorId', id: String(top.value) };
   if (!top || !(top.value instanceof Uint8Array)) return { kind: 'other', field: top?.field ?? 0 };
   const inner = readFields(top.value);
   switch (top.field) {
+    case FIELD.cursorData:
+      return {
+        kind: 'cursorData',
+        cursor: {
+          id: String(numberOf(inner, 1)), hotx: unzigzag(numberOf(inner, 2)), hoty: unzigzag(numberOf(inner, 3)),
+          width: numberOf(inner, 4), height: numberOf(inner, 5), colors: bytesOf(inner, 6) ?? new Uint8Array(),
+        },
+      };
+    case FIELD.cursorPosition:
+      return { kind: 'cursorPosition', x: unzigzag(numberOf(inner, 1)), y: unzigzag(numberOf(inner, 2)) };
+    case FIELD.clipboard:
+      return { kind: 'clipboard', items: [decodeClip(top.value)] };
+    case FIELD.multiClipboards:
+      return {
+        kind: 'clipboard',
+        items: inner.filter((x) => x.field === 1 && x.value instanceof Uint8Array).map((x) => decodeClip(x.value as Uint8Array)),
+      };
     case FIELD.signedId:
       return { kind: 'signedId', id: bytesOf(inner, 1) ?? new Uint8Array() };
     case FIELD.hash:

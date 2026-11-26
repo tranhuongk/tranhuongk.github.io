@@ -2,8 +2,9 @@
 //   ID server  ──PunchHoleRequest(force_relay)──▶  RelayResponse {uuid, relay, signed peer key}
 //   relay      ──RequestRelay(uuid)──▶  peer's SignedId ──▶ our sealed key ──▶ secretbox frames
 //   peer       ──Hash──▶ LoginRequest(proof) ──▶ LoginResponse ──▶ VideoFrame...
-import { CONTROL_KEY, decodeIdPk, decodeMessage, encodeKey, encodeLoginRequest, encodeMouse, encodePublicKey,
-  encodeRefreshVideo, encodeShowRemoteCursor, encodeTestDelayEcho, encodeVideoReceived, type KeyInput, type PeerSummary, type VideoChunk } from '../proto/message';
+import { CONTROL_KEY, decodeIdPk, decodeMessage, encodeClipboardText, encodeKey, encodeLoginRequest, encodeMouse, encodePublicKey,
+  encodeRefreshVideo, encodeRequestCursorData, encodeShowRemoteCursor, encodeTestDelayEcho, encodeVideoReceived, type ClipItem, type CursorShape,
+  type KeyInput, type PeerSummary, type VideoChunk } from '../proto/message';
 import { CLIENT_VERSION, decodeConnectReply, encodeIceCandidate, encodePunchHoleRequest, encodeRequestRelay, type RelayOffer } from '../proto/rendezvous';
 import { fromBase64, loginProof, makeKeyOffer, openSigned, PUBLIC_SERVER_KEY, SecretStream } from './crypto';
 import { Pipe, PipeError } from './pipe';
@@ -26,6 +27,10 @@ export interface SessionEvents {
   video(frames: VideoChunk[]): void;
   /** Round-trip time in ms measured by the peer (sent about once a second). */
   delay?(ms: number): void;
+  /** The remote cursor: a new shape, a shape named by id, or a move the peer made itself. */
+  cursor?(e: { shape: CursorShape } | { id: string } | { x: number; y: number }): void;
+  /** The peer's clipboard changed. */
+  clipboard?(items: ClipItem[]): void;
   closed(error: SessionError | null): void;
 }
 
@@ -344,6 +349,18 @@ export class RustSession {
           relay.send(encodeTestDelayEcho(msg.raw));
           if (msg.lastDelay > 0) this.o.events.delay?.(msg.lastDelay);
           break;
+        case 'cursorData':
+          this.o.events.cursor?.({ shape: msg.cursor });
+          break;
+        case 'cursorId':
+          this.o.events.cursor?.({ id: msg.id });
+          break;
+        case 'cursorPosition':
+          this.o.events.cursor?.({ x: msg.x, y: msg.y });
+          break;
+        case 'clipboard':
+          this.o.events.clipboard?.(msg.items);
+          break;
         default:
           break;
       }
@@ -376,5 +393,15 @@ export class RustSession {
 
   requestKeyFrame(): void {
     if (this.canSend()) this.relay!.send(encodeRefreshVideo());
+  }
+
+  /** Asks the peer for a cursor shape it named by id before we had it. */
+  requestCursorData(id: string): void {
+    if (this.canSend()) this.relay!.send(encodeRequestCursorData(id));
+  }
+
+  /** Puts text on the peer's clipboard. */
+  sendClipboardText(text: string): void {
+    if (this.canSend()) this.relay!.send(encodeClipboardText(text));
   }
 }

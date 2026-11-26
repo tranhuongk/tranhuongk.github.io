@@ -292,7 +292,7 @@ class FakePeer {
 
 describe('decodeMessage tolerates what the peer really sends', () => {
   test('a message whose only field is a number (cursor_id) or nothing at all is ignored', () => {
-    expect(decodeMessage(new Uint8Array([0x70, 0x05]))).toEqual({ kind: 'other', field: 14 });
+    expect(decodeMessage(new Uint8Array([0x70, 0x05]))).toEqual({ kind: 'cursorId', id: '5' });
     expect(decodeMessage(new Uint8Array())).toEqual({ kind: 'other', field: 0 });
   });
 });

@@ -171,6 +171,14 @@
       #vcursor svg { display: block; fill: #FFFFFF; stroke: #0E1117; stroke-width: 1.4; stroke-linejoin: round;
                      transition: transform 0.08s ease; transform-origin: 3px 2px; }
       #vcursor.pressed svg { fill: var(--accent); transform: scale(0.88); }
+      #vcursor img { display: none; max-width: none; }
+      #vcursor.img { width: auto; height: auto; margin: 0; }
+      #vcursor.img svg { display: none; }
+      #vcursor.img img { display: block; transition: filter 0.08s ease; }
+      #vcursor.img.pressed img { filter: drop-shadow(0 0 2px var(--accent)) drop-shadow(0 0 1px var(--accent)); }
+      #clip-offer { position: absolute; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 3;
+                    max-width: calc(100% - 32px); min-height: 40px; padding: 0 16px; border-radius: 99px; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+                    background: var(--accent); color: var(--on-accent); box-shadow: 0 4px 16px rgb(0 0 0 / 0.3); }
       #soft-kbd { position: fixed; left: 0; bottom: 0; width: 1px; height: 1px; min-height: 0; padding: 0; opacity: 0; font-size: 16px; pointer-events: none; }
       #hud { position: absolute; top: 0; left: 0; right: 0; z-index: 2; display: flex; justify-content: center; padding: 8px; pointer-events: none;
              transition: transform 0.18s ease, opacity 0.18s ease; }

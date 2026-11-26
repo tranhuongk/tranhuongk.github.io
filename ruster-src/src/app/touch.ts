@@ -86,6 +86,15 @@ export class TouchPad {
     }
   }
 
+  /** The peer moved its cursor itself (an app, or someone at that machine): follow it while idle. */
+  remoteMoved(x: number, y: number): void {
+    if (this.mode !== 'idle' && this.mode !== 'done') return;
+    const g = this.geometry();
+    this.cx = Math.min(Math.max(x, g.originX), g.originX + g.width - 1);
+    this.cy = Math.min(Math.max(y, g.originY), g.originY + g.height - 1);
+    this.redraw();
+  }
+
   down(id: number, x: number, y: number, t: number): void {
     this.fingers.set(id, { x, y, startX: x, startY: y, t });
     if (!this.shown) {

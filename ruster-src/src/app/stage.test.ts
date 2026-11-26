@@ -8,8 +8,9 @@ function session(): StageSession & { calls: string[] } {
   const calls: string[] = [];
   return {
     calls, path: 'webrtc',
-    sendMouse: () => {}, sendKey: () => {}, requestKeyFrame: () => calls.push('keyframe'),
+    sendMouse: () => {}, sendKey: (k) => calls.push(`key:${JSON.stringify(k)}`), requestKeyFrame: () => calls.push('keyframe'),
     setShowRemoteCursor: (on) => calls.push(`cursor:${on}`), sendCtrlAltDel: (p) => calls.push(`cad:${p}`), close: () => calls.push('close'),
+    requestCursorData: (id) => calls.push(`want:${id}`), sendClipboardText: (t) => calls.push(`clip:${t}`),
   };
 }
 
@@ -62,8 +63,47 @@ describe('Stage', () => {
     $('btn-cursor').click();
     expect($('btn-cursor').getAttribute('aria-pressed')).toBe('false');
     $('btn-cursor').click();
+    expect($('btn-cursor').getAttribute('aria-pressed')).toBe('true');
     $('disconnect').click();
-    expect(s.calls).toEqual(['cad:Mac OS', 'cursor:false', 'cursor:true', 'close']);
+    expect(s.calls).toEqual(['cad:Mac OS', 'close']);
+  });
+
+  test('⌘V on the picture sends the pasted text first, then the keys', () => {
+    stage.start();
+    const canvas = $('screen') as HTMLCanvasElement;
+    canvas.focus();
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', code: 'KeyV', metaKey: true, bubbles: true, cancelable: true }));
+    expect(s.calls).toEqual([]);
+    const paste = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent;
+    Object.defineProperty(paste, 'clipboardData', { value: { getData: () => 'xin chào' } });
+    canvas.dispatchEvent(paste);
+    expect(paste.defaultPrevented).toBe(true);
+    expect(s.calls).toEqual(['clip:xin chào']);
+    vi.advanceTimersByTime(100);
+    expect(s.calls).toEqual(['clip:xin chào', `key:${JSON.stringify({ chr: 0x76, modifiers: [23] })}`]);
+  });
+
+  test('⌘V with nothing to paste still reaches the peer', () => {
+    stage.start();
+    const canvas = $('screen') as HTMLCanvasElement;
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', code: 'KeyV', ctrlKey: true, bubbles: true, cancelable: true }));
+    vi.advanceTimersByTime(200);
+    expect(s.calls).toEqual([`key:${JSON.stringify({ chr: 0x76, modifiers: [4] })}`]);
+  });
+
+  test('a cursor id never received is asked for once', () => {
+    stage.start();
+    stage.cursorEvent({ id: '42' });
+    stage.cursorEvent({ id: '42' });
+    expect(s.calls).toEqual(['want:42']);
+  });
+
+  test('remote clipboard that cannot be written offers a button', async () => {
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: () => Promise.reject(new Error('not focused')) } });
+    stage.start();
+    stage.remoteClipboard([{ format: 0, compress: false, content: new TextEncoder().encode('abc') }]);
+    await vi.waitFor(() => expect($('clip-offer').hidden).toBe(false));
+    vi.unstubAllGlobals();
   });
 
   test('rename in place: Enter saves and shows what rename returned, Escape cancels', () => {

@@ -318,6 +318,8 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     },
     video: (frames) => stage?.feed(frames),
     delay: (ms) => stage?.setDelay(ms),
+    cursor: (e) => stage?.cursorEvent(e),
+    clipboard: (items) => stage?.remoteClipboard(items),
     closed: (error: SessionError | null) => {
       endSession();
       if (error?.kind === 'auth') {

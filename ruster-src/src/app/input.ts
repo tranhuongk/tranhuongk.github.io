@@ -59,12 +59,19 @@ export function keyInputFor(e: Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 
   return null;
 }
 
+/** Ctrl+V / ⌘+V (no Alt): a paste the local clipboard should follow. */
+export function isPasteChord(k: KeyInput): boolean {
+  const mods = k.modifiers ?? [];
+  return k.chr === 0x76 && (mods.includes(CONTROL_KEY.Control) || mods.includes(CONTROL_KEY.Meta)) && !mods.includes(CONTROL_KEY.Alt);
+}
+
 /**
  * Wires mouse/pen and keyboard events on `canvas` to `target`; returns the cleanup. Touch is left to
  * the touchpad (touch.ts); `onMouse` hears where a real mouse put the cursor.
  */
 export function attachInput(
   canvas: HTMLCanvasElement, target: InputTarget, geometry: () => Geometry, onMouse?: (x: number, y: number) => void,
+  onPasteChord?: (k: KeyInput) => void,
 ): () => void {
   const point = (e: MouseEvent) => toRemote(e.clientX, e.clientY, canvas.getBoundingClientRect(), geometry());
   const move = (e: PointerEvent) => {
@@ -95,6 +102,11 @@ export function attachInput(
   const keydown = (e: KeyboardEvent) => {
     const k = keyInputFor(e);
     if (!k) return;
+    if (onPasteChord && isPasteChord(k)) {
+      // Let the browser fire `paste` so the text can reach the peer before the keys do.
+      onPasteChord(k);
+      return;
+    }
     target.sendKey(k);
     e.preventDefault();
   };
