@@ -118,14 +118,30 @@ export class SoftKeyboard {
     const { backspaces, text } = diffTyping(this.last, now);
     this.log?.(`in${this.composing ? '(c)' : ''} "${now.replace(/\u200b/g, '')}" → ${'⌫'.repeat(backspaces)}${text ? `+"${text}"` : ''}`);
     for (let i = 0; i < backspaces; i++) this.out({ controlKey: CONTROL_KEY.Backspace });
-    for (const part of text.split('\n')) {
-      if (part) this.out({ text: part });
-    }
+    for (const part of text.split('\n')) this.typeText(part);
     if (text.includes('\n')) this.out({ controlKey: CONTROL_KEY.Return });
     this.last = now;
     // Start over once the field drifts, so the diff stays short and Backspace always has a sentinel —
     // never mid-composition, which would break the word the IME is building.
     if (!this.composing && (!now.startsWith(SENTINEL) || now.length > 64)) this.reset();
+  }
+
+  /**
+   * Plain ASCII goes one character at a time as `chr`: a Linux peer presses those through XTest at
+   * once, while a `seq` goes through xdo's typing (12 ms a key, more for remapped letters), which made
+   * every key feel late. Windows and macOS peers type both the same way. Accented text stays `seq`.
+   */
+  private typeText(part: string): void {
+    let run = '';
+    for (const ch of part) {
+      const code = ch.codePointAt(0)!;
+      if (code >= 0x20 && code <= 0x7e) {
+        if (run) this.out({ text: run });
+        run = '';
+        this.out({ chr: code });
+      } else run += ch;
+    }
+    if (run) this.out({ text: run });
   }
 
   private out(k: KeyInput): void {

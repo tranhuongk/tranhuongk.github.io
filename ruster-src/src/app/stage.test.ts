@@ -104,9 +104,9 @@ describe('Stage', () => {
       field.dispatchEvent(new Event('input'));
     }
     // The text after each Backspace waits its turn (25 ms), in order.
-    expect(s.calls).toEqual(['key:{"text":"a"}', 'key:{"controlKey":2}']);
+    expect(s.calls).toEqual(['key:{"chr":97}', 'key:{"controlKey":2}']);
     vi.advanceTimersByTime(100);
-    expect(s.calls).toEqual(['key:{"text":"a"}', 'key:{"controlKey":2}', 'key:{"text":"â"}', 'key:{"controlKey":2}', 'key:{"text":"ấ"}']);
+    expect(s.calls).toEqual(['key:{"chr":97}', 'key:{"controlKey":2}', 'key:{"text":"â"}', 'key:{"controlKey":2}', 'key:{"text":"ấ"}']);
   });
 
   test('a Mac driving Windows: ⌘C goes as Ctrl+C, Ctrl+X as Win+X; "Đổi bộ gõ" stays Ctrl+Shift', () => {

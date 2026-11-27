@@ -9,7 +9,7 @@ describe('soft keyboard', () => {
     expect(diffTyping('xa', 'xâ')).toEqual({ backspaces: 1, text: 'â' });
   });
 
-  test('typing in the field sends text; deleting sends Backspace; Enter goes as a key', () => {
+  test('typing in the field sends ASCII as chr (instant on Linux), accents as text; deleting sends Backspace; Enter goes as a key', () => {
     const host = document.createElement('div');
     const sent: unknown[] = [];
     const kb = new SoftKeyboard(host, (k) => sent.push(k), vi.fn());
@@ -21,7 +21,7 @@ describe('soft keyboard', () => {
     f.value = start + 'h';
     f.dispatchEvent(new Event('input'));
     f.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter' }));
-    expect(sent).toEqual([{ text: 'hi' }, { controlKey: CONTROL_KEY.Backspace }, { controlKey: CONTROL_KEY.Return, modifiers: undefined }]);
+    expect(sent).toEqual([{ chr: 0x68 }, { chr: 0x69 }, { controlKey: CONTROL_KEY.Backspace }, { controlKey: CONTROL_KEY.Return, modifiers: undefined }]);
     kb.destroy();
   });
 
@@ -36,7 +36,7 @@ describe('soft keyboard', () => {
     f.dispatchEvent(new Event('input'));
     f.value = start + 'việt';
     f.dispatchEvent(new Event('compositionend'));
-    expect(sent).toEqual([{ text: 'vie' }, { controlKey: CONTROL_KEY.Backspace }, { text: 'ệt' }]);
+    expect(sent).toEqual([{ chr: 0x76 }, { chr: 0x69 }, { chr: 0x65 }, { controlKey: CONTROL_KEY.Backspace }, { text: 'ệ' }, { chr: 0x74 }]);
     kb.destroy();
   });
 
@@ -53,7 +53,7 @@ describe('soft keyboard', () => {
     }
     f.dispatchEvent(new Event('compositionend'));
     const bs = { controlKey: CONTROL_KEY.Backspace };
-    expect(sent).toEqual([{ text: 'a' }, bs, { text: 'â' }, bs, { text: 'ấ' }]);
+    expect(sent).toEqual([{ chr: 0x61 }, bs, { text: 'â' }, bs, { text: 'ấ' }]);
     kb.destroy();
   });
 
@@ -68,7 +68,7 @@ describe('soft keyboard', () => {
     f.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', code: 'Backspace', cancelable: true }));
     f.value = start + 'aá';
     f.dispatchEvent(new Event('input'));
-    expect(sent).toEqual([{ text: 'a' }, { controlKey: CONTROL_KEY.Backspace, modifiers: undefined }, { text: 'á' }]);
+    expect(sent).toEqual([{ chr: 0x61 }, { controlKey: CONTROL_KEY.Backspace, modifiers: undefined }, { text: 'á' }]);
     kb.destroy();
   });
 
@@ -97,13 +97,13 @@ describe('soft keyboard', () => {
       kb.field.value = start + v;
       kb.field.dispatchEvent(new Event('input'));
     }
-    expect(sent).toEqual(['{"text":"v"}', '{"text":"a"}', '{"text":"o"}', '{"controlKey":2}']);
+    expect(sent).toEqual(['{"chr":118}', '{"chr":97}', '{"chr":111}', '{"controlKey":2}']);
     vi.advanceTimersByTime(24);
     expect(sent).toHaveLength(4);
     vi.advanceTimersByTime(1);
     expect(sent.at(-1)).toBe('{"controlKey":2}');
     vi.advanceTimersByTime(25);
-    expect(sent.slice(4)).toEqual(['{"controlKey":2}', '{"text":"ào"}']);
+    expect(sent.slice(4)).toEqual(['{"controlKey":2}', '{"text":"à"}', '{"chr":111}']);
     kb.destroy();
     vi.useRealTimers();
   });
