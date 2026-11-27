@@ -26,9 +26,10 @@
 #stage button:hover:not(:disabled) { background: var(--st-field); }
 #stage button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
 #stage button.primary { background: var(--st-accent); color: var(--st-on-accent); font-weight: 600; }
-#stage input { box-sizing: border-box; border: 1px solid var(--input); border-radius: calc(var(--radius) * 0.8);
+/* Visible fields only (the rename box): the hidden typing field keeps its own rule below. */
+#stage input:not(#soft-kbd) { box-sizing: border-box; border: 1px solid var(--input); border-radius: calc(var(--radius) * 0.8);
                background: var(--background); color: var(--st-text); font: inherit; font-size: 14px; }
-#stage input:focus-visible { outline: 2px solid var(--ring); outline-offset: 0; }
+#stage input:not(#soft-kbd):focus-visible { outline: 2px solid var(--ring); outline-offset: 0; }
 #stage .ico { flex: none; width: 16px; height: 16px; }
 
 #screen-wrap { position: absolute; inset: 0; display: flex; overflow: auto; overscroll-behavior: contain; touch-action: none; }
@@ -52,7 +53,10 @@
                      max-width: calc(100% - 32px); min-height: 40px; padding: 0 16px; border-radius: 999px; font-size: 14px;
                      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
                      background: var(--st-accent); color: var(--st-on-accent); box-shadow: 0 6px 20px rgb(0 0 0 / 0.35); }
-#soft-kbd { position: fixed; left: 0; bottom: 0; width: 1px; height: 1px; min-height: 0; padding: 0; opacity: 0; font-size: 16px; pointer-events: none; }
+/* The hidden field the local input method types into (Telex, the phone keyboard). 16px or more, or iOS
+   zooms the page each time it takes focus; no border or fill. */
+#stage #soft-kbd { position: fixed; left: 0; bottom: 0; width: 1px; height: 1px; min-height: 0; margin: 0; padding: 0; border: 0;
+                   opacity: 0; background: transparent; font-size: 16px; pointer-events: none; }
 
 /* Toolbar: a floating pill (popover colour, hairline ring, blur) that hides itself. */
 #hud { position: absolute; top: 0; left: 0; right: 0; z-index: 2; display: flex; justify-content: center;
