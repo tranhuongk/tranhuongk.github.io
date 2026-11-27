@@ -94,6 +94,8 @@ export interface StageOptions {
 }
 
 const SILENCE_MS = 5000;
+/** Seconds between the key frames asked for so a damaged picture heals by itself. */
+const KEYFRAME_EVERY_S = 10;
 /** Time between the Backspaces of an input method's rewrite (see SoftKeyboard). */
 const BACKSPACE_GAP_MS = 25;
 
@@ -207,9 +209,19 @@ export class Stage {
       this.observer = new ResizeObserver(() => this.layout());
       this.observer.observe(this.wrap);
     }
+    let sinceKey = 0;
     this.watchdog = setInterval(() => {
       $('lost').hidden = Date.now() - this.lastData < (this.o.silenceMs ?? SILENCE_MS);
+      // A fresh key frame now and then: a delta frame the decoder lost leaves black blocks on the parts
+      // of the screen that do not change again, until the next key frame (seen on a Windows peer).
+      if (++sinceKey >= KEYFRAME_EVERY_S && !document.hidden) {
+        sinceKey = 0;
+        this.session.requestKeyFrame();
+      }
     }, 1000);
+    this.on(document, 'visibilitychange', () => {
+      if (!document.hidden) this.session.requestKeyFrame();
+    });
     this.wireToolbar();
     this.canvas.focus();
     return true;

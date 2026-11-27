@@ -218,4 +218,14 @@ describe('Stage', () => {
     root.dispatchEvent(Object.assign(new Event('pointermove'), { clientY: 5 }));
     expect($('hud').classList.contains('hidden')).toBe(false);
   });
+
+  test('a key frame is asked for every 10 s, so lost frames cannot leave black blocks for good', () => {
+    stage.start();
+    vi.advanceTimersByTime(9_000);
+    expect(s.calls.filter((c) => c === 'keyframe')).toHaveLength(0);
+    vi.advanceTimersByTime(1_000);
+    expect(s.calls.filter((c) => c === 'keyframe')).toHaveLength(1);
+    vi.advanceTimersByTime(10_000);
+    expect(s.calls.filter((c) => c === 'keyframe')).toHaveLength(2);
+  });
 });
