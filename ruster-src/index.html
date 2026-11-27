@@ -113,7 +113,7 @@
       label.check { flex-direction: row; align-items: center; gap: 10px; font-size: 14px; font-weight: 400; color: var(--text); }
       .row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
       #connect { flex: 1; min-height: 44px; font-size: 15px; }
-      #status { margin: 0; font-size: 13px; color: var(--text-2); }
+      #status { margin: -2px 0 0; font-size: 13px; line-height: 1.4; color: var(--text-2); text-align: center; }
       #status:empty { display: none; }
       /* Remembered machines: one card each (avatar, name, id · age, state). Pick fills the ID,
          ✎ renames in place, × forgets the machine. */
@@ -140,7 +140,8 @@
       .peer-save { min-height: 40px; }
 
       /* Server row: a segmented pick (state by fill); Tuỳ chỉnh opens host + key fields. */
-      .server-row { display: flex; flex-direction: column; gap: 8px; }
+      .server-row { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; padding-top: 16px;
+                    border-top: 1px solid color-mix(in srgb, var(--text-2) 18%, transparent); }
       .server-pick { display: flex; align-items: center; gap: 10px; }
       .server-label { flex: none; font-size: 13px; font-weight: 500; color: var(--text-2); }
       .segmented { flex: 1; min-width: 0; display: flex; gap: 2px; padding: 3px; border-radius: var(--r-control); background: var(--field); }
@@ -150,9 +151,16 @@
       .segmented button[aria-checked="true"], .segmented button[aria-checked="true"]:hover:not(:disabled) {
         background: var(--surface); color: var(--accent); font-weight: 600; }
       .server-custom { flex-direction: row; flex-wrap: wrap; gap: 6px; }
-      .server-self:not([hidden]) { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
-      .server-self button { min-height: 32px; font-size: 13px; }
-      .server-hint { font-size: 12px; color: var(--text-2); }
+      /* Hà Nội: one quiet row — what it is for on the left, the copy action on the right. */
+      .server-self:not([hidden]) { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 14px;
+                                   border-radius: var(--r-control); background: var(--field); }
+      .server-self-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+      .server-self-title { font-size: 13px; font-weight: 600; color: var(--text); }
+      .server-hint { font-size: 12px; line-height: 1.35; color: var(--text-2); }
+      .server-self button { flex: none; min-height: 34px; padding: 0 14px; font-size: 13px; font-weight: 600;
+                            background: var(--surface); color: var(--accent); }
+      .server-self button:hover:not(:disabled) { background: var(--surface); color: var(--accent-hover); }
+      .server-self button.done, .server-self button.done:hover:not(:disabled) { color: var(--ok); }
       .server-custom input { flex: 1 1 140px; min-width: 0; min-height: 36px; padding: 6px 10px; }
       .server-custom button { min-height: 36px; font-size: 13px; }
       /* Account row: sign-in buttons while logged out, the name and Đăng xuất while logged in. */

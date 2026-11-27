@@ -22,6 +22,7 @@ const LAYOUT = `
         <button id="connect" type="submit" class="primary">Enter</button>
       </div>
     </form>
+    <p id="status" role="status"></p>
     <section id="saved" aria-label="Máy đã kết nối" hidden>
       <ul id="saved-list"></ul>
     </section>
@@ -35,8 +36,11 @@ const LAYOUT = `
         </div>
       </div>
       <div id="server-self" class="server-self" hidden>
-        <button id="server-copy" type="button" title="Dán vào app trên máy tính: Cài đặt → Mạng → Máy chủ ID/Relay → biểu tượng dán">Sao chép config máy chủ</button>
-        <span class="server-hint">Dán vào app trên máy tính: Cài đặt → Mạng → biểu tượng dán</span>
+        <div class="server-self-text">
+          <span class="server-self-title">Dùng trên máy tính</span>
+          <span class="server-hint">Dán vào app: Cài đặt → Mạng → biểu tượng dán</span>
+        </div>
+        <button id="server-copy" type="button" title="Chép config máy chủ Hà Nội">Sao chép</button>
       </div>
       <form id="server-custom" class="server-custom" hidden>
         <input id="server-host" placeholder="Máy chủ ID" aria-label="Máy chủ ID" autocomplete="off" autocapitalize="off" spellcheck="false" required>
@@ -45,7 +49,6 @@ const LAYOUT = `
       </form>
     </div>
     <div id="account" class="account"></div>
-    <p id="status" role="status"></p>
   </header>
   <section id="stage">${STAGE_HTML}</section>
 `;
@@ -466,12 +469,15 @@ export function mountRuster(root: HTMLElement, deps: RusterDeps = DEFAULT_DEPS):
     const code = selfConfigCode();
     try {
       await navigator.clipboard.writeText(code);
-      serverCopy.textContent = 'Đã sao chép';
-      say('Đã sao chép config máy chủ Hà Nội. Dán vào app trên máy tính: Cài đặt → Mạng → biểu tượng dán.');
+      serverCopy.textContent = 'Đã chép ✓';
+      serverCopy.classList.add('done');
     } catch {
       window.prompt('Trình duyệt không cho chép tự động. Chép mã này:', code);
     }
-    setTimeout(() => (serverCopy.textContent = 'Sao chép config máy chủ'), 2000);
+    setTimeout(() => {
+      serverCopy.textContent = 'Sao chép';
+      serverCopy.classList.remove('done');
+    }, 2000);
   });
   serverCustom.addEventListener('submit', (event) => {
     event.preventDefault();
