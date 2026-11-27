@@ -84,4 +84,27 @@ describe('soft keyboard', () => {
     expect(chords).toEqual([{ chr: 0x76, modifiers: [CONTROL_KEY.Meta] }]);
     kb.destroy();
   });
+
+  test('with a gap, Telex "vao" → "vào" sends each Backspace apart, then the letters, in order', () => {
+    vi.useFakeTimers();
+    const sent: string[] = [];
+    const host = document.createElement('div');
+    document.body.append(host);
+    const kb = new SoftKeyboard(host, (k) => sent.push(JSON.stringify(k)), () => {}, undefined, undefined, 25);
+    kb.open();
+    const start = kb.field.value;
+    for (const v of ['v', 'va', 'vao', 'vào']) {
+      kb.field.value = start + v;
+      kb.field.dispatchEvent(new Event('input'));
+    }
+    expect(sent).toEqual(['{"text":"v"}', '{"text":"a"}', '{"text":"o"}', '{"controlKey":2}']);
+    vi.advanceTimersByTime(24);
+    expect(sent).toHaveLength(4);
+    vi.advanceTimersByTime(1);
+    expect(sent.at(-1)).toBe('{"controlKey":2}');
+    vi.advanceTimersByTime(25);
+    expect(sent.slice(4)).toEqual(['{"controlKey":2}', '{"text":"ào"}']);
+    kb.destroy();
+    vi.useRealTimers();
+  });
 });

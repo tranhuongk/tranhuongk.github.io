@@ -22,6 +22,10 @@ export class SoftKeyboard {
   private last = SENTINEL;
   private composing = false;
   private readonly cleanups: (() => void)[] = [];
+  /** Keys waiting their turn: everything goes through here, so order never changes. */
+  private readonly queue: KeyInput[] = [];
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private lastBackspace = -Infinity;
 
   constructor(
     host: HTMLElement,
@@ -31,6 +35,11 @@ export class SoftKeyboard {
     private readonly onPasteChord?: (k: KeyInput) => void,
     /** ?debug: one line per field event and what it sent. */
     private readonly log?: (line: string) => void,
+    /**
+     * Pause after each Backspace that has more keys behind it. A Linux peer drops some of a burst of
+     * Backspaces, so Telex rewriting "vao" into "vào" (⌫⌫ + "ào") came out as "vaào".
+     */
+    private readonly gapMs = 0,
   ) {
     const f = document.createElement('input');
     f.id = 'soft-kbd';
@@ -69,7 +78,7 @@ export class SoftKeyboard {
         this.onPasteChord(k);
         return;
       }
-      this.send(k);
+      this.out(k);
       e.preventDefault();
     });
     on('focus', () => this.onOpenChange(true));
@@ -108,15 +117,35 @@ export class SoftKeyboard {
     const now = this.field.value;
     const { backspaces, text } = diffTyping(this.last, now);
     this.log?.(`in${this.composing ? '(c)' : ''} "${now.replace(/\u200b/g, '')}" → ${'⌫'.repeat(backspaces)}${text ? `+"${text}"` : ''}`);
-    for (let i = 0; i < backspaces; i++) this.send({ controlKey: CONTROL_KEY.Backspace });
+    for (let i = 0; i < backspaces; i++) this.out({ controlKey: CONTROL_KEY.Backspace });
     for (const part of text.split('\n')) {
-      if (part) this.send({ text: part });
+      if (part) this.out({ text: part });
     }
-    if (text.includes('\n')) this.send({ controlKey: CONTROL_KEY.Return });
+    if (text.includes('\n')) this.out({ controlKey: CONTROL_KEY.Return });
     this.last = now;
     // Start over once the field drifts, so the diff stays short and Backspace always has a sentinel —
     // never mid-composition, which would break the word the IME is building.
     if (!this.composing && (!now.startsWith(SENTINEL) || now.length > 64)) this.reset();
+  }
+
+  private out(k: KeyInput): void {
+    this.queue.push(k);
+    if (this.timer === null) this.drain();
+  }
+
+  private drain(): void {
+    this.timer = null;
+    while (this.queue.length) {
+      // Whatever follows a Backspace waits until the gap has passed, whether it came with it or later.
+      const wait = this.lastBackspace + this.gapMs - Date.now();
+      if (this.gapMs > 0 && wait > 0) {
+        this.timer = setTimeout(() => this.drain(), wait);
+        return;
+      }
+      const k = this.queue.shift()!;
+      this.send(k);
+      this.lastBackspace = 'controlKey' in k && k.controlKey === CONTROL_KEY.Backspace ? Date.now() : -Infinity;
+    }
   }
 
   private reset(): void {
@@ -130,6 +159,9 @@ export class SoftKeyboard {
   }
 
   destroy(): void {
+    if (this.timer !== null) clearTimeout(this.timer);
+    this.timer = null;
+    this.queue.length = 0;
     for (const c of this.cleanups.splice(0)) c();
     this.field.remove();
   }

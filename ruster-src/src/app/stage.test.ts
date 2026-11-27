@@ -103,6 +103,9 @@ describe('Stage', () => {
       field.value = start + v;
       field.dispatchEvent(new Event('input'));
     }
+    // The text after each Backspace waits its turn (25 ms), in order.
+    expect(s.calls).toEqual(['key:{"text":"a"}', 'key:{"controlKey":2}']);
+    vi.advanceTimersByTime(100);
     expect(s.calls).toEqual(['key:{"text":"a"}', 'key:{"controlKey":2}', 'key:{"text":"â"}', 'key:{"controlKey":2}', 'key:{"text":"ấ"}']);
   });
 

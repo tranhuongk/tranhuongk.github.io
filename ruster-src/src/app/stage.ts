@@ -92,6 +92,8 @@ export interface StageOptions {
 }
 
 const SILENCE_MS = 5000;
+/** Time between the Backspaces of an input method's rewrite (see SoftKeyboard). */
+const BACKSPACE_GAP_MS = 25;
 
 /** `?debug` in the address: a corner of the stage lists cursor shapes and taps. */
 const DEBUG = /[?&]debug\b/.test(location.search);
@@ -278,7 +280,7 @@ export class Stage {
 
     const kbdButton = this.root.querySelector<HTMLButtonElement>('#btn-kbd')!;
     this.keyboard = new SoftKeyboard(this.root, (k) => this.keys(k), (open) => kbdButton.setAttribute('aria-pressed', String(open)),
-      (k) => this.pasteChord(k), DEBUG ? (line) => this.debug(line) : undefined);
+      (k) => this.pasteChord(k), DEBUG ? (line) => this.debug(line) : undefined, BACKSPACE_GAP_MS);
     // With a mouse, the keys go through the hidden field too, so the computer's input method (Telex,
     // Unikey…) works; a canvas cannot host one. With touch the field stays closed until asked for.
     this.on(this.root, 'pointerdown', (e) => {
