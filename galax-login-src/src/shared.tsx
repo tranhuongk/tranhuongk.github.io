@@ -1,5 +1,5 @@
 // Pieces every section uses.
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowDownToLineIcon } from 'lucide-react'
 import { ShimmerButton } from '@/components/ui/shimmer-button'
 import { cn } from '@/lib/utils'
@@ -39,26 +39,5 @@ export function DownloadButton({ href, children, className }: { href: string; ch
       className={cn('h-12 gap-2 px-7 text-base font-semibold shadow-lg shadow-primary/30', className)}>
       <ArrowDownToLineIcon className="size-5" /> {children}
     </ShimmerButton>
-  )
-}
-
-/**
- * Draws `children` at a fixed design size and scales it to the width it gets, so the illustrated app
- * keeps its layout (and stays sharp: it is still text and vectors) from phones to wide screens.
- */
-export function FitWidth({ width, height, children, className }: { width: number; height: number; children: ReactNode; className?: string }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [k, setK] = useState(1)
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const ro = new ResizeObserver(() => setK(Math.min(1, el.clientWidth / width)))
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [width])
-  return (
-    <div ref={ref} className={cn('relative w-full', className)} style={{ height: height * k }}>
-      <div className="absolute top-0 left-0 origin-top-left" style={{ width, height, transform: `scale(${k})` }}>{children}</div>
-    </div>
   )
 }

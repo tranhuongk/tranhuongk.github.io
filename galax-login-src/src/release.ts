@@ -14,10 +14,13 @@ export interface Release {
   size: number
   sha256: string
   released: string
+  /** The macOS .dmg of the same release; empty until a release carries one. */
+  mac_url: string
+  mac_size: number
 }
 
 /** Shown until (or if) the API cannot be read: the stable link still gets the newest build. */
-const FALLBACK: Release = { version: '', setup_url: LATEST_URL, latest_url: LATEST_URL, size: 0, sha256: '', released: '' }
+const FALLBACK: Release = { version: '', setup_url: LATEST_URL, latest_url: LATEST_URL, size: 0, sha256: '', released: '', mac_url: '', mac_size: 0 }
 
 interface GhAsset { name: string; size: number; digest?: string; browser_download_url: string }
 
@@ -30,6 +33,7 @@ export function useRelease(): Release {
       .then((d: { tag_name: string; published_at: string; assets: GhAsset[] }) => {
         const setup = d.assets.find((a) => /^Galax-Login-[\d.]+-Setup\.exe$/.test(a.name)) ?? d.assets.find((a) => a.name.endsWith('.exe'))
         if (!setup) return
+        const mac = d.assets.find((a) => /^Galax-Login-[\d.]+-macOS\.dmg$/.test(a.name))
         setR({
           version: d.tag_name.replace(/^v/, ''),
           setup_url: setup.browser_download_url,
@@ -37,6 +41,8 @@ export function useRelease(): Release {
           size: setup.size,
           sha256: setup.digest?.replace(/^sha256:/, '') ?? '',
           released: d.published_at.slice(0, 10),
+          mac_url: mac ? `https://github.com/${REPO}/releases/latest/download/Galax-Login-macOS.dmg` : '',
+          mac_size: mac?.size ?? 0,
         })
       })
       .catch(() => {})

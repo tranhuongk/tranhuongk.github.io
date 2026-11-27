@@ -8,9 +8,9 @@ import { Badge } from '@/components/ui/badge'
 import { BlurFade } from '@/components/ui/blur-fade'
 import { Button } from '@/components/ui/button'
 import { Particles } from '@/components/ui/particles'
-import { AppWindow, APP_H, APP_W } from './app-mock'
+import { AppShot } from './app-shot'
 import { megabytes, vnDate, type Release } from './release'
-import { BRAND, DownloadButton, FitWidth, ICON, useDark, useWide } from './shared'
+import { BRAND, DownloadButton, ICON, useDark, useWide } from './shared'
 
 function Title({ r }: { r: Release }) {
   return (
@@ -41,7 +41,8 @@ function Title({ r }: { r: Release }) {
           <DownloadButton href={r.latest_url} className="w-full sm:w-auto">Tải cho Windows</DownloadButton>
           <Button asChild size="lg" variant="ghost" className="h-12 rounded-full px-6 text-base text-primary"><a href="#xem-ky">Xem kỹ hơn ›</a></Button>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">Windows 10 / 11 · 64-bit{r.size ? ` · ${megabytes(r.size)}` : ''}</p>
+        <p className="mt-3 text-xs text-muted-foreground">Windows 10 / 11 · 64-bit{r.size ? ` · ${megabytes(r.size)}` : ''}
+          {r.mac_url && <> · <a href={r.mac_url} className="underline underline-offset-2 hover:text-foreground">Bản macOS</a></>}</p>
       </BlurFade>
     </div>
   )
@@ -78,7 +79,7 @@ export function Hero({ r }: { r: Release }) {
     return (
       <section className="relative overflow-hidden border-b px-4 pt-14 pb-14">
         <Backdrop />
-        <div className="relative mx-auto max-w-5xl"><Title r={r} /><BlurFade inView delay={0.2}><div className="mt-12"><FitWidth width={APP_W} height={APP_H}><AppWindow /></FitWidth></div></BlurFade></div>
+        <div className="relative mx-auto max-w-5xl"><Title r={r} /><BlurFade inView delay={0.2}><div className="mt-12 overflow-hidden rounded-xl shadow-2xl ring-1 ring-border"><AppShot /></div></BlurFade></div>
       </section>
     )
   }
@@ -93,8 +94,8 @@ export function Hero({ r }: { r: Release }) {
         <motion.div className="absolute inset-x-0 top-[80vh] z-20 mx-auto w-[min(1100px,92vw)] origin-top" style={{ scale: winScale, y: winY }}>
           <motion.div className="pointer-events-none absolute -inset-10 -z-10 rounded-[40px] bg-[radial-gradient(closest-side,color-mix(in_oklab,var(--primary)_35%,transparent),transparent)] blur-2xl"
             style={{ opacity: glow }} />
-          <motion.div className="overflow-hidden" style={{ borderRadius: winRadius }}>
-            <FitWidth width={APP_W} height={APP_H}><AppWindow className="rounded-none" /></FitWidth>
+          <motion.div className="overflow-hidden shadow-2xl ring-1 ring-border" style={{ borderRadius: winRadius }}>
+            <AppShot />
           </motion.div>
         </motion.div>
       </div>

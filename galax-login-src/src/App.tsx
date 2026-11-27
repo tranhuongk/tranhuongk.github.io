@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { animate, MotionConfig, motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform } from 'motion/react'
-import { CheckIcon, CopyIcon, FileSpreadsheetIcon, GlobeIcon, MonitorIcon, NetworkIcon, RefreshCwIcon, ShieldCheckIcon } from 'lucide-react'
+import { ArrowDownToLineIcon, CheckIcon, CopyIcon, FileSpreadsheetIcon, GlobeIcon, MonitorIcon, NetworkIcon, RefreshCwIcon, ShieldCheckIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { BlurFade } from '@/components/ui/blur-fade'
 import { BorderBeam } from '@/components/ui/border-beam'
@@ -253,7 +253,12 @@ function DownloadCard({ r }: { r: Release }) {
             {copied ? <CheckIcon className="size-3.5 shrink-0 text-emerald-500" /> : <CopyIcon className="size-3.5 shrink-0 opacity-60 group-hover:opacity-100" />}
           </button>
         )}
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><RefreshCwIcon className="size-3" /> Đã cài rồi thì cập nhật ngay trong app.</p>
+        {r.mac_url && (
+          <a href={r.mac_url} className="flex items-center justify-center gap-1.5 rounded-md border py-2 text-sm font-medium hover:bg-muted">
+            <ArrowDownToLineIcon className="size-4" /> Bản macOS (.dmg{r.mac_size ? `, ${megabytes(r.mac_size)}` : ''})
+          </a>
+        )}
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><RefreshCwIcon className="size-3" /> Đã cài rồi thì cập nhật ngay trong app{r.mac_url ? ' (Windows)' : ''}.</p>
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><GlobeIcon className="size-3" /> Tải từ GitHub ·{' '}
           <a href={RELEASES_PAGE} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">các bản trước</a></p>
       </CardContent>
