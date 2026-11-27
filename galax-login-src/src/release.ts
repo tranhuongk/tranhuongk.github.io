@@ -1,7 +1,11 @@
-// The latest installer, as published by the Galax Login release workflow on the VPS.
+// The latest installer, from the public GitHub repo galaxvn/galax-login-releases (its workflow mirrors
+// each release from the release server). Downloads go through github.com: Chrome blocked them from
+// the shared sslip.io domain, which Safe Browsing flags as a whole.
 import { useEffect, useState } from 'react'
 
-export const DOWNLOAD_BASE = 'https://dl.103-75-184-121.sslip.io/galax'
+const REPO = 'galaxvn/galax-login-releases'
+export const LATEST_URL = `https://github.com/${REPO}/releases/latest/download/Galax-Login-Setup.exe`
+export const RELEASES_PAGE = `https://github.com/${REPO}/releases`
 
 export interface Release {
   version: string
@@ -12,23 +16,29 @@ export interface Release {
   released: string
 }
 
-/** Shown until (or if) the manifest cannot be read: the stable link still gets the newest build. */
-const FALLBACK: Release = {
-  version: '',
-  setup_url: `${DOWNLOAD_BASE}/Galax-Login-Setup.exe`,
-  latest_url: `${DOWNLOAD_BASE}/Galax-Login-Setup.exe`,
-  size: 0,
-  sha256: '',
-  released: '',
-}
+/** Shown until (or if) the API cannot be read: the stable link still gets the newest build. */
+const FALLBACK: Release = { version: '', setup_url: LATEST_URL, latest_url: LATEST_URL, size: 0, sha256: '', released: '' }
+
+interface GhAsset { name: string; size: number; digest?: string; browser_download_url: string }
 
 export function useRelease(): Release {
   const [r, setR] = useState(FALLBACK)
   useEffect(() => {
     const ctl = new AbortController()
-    fetch(`${DOWNLOAD_BASE}/latest.json`, { signal: ctl.signal, cache: 'no-store' })
+    fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { signal: ctl.signal, headers: { Accept: 'application/vnd.github+json' } })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
-      .then((d: Release) => d.version && setR(d))
+      .then((d: { tag_name: string; published_at: string; assets: GhAsset[] }) => {
+        const setup = d.assets.find((a) => /^Galax-Login-[\d.]+-Setup\.exe$/.test(a.name)) ?? d.assets.find((a) => a.name.endsWith('.exe'))
+        if (!setup) return
+        setR({
+          version: d.tag_name.replace(/^v/, ''),
+          setup_url: setup.browser_download_url,
+          latest_url: LATEST_URL,
+          size: setup.size,
+          sha256: setup.digest?.replace(/^sha256:/, '') ?? '',
+          released: d.published_at.slice(0, 10),
+        })
+      })
       .catch(() => {})
     return () => ctl.abort()
   }, [])

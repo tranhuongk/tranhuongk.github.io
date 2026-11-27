@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { megabytes, useRelease, vnDate, type Release } from './release'
+import { megabytes, RELEASES_PAGE, useRelease, vnDate, type Release } from './release'
 
 const ICON = `${import.meta.env.BASE_URL}icon.png`
 
@@ -298,7 +298,8 @@ function DownloadCard({ r }: { r: Release }) {
           </button>
         )}
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><RefreshCwIcon className="size-3" /> Đã cài rồi thì cập nhật ngay trong app.</p>
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><GlobeIcon className="size-3" /> Tải từ máy chủ ở Hà Nội.</p>
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><GlobeIcon className="size-3" /> Tải từ GitHub ·{' '}
+          <a href={RELEASES_PAGE} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">các bản trước</a></p>
       </CardContent>
     </Card>
   )
