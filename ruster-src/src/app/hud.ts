@@ -11,6 +11,8 @@ export class AutoHide {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private pinned = false;
   private hidden = false;
+  /** False right after the user hid the bar on purpose: the top edge reveals it again only after the pointer has left it. */
+  private armed = true;
   private readonly delay: number;
   private readonly edge: number;
 
@@ -32,6 +34,7 @@ export class AutoHide {
   }
 
   show(): void {
+    this.armed = true;
     this.hidden = false;
     this.el.classList.remove('hidden');
     this.grip?.setAttribute('hidden', '');
@@ -48,9 +51,21 @@ export class AutoHide {
     this.grip?.removeAttribute('hidden');
   }
 
+  /** Hides now because the user asked (the hide button): ignores hover/pin and lets go of the edge until the pointer leaves it. */
+  dismiss(): void {
+    this.pinned = false;
+    this.armed = false;
+    if (this.timer !== null) clearTimeout(this.timer);
+    this.timer = null;
+    this.hidden = true;
+    this.el.classList.add('hidden');
+    this.grip?.removeAttribute('hidden');
+  }
+
   /** Pointer position over the stage: reveal at the top edge. */
   pointerAt(clientY: number): void {
-    if (clientY <= this.edge) this.show();
+    if (clientY > this.edge) this.armed = true;
+    else if (this.armed) this.show();
   }
 
   private schedule(): void {

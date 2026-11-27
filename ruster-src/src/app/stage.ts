@@ -24,6 +24,7 @@ const ICON: Record<string, string> = {
   cad: '<path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/>',
   full: '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
   power: '<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
+  hide: '<path d="m18 15-6-6-6 6"/>',
 };
 const icon = (name: string) =>
   `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name]}</svg>`;
@@ -59,6 +60,7 @@ export const STAGE_HTML = `
       ${tool('btn-cursor', 'cursor', 'Con trỏ', 'Dùng hình con trỏ của máy đích', ' aria-pressed="true"')}
       ${tool('btn-cad', 'cad', 'Ctrl+Alt+Del', 'Gửi Ctrl+Alt+Del')}
       ${tool('btn-full', 'full', 'Toàn màn hình', 'Toàn màn hình')}
+      ${tool('btn-hide', 'hide', 'Ẩn', 'Ẩn thanh công cụ — rê chuột lên mép trên hoặc bấm tay nắm để hiện lại')}
       <span class="sep" aria-hidden="true"></span>
       ${tool('disconnect', 'power', 'Ngắt', 'Ngắt kết nối', ' class="danger"')}
     </div>
@@ -433,6 +435,10 @@ export class Stage {
     // Toolbar visibility: top edge, touch on the grip, anything focused or being edited inside it.
     this.on(this.root, 'pointermove', (e) => this.hud.pointerAt((e as PointerEvent).clientY), { capture: true });
     this.on($('hud-grip'), 'click', () => this.hud.show());
+    this.on($('btn-hide'), 'click', () => {
+      this.hud.dismiss();
+      this.canvas.focus();
+    });
     this.on($('hud'), 'focusin', () => this.hud.pin(true));
     this.on($('hud'), 'focusout', () => this.hud.pin(false));
 

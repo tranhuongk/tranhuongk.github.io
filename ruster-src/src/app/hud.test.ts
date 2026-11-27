@@ -45,4 +45,32 @@ describe('AutoHide', () => {
     expect(h.isHidden()).toBe(true);
     h.destroy();
   });
+
+  test('the hide button hides at once, even while hovered or pinned', () => {
+    const h = new AutoHide(el, grip, { delayMs: 1000, edgePx: 40 });
+    h.pin(true);
+    h.dismiss();
+    expect(h.isHidden()).toBe(true);
+    expect(el.classList.contains('hidden')).toBe(true);
+    expect(grip.hasAttribute('hidden')).toBe(false);
+  });
+
+  test('after hiding by hand the top edge waits for the pointer to leave it first', () => {
+    const h = new AutoHide(el, grip, { delayMs: 1000, edgePx: 40 });
+    h.dismiss();
+    h.pointerAt(10); // pointer is still where the button was
+    expect(h.isHidden()).toBe(true);
+    h.pointerAt(300);
+    expect(h.isHidden()).toBe(true);
+    h.pointerAt(5);
+    expect(h.isHidden()).toBe(false);
+  });
+
+  test('the grip still brings it back right after hiding by hand', () => {
+    const h = new AutoHide(el, grip, { delayMs: 1000 });
+    h.dismiss();
+    h.show();
+    expect(h.isHidden()).toBe(false);
+    expect(grip.hasAttribute('hidden')).toBe(true);
+  });
 });
