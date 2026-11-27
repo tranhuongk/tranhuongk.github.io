@@ -14,26 +14,53 @@ import { SoftKeyboard } from './soft-keyboard';
 import { TouchPad, type TouchView } from './touch';
 import { VideoPlayer } from './video';
 
+const ICON: Record<string, string> = {
+  pen: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>',
+  kbd: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="M10 8h.01M12 12h.01M14 8h.01M16 12h.01M18 8h.01M6 8h.01M7 16h10M8 12h.01"/>',
+  paste: '<path d="M11 14h10"/><path d="M16 4h2a2 2 0 0 1 2 2v1.344"/><path d="m17 18 4-4-4-4"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113"/><rect x="8" y="2" width="8" height="4" rx="1"/>',
+  ime: '<path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>',
+  fit: '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect width="10" height="8" x="7" y="8" rx="1"/>',
+  cursor: '<path d="M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z"/>',
+  cad: '<path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/>',
+  full: '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
+  power: '<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
+};
+const icon = (name: string) =>
+  `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name]}</svg>`;
+/** A toolbar button: icon + label (the label hides on narrow screens; the title still names it). */
+const tool = (id: string, ico: string, label: string, title: string, extra = '') =>
+  `<button id="${id}" type="button" title="${title}" aria-label="${label}"${extra}>${icon(ico)}<span class="lbl">${label}</span></button>`;
+
+/** Changes a toolbar button's label without dropping its icon. */
+function setLabel(b: Element, text: string): void {
+  const lbl = b.querySelector('.lbl');
+  if (lbl) lbl.textContent = text;
+  else b.textContent = text;
+  b.setAttribute('aria-label', text);
+}
+
 export const STAGE_HTML = `
   <div id="screen-wrap"><canvas id="screen" tabindex="0" width="16" height="9"></canvas></div>
   <div id="vcursor" aria-hidden="true" hidden><svg viewBox="0 0 24 24" width="24" height="24"><path d="M3 2l15 11.2-6.6.9 3.9 7.4-2.6 1.3-3.8-7.5L3 20z"/></svg><img alt=""></div>
   <div id="hud">
     <div id="bar">
-      <button id="bar-title" type="button" class="title" title="Đổi tên máy này"><span id="bar-name"></span><span class="pen" aria-hidden="true">✎</span></button>
+      <button id="bar-title" type="button" class="title" title="Đổi tên máy này"><span id="bar-name"></span><span class="pen" aria-hidden="true">${icon('pen')}</span></button>
       <form id="bar-rename" hidden>
         <input id="bar-rename-input" autocomplete="off" aria-label="Tên máy">
         <button type="submit" class="primary">Lưu</button>
       </form>
       <span id="link" class="link" data-quality="unknown"><span class="dot"></span><span id="link-text"></span></span>
       <span class="spacer"></span>
-      <button id="btn-kbd" type="button" aria-pressed="false" title="Mở bàn phím" hidden>Bàn phím</button>
-      <button id="btn-paste" type="button" title="Dán nội dung đang copy ở máy này sang máy đích">Dán</button>
-      <button id="btn-ime" type="button" title="Đổi bộ gõ của máy đích (Ctrl+Space trên Mac, Ctrl+Shift trên Windows)">Đổi bộ gõ</button>
-      <button id="btn-fit" type="button" title="Đổi giữa vừa khung và 100%">100%</button>
-      <button id="btn-cursor" type="button" aria-pressed="true" title="Dùng hình con trỏ của máy đích">Con trỏ</button>
-      <button id="btn-cad" type="button" title="Gửi Ctrl+Alt+Del">Ctrl+Alt+Del</button>
-      <button id="btn-full" type="button" title="Toàn màn hình">Toàn màn hình</button>
-      <button id="disconnect" type="button" class="danger">Ngắt</button>
+      ${tool('btn-kbd', 'kbd', 'Bàn phím', 'Mở bàn phím', ' aria-pressed="false" hidden')}
+      ${tool('btn-paste', 'paste', 'Dán', 'Dán nội dung đang copy ở máy này sang máy đích')}
+      ${tool('btn-ime', 'ime', 'Đổi bộ gõ', 'Đổi bộ gõ của máy đích (Ctrl+Space trên Mac, Ctrl+Shift trên Windows)')}
+      <span class="sep" aria-hidden="true"></span>
+      ${tool('btn-fit', 'fit', '100%', 'Đổi giữa vừa khung và 100%')}
+      ${tool('btn-cursor', 'cursor', 'Con trỏ', 'Dùng hình con trỏ của máy đích', ' aria-pressed="true"')}
+      ${tool('btn-cad', 'cad', 'Ctrl+Alt+Del', 'Gửi Ctrl+Alt+Del')}
+      ${tool('btn-full', 'full', 'Toàn màn hình', 'Toàn màn hình')}
+      <span class="sep" aria-hidden="true"></span>
+      ${tool('disconnect', 'power', 'Ngắt', 'Ngắt kết nối', ' class="danger"')}
     </div>
   </div>
   <button id="hud-grip" type="button" aria-label="Hiện thanh công cụ" hidden></button>
@@ -338,7 +365,7 @@ export class Stage {
     const fy = before.height > 0 ? (clientY - before.top) / before.height : 0.5;
     this.mode = 'fit';
     this.zoom = zoom;
-    this.root.querySelector('#btn-fit')!.textContent = zoom > 1 ? 'Vừa khung' : '100%';
+    setLabel(this.root.querySelector('#btn-fit')!, zoom > 1 ? 'Vừa khung' : '100%');
     this.layout();
     // Keep the point under the fingers where it was.
     const after = this.canvas.getBoundingClientRect();
@@ -371,7 +398,7 @@ export class Stage {
       if (this.mode === 'fit' && this.zoom > 1) this.zoom = 1;
       else this.mode = this.mode === 'fit' ? 'actual' : 'fit';
       this.zoom = 1;
-      fit.textContent = this.mode === 'fit' ? '100%' : 'Vừa khung';
+      setLabel(fit, this.mode === 'fit' ? '100%' : 'Vừa khung');
       this.layout();
       this.canvas.focus();
     });
@@ -392,7 +419,7 @@ export class Stage {
     });
     this.on(document, 'fullscreenchange', () => {
       const on = Boolean(document.fullscreenElement);
-      full.textContent = on ? 'Thu nhỏ' : 'Toàn màn hình';
+      setLabel(full, on ? 'Thu nhỏ' : 'Toàn màn hình');
       // In full screen Esc would leave it; keep Esc for the remote machine where the browser allows.
       const keyboard = (navigator as Navigator & { keyboard?: { lock?: (keys: string[]) => Promise<void>; unlock?: () => void } }).keyboard;
       if (on) void keyboard?.lock?.(['Escape']).catch(() => {});
@@ -569,8 +596,8 @@ export class Stage {
       if (text) {
         this.pasteLocal(text);
       } else {
-        paste.textContent = 'Chưa đọc được clipboard';
-        setTimeout(() => (paste.textContent = 'Dán'), 2000);
+        setLabel(paste, 'Chưa đọc được clipboard');
+        setTimeout(() => setLabel(paste, 'Dán'), 2000);
       }
       this.refocus();
     });
@@ -590,7 +617,9 @@ export class Stage {
   private renderLink(): void {
     const link = this.root.querySelector<HTMLElement>('#link')!;
     link.dataset.quality = quality(this.delay);
-    this.root.querySelector('#link-text')!.textContent = linkText(this.session.path, this.delay, this.fpsNow);
+    const text = linkText(this.session.path, this.delay, this.fpsNow);
+    this.root.querySelector('#link-text')!.textContent = text;
+    link.title = text;
   }
 
   feed(frames: VideoChunk[]): void {

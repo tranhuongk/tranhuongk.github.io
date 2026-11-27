@@ -6,6 +6,8 @@ import { PEERS_KEY } from './saved-peers';
 import { SERVER_KEY, SERVER_PUBKEY_KEY } from './server-setting';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
+// jsdom has no ResizeObserver; Radix (Checkbox) measures itself with one.
+globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
 const PEER: PeerSummary = { hostname: 'MAC', platform: 'Mac OS', username: 'u', version: '1.5.3', width: 1920, height: 1080, originX: 0, originY: 0 };
 
 class FakeSession {
@@ -62,7 +64,7 @@ describe('ruster page', () => {
   const submit = (id: string, pw = '') => {
     app.querySelector<HTMLInputElement>('#peer')!.value = id;
     app.querySelector<HTMLInputElement>('#password')!.value = pw;
-    app.querySelector<HTMLFormElement>('#connect-form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    app.querySelector<HTMLFormElement>('#connect-form')!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
   };
   const status = () => app.querySelector('#status')!.textContent;
   const picked = () => app.querySelector<HTMLButtonElement>('#server [aria-checked="true"]')?.dataset.choice;
@@ -164,10 +166,9 @@ describe('ruster page', () => {
   test('"Lưu mật khẩu": saved once the machine accepts it, a pick connects with it, a refusal forgets it', () => {
     const stored = () => JSON.parse(localStorage.getItem(PEERS_KEY)!)[0];
     mountRuster(app, deps);
-    const box = app.querySelector<HTMLInputElement>('#save-pw')!;
-    expect(box.checked).toBe(false);
-    box.checked = true;
-    box.dispatchEvent(new Event('change'));
+    const box = app.querySelector<HTMLButtonElement>('#save-pw')!;
+    expect(box.getAttribute('aria-checked')).toBe('false');
+    box.click();
     submit('123456789', 'secret');
     sessions[0]!.events.ready({ ...PEER, width: 0 });
     expect(stored()).toMatchObject({ id: '123456789', password: 'secret' });
@@ -177,7 +178,7 @@ describe('ruster page', () => {
     document.body.innerHTML = '<div id="app"></div>';
     app = document.getElementById('app')!;
     mountRuster(app, deps);
-    expect(app.querySelector<HTMLInputElement>('#save-pw')!.checked).toBe(true);
+    expect(app.querySelector('#save-pw')!.getAttribute('aria-checked')).toBe('true');
     app.querySelector<HTMLButtonElement>('.saved-pick')!.click();
     expect(sessions[1]!.o).toMatchObject({ peerId: '123456789', password: 'secret' });
     sessions[1]!.events.needPassword('Wrong Password');
@@ -298,7 +299,7 @@ describe('ruster page', () => {
       expect(localStorage.getItem(SERVER_KEY)).toBeNull();
       app.querySelector<HTMLInputElement>('#server-host')!.value = 'rd.example.com/';
       app.querySelector<HTMLInputElement>('#server-pubkey')!.value = ' KEY= ';
-      app.querySelector<HTMLFormElement>('#server-custom')!.dispatchEvent(new Event('submit', { cancelable: true }));
+      app.querySelector<HTMLFormElement>('#server-custom')!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
       expect(localStorage.getItem(SERVER_KEY)).toBe('rd.example.com');
       expect(localStorage.getItem(SERVER_PUBKEY_KEY)).toBe('KEY=');
       submit('123456789', 'pw');

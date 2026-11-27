@@ -1,0 +1,101 @@
+/* The remote screen (stage.ts, plain DOM). Everything is scoped to #stage so these unlayered rules never
+   reach the React connect page (whose Tailwind utilities sit in layers). Colours come from the shadcn
+   tokens in index.css, so the toolbar matches the rest of the app in light and dark. */
+#stage {
+  --st-surface: color-mix(in oklab, var(--popover) 88%, transparent);
+  --st-field: var(--muted);
+  --st-text: var(--foreground);
+  --st-text-2: var(--muted-foreground);
+  --st-accent: var(--primary);
+  --st-on-accent: var(--primary-foreground);
+  --st-ok: #1fa35c;
+  --st-warn: #e8a317;
+  --st-danger: var(--destructive);
+  --st-screen: #0e1117;
+  display: none; position: fixed; inset: 0; z-index: 10; overflow: hidden;
+  background: var(--st-screen); color: var(--st-text);
+  font: 400 14px/1.45 var(--font-sans); -webkit-font-smoothing: antialiased;
+}
+.connected #stage { display: block; }
+.connected #connect-root { display: none; }
+
+#stage button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; box-sizing: border-box;
+                min-height: 32px; padding: 0 10px; border: 0; border-radius: calc(var(--radius) * 0.8); cursor: pointer;
+                background: transparent; color: var(--st-text); font: inherit; font-size: 13px; font-weight: 500; line-height: 1.2;
+                touch-action: manipulation; transition: background-color 0.12s ease, color 0.12s ease; }
+#stage button:hover:not(:disabled) { background: var(--st-field); }
+#stage button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+#stage button.primary { background: var(--st-accent); color: var(--st-on-accent); font-weight: 600; }
+#stage input { box-sizing: border-box; border: 1px solid var(--input); border-radius: calc(var(--radius) * 0.8);
+               background: var(--background); color: var(--st-text); font: inherit; font-size: 14px; }
+#stage input:focus-visible { outline: 2px solid var(--ring); outline-offset: 0; }
+#stage .ico { flex: none; width: 16px; height: 16px; }
+
+#screen-wrap { position: absolute; inset: 0; display: flex; overflow: auto; overscroll-behavior: contain; touch-action: none; }
+/* margin:auto centres the canvas when it is smaller than the window and lets 100 % scroll when larger;
+   the local cursor is a small dot so pointing feels instant next to the remote cursor in the video. */
+#screen { flex: none; margin: auto; outline: none; touch-action: none; user-select: none;
+          cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Ccircle cx='6' cy='6' r='3' fill='%23ffffff' fill-opacity='.85' stroke='%23000000' stroke-opacity='.6'/%3E%3C/svg%3E") 6 6, default; }
+
+/* Touch: the whole stage is a touchpad; our cursor is drawn on top (tip = the click point). */
+#vcursor { position: fixed; left: 0; top: 0; z-index: 1; pointer-events: none; width: 24px; height: 24px; margin: -2px 0 0 -3px; }
+#vcursor svg { display: block; fill: #ffffff; stroke: #0e1117; stroke-width: 1.4; stroke-linejoin: round;
+               transition: transform 0.08s ease; transform-origin: 3px 2px; }
+#vcursor.pressed svg { fill: #3b82f6; transform: scale(0.88); }
+#vcursor img { display: none; max-width: none; }
+#vcursor.img { width: auto; height: auto; margin: 0; }
+#vcursor.img svg { display: none; }
+#vcursor.img img { display: block; transition: filter 0.08s ease; }
+#vcursor.img.pressed img { filter: drop-shadow(0 0 2px #3b82f6) drop-shadow(0 0 1px #3b82f6); }
+
+#stage #clip-offer { position: absolute; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 3;
+                     max-width: calc(100% - 32px); min-height: 40px; padding: 0 16px; border-radius: 999px; font-size: 14px;
+                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+                     background: var(--st-accent); color: var(--st-on-accent); box-shadow: 0 6px 20px rgb(0 0 0 / 0.35); }
+#soft-kbd { position: fixed; left: 0; bottom: 0; width: 1px; height: 1px; min-height: 0; padding: 0; opacity: 0; font-size: 16px; pointer-events: none; }
+
+/* Toolbar: a floating pill (popover colour, hairline ring, blur) that hides itself. */
+#hud { position: absolute; top: 0; left: 0; right: 0; z-index: 2; display: flex; justify-content: center;
+       padding: max(8px, env(safe-area-inset-top)) 8px 8px; pointer-events: none; transition: transform 0.18s ease, opacity 0.18s ease; }
+#hud.hidden { transform: translateY(-110%); opacity: 0; }
+#bar { pointer-events: auto; display: flex; align-items: center; gap: 2px; box-sizing: border-box; max-width: 100%; padding: 4px;
+       border-radius: calc(var(--radius) * 1.4); background: var(--st-surface); color: var(--st-text);
+       box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent), 0 8px 24px rgb(0 0 0 / 0.25);
+       backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); overflow-x: auto; scrollbar-width: none; }
+#bar button { flex: none; white-space: nowrap; }
+#bar button[aria-pressed="false"] { color: var(--st-text-2); }
+#bar button[aria-pressed="true"]:is(#btn-kbd) { background: var(--st-field); }
+#bar button.danger { color: var(--st-danger); }
+#bar button.danger:hover:not(:disabled) { background: color-mix(in oklab, var(--st-danger) 14%, transparent); }
+#bar .sep { flex: none; width: 1px; height: 18px; margin: 0 4px; background: color-mix(in oklab, var(--foreground) 12%, transparent); }
+#bar .title { gap: 6px; padding: 0 10px; font-weight: 600; max-width: 220px; }
+#bar .title #bar-name { overflow: hidden; text-overflow: ellipsis; }
+#bar .pen { display: inline-flex; color: var(--st-text-2); }
+#bar .pen .ico { width: 13px; height: 13px; }
+#bar-rename { flex-direction: row; align-items: center; gap: 4px; }
+#bar-rename input { width: 160px; min-height: 32px; padding: 0 10px; }
+#bar-rename:not([hidden]) { display: flex; }
+#bar .spacer { flex: 1; min-width: 8px; }
+.link { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; font-size: 12px; color: var(--st-text-2);
+        font-variant-numeric: tabular-nums; white-space: nowrap; }
+.link .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--st-text-2); opacity: 0.6; }
+.link[data-quality="good"] .dot { background: var(--st-ok); opacity: 1; }
+.link[data-quality="ok"] .dot { background: var(--st-warn); opacity: 1; }
+.link[data-quality="bad"] .dot { background: var(--st-danger); opacity: 1; }
+/* Narrow screens: icons only (each button keeps its title and aria-label). */
+@media (max-width: 720px) {
+  #bar .lbl { display: none; }
+  #bar button:has(.lbl) { padding: 0; width: 34px; min-height: 34px; }
+  #bar .title { max-width: 110px; }
+  #bar .sep { display: none; }
+}
+/* Phones: the link chip keeps only its coloured dot (the full text stays as its title). */
+@media (max-width: 480px) {
+  #link-text { display: none; }
+  .link { padding: 0 6px; }
+}
+
+#stage #hud-grip { position: absolute; top: 0; left: 50%; z-index: 2; transform: translateX(-50%); width: 64px; min-height: 0; height: 14px; padding: 0;
+                   border-radius: 0 0 8px 8px; background: var(--st-surface); opacity: 0.85; }
+#lost { position: absolute; top: 64px; left: 50%; z-index: 3; transform: translateX(-50%); padding: 8px 14px; border-radius: var(--radius);
+        background: color-mix(in oklab, var(--st-warn) 22%, var(--popover)); color: var(--st-text); font-size: 13px; pointer-events: none; }
