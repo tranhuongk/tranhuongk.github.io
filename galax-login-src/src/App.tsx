@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { MotionConfig, motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform } from 'motion/react'
+import { useEffect, useRef, useState } from 'react'
+import { animate, MotionConfig, motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform } from 'motion/react'
 import { CheckIcon, CopyIcon, FileSpreadsheetIcon, GlobeIcon, MonitorIcon, NetworkIcon, RefreshCwIcon, ShieldCheckIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { BlurFade } from '@/components/ui/blur-fade'
@@ -13,8 +13,49 @@ import { megabytes, RELEASES_PAGE, useRelease, vnDate, type Release } from './re
 import { DownloadButton, ICON } from './shared'
 import { Statement } from './statement'
 
+/**
+ * In-page links ("#xem-ky", "#api", "#cai-dat", "#") glide to their section instead of jumping: an
+ * eased scroll whose length grows with the distance, landing just under the sticky product bar.
+ * Reduced motion keeps the plain jump.
+ */
+function useSmoothAnchors() {
+  useEffect(() => {
+    let current: ReturnType<typeof animate> | null = null
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+      const a = (e.target as HTMLElement | null)?.closest<HTMLAnchorElement>('a[href^="#"]')
+      if (!a) return
+      const id = a.getAttribute('href')!.slice(1)
+      const el = id ? document.getElementById(id) : null
+      if (id && !el) return
+      e.preventDefault()
+      const bar = document.querySelector('header')?.getBoundingClientRect().height ?? 0
+      const to = el ? Math.max(0, el.getBoundingClientRect().top + window.scrollY - bar) : 0
+      const from = window.scrollY
+      history.replaceState(null, '', id ? `#${id}` : location.pathname)
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        window.scrollTo(0, to)
+        return
+      }
+      current?.stop()
+      const duration = Math.min(1.4, Math.max(0.6, Math.abs(to - from) / 3000))
+      current = animate(from, to, { duration, ease: [0.65, 0, 0.35, 1], onUpdate: (y) => window.scrollTo(0, y) })
+      // A wheel or touch during the glide hands the page back to the user.
+      const stop = () => { current?.stop(); window.removeEventListener('wheel', stop); window.removeEventListener('touchstart', stop) }
+      window.addEventListener('wheel', stop, { passive: true, once: true })
+      window.addEventListener('touchstart', stop, { passive: true, once: true })
+    }
+    document.addEventListener('click', onClick)
+    return () => {
+      document.removeEventListener('click', onClick)
+      current?.stop()
+    }
+  }, [])
+}
+
 export default function App() {
   const r = useRelease()
+  useSmoothAnchors()
   return (
     <MotionConfig reducedMotion="user">
       <div className="min-h-svh overflow-x-clip">
@@ -115,7 +156,8 @@ function Api() {
             ))}
           </ul>
         </BlurFade>
-        <BlurFade inView direction="left" className="relative min-w-0">
+        {/* rounded-xl like the Terminal: the BorderBeam inherits this radius, so it follows the corners. */}
+        <BlurFade inView direction="left" className="relative min-w-0 rounded-xl">
           <Terminal className="relative max-w-none bg-background">
             <AnimatedSpan className="text-muted-foreground"># Danh sách profile (như GPM, chỉ đổi cổng)</AnimatedSpan>
             <TypingAnimation duration={18}>curl http://127.0.0.1:19995/api/v1/profiles</TypingAnimation>
