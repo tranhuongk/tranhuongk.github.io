@@ -295,8 +295,11 @@ describe('ruster page', () => {
 
     test('Tuỳ chỉnh keeps the host and key only once Lưu is pressed', () => {
       mountRuster(app, deps);
+      pick('public');
       pick('custom');
-      expect(localStorage.getItem(SERVER_KEY)).toBeNull();
+      expect(app.querySelector<HTMLInputElement>('#server-host')!.value).toBe('');
+      expect(app.querySelector<HTMLInputElement>('#server-pubkey')!.value).toBe('');
+      expect(localStorage.getItem(SERVER_KEY)).toBe('wss://rs-ny.rustdesk.com');
       app.querySelector<HTMLInputElement>('#server-host')!.value = 'rd.example.com/';
       app.querySelector<HTMLInputElement>('#server-pubkey')!.value = ' KEY= ';
       app.querySelector<HTMLFormElement>('#server-custom')!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));

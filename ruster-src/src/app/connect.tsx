@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { OP_LABEL, OPS } from '../auth/account';
 import { avatarHue, avatarLetter, displayName, formatId, MAX_NAME_LENGTH, relativeTime, type SavedPeer } from './saved-peers';
-import { loadServer, loadServerKey, type ServerChoice } from './server-setting';
+import { loadServer, loadServerKey, serverChoice, type ServerChoice } from './server-setting';
 import type { Ruster } from './ruster';
 
 export function ConnectScreen({ ruster, now }: { ruster: Ruster; now: () => number }) {
@@ -134,6 +134,8 @@ function PeerEditor({ p, ruster }: { p: SavedPeer; ruster: Ruster }) {
 }
 
 function ServerCard({ ruster, server, formKey, copied }: { ruster: Ruster; server: ServerChoice; formKey: number; copied: boolean }) {
+  // Only a server the user saved here fills the fields, never the Hà Nội / public one picked before.
+  const savedCustom = serverChoice() === 'custom';
   return (
     <Card size="sm">
       <CardContent className="flex flex-col gap-3">
@@ -170,10 +172,10 @@ function ServerCard({ ruster, server, formKey, copied }: { ruster: Ruster; serve
             ruster.saveCustom(String(f.get('host') ?? ''), String(f.get('key') ?? ''));
           }}>
           <Input id="server-host" name="host" required placeholder="Máy chủ ID" aria-label="Máy chủ ID" autoComplete="off" autoCapitalize="off" spellCheck={false}
-            defaultValue={server === 'custom' ? loadServer() : ''} />
+            defaultValue={savedCustom ? loadServer() : ''} />
           <div className="flex gap-2">
             <Input id="server-pubkey" name="key" placeholder="Key" aria-label="Key của máy chủ" autoComplete="off" autoCapitalize="off" spellCheck={false}
-              defaultValue={server === 'custom' ? (loadServerKey() ?? '') : ''} className="font-mono text-xs" />
+              defaultValue={savedCustom ? (loadServerKey() ?? '') : ''} className="font-mono text-xs" />
             <Button type="submit" variant="secondary">Lưu</Button>
           </div>
         </form>
