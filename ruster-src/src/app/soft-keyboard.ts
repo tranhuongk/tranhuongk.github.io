@@ -29,6 +29,8 @@ export class SoftKeyboard {
     private readonly onOpenChange: (open: boolean) => void,
     /** Ctrl/⌘+V: left to the browser's `paste` (the stage sends the text before the keys). */
     private readonly onPasteChord?: (k: KeyInput) => void,
+    /** ?debug: one line per field event and what it sent. */
+    private readonly log?: (line: string) => void,
   ) {
     const f = document.createElement('input');
     f.id = 'soft-kbd';
@@ -47,15 +49,18 @@ export class SoftKeyboard {
       this.cleanups.push(() => f.removeEventListener(type, h));
     };
     on('compositionstart', () => {
+      this.log?.('compositionstart');
       this.composing = true;
     });
     on('compositionend', () => {
+      this.log?.('compositionend');
       this.composing = false;
       this.flush();
     });
     // Every change is typed at once, mid-composition too, so the remote shows letters as they come.
     on('input', () => this.flush());
     on('keydown', (e) => {
+      this.log?.(`kd ${e.key} ${e.keyCode}${e.isComposing ? ' comp' : ''}`);
       if (e.isComposing || e.key === 'Unidentified' || e.keyCode === 229) return;
       const k = keyInputFor(e);
       // Printable characters arrive through `input`; only control keys and chords are sent here.
@@ -102,6 +107,7 @@ export class SoftKeyboard {
   private flush(): void {
     const now = this.field.value;
     const { backspaces, text } = diffTyping(this.last, now);
+    this.log?.(`in${this.composing ? '(c)' : ''} "${now.replace(/\u200b/g, '')}" → ${'⌫'.repeat(backspaces)}${text ? `+"${text}"` : ''}`);
     for (let i = 0; i < backspaces; i++) this.send({ controlKey: CONTROL_KEY.Backspace });
     for (const part of text.split('\n')) {
       if (part) this.send({ text: part });

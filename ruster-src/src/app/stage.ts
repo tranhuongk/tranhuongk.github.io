@@ -278,7 +278,7 @@ export class Stage {
 
     const kbdButton = this.root.querySelector<HTMLButtonElement>('#btn-kbd')!;
     this.keyboard = new SoftKeyboard(this.root, (k) => this.keys(k), (open) => kbdButton.setAttribute('aria-pressed', String(open)),
-      (k) => this.pasteChord(k));
+      (k) => this.pasteChord(k), DEBUG ? (line) => this.debug(line) : undefined);
     // With a mouse, the keys go through the hidden field too, so the computer's input method (Telex,
     // Unikey…) works; a canvas cannot host one. With touch the field stays closed until asked for.
     this.on(this.root, 'pointerdown', (e) => {
@@ -315,7 +315,7 @@ export class Stage {
       this.root.append(box);
     }
     const t = new Date();
-    this.debugLines = [...this.debugLines, `${t.getSeconds()}.${String(t.getMilliseconds()).padStart(3, '0')} ${line}`].slice(-10);
+    this.debugLines = [...this.debugLines, `${t.getSeconds()}.${String(t.getMilliseconds()).padStart(3, '0')} ${line}`].slice(-18);
     box.textContent = this.debugLines.join('\n');
   }
 
