@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { MotionConfig, motion, useReducedMotion } from 'motion/react'
+import { useEffect, useRef, useState } from 'react'
+import { MotionConfig, motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform } from 'motion/react'
 import {
   ArrowDownToLineIcon, BotIcon, CheckIcon, CopyIcon, FileSpreadsheetIcon, FingerprintIcon, GlobeIcon, LayersIcon,
   MonitorIcon, NetworkIcon, PlugIcon, RefreshCwIcon, ShieldCheckIcon, WorkflowIcon,
@@ -11,7 +11,10 @@ import { BorderBeam } from '@/components/ui/border-beam'
 import { MagicCard } from '@/components/ui/magic-card'
 import { NumberTicker } from '@/components/ui/number-ticker'
 import { Particles } from '@/components/ui/particles'
+import { ScrollVelocityContainer, ScrollVelocityRow } from '@/components/ui/scroll-based-velocity'
+import { ScrollProgress } from '@/components/ui/scroll-progress'
 import { ShimmerButton } from '@/components/ui/shimmer-button'
+import { TextReveal } from '@/components/ui/text-reveal'
 import { AnimatedSpan, Terminal, TypingAnimation } from '@/components/ui/terminal'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -51,8 +54,10 @@ export default function App() {
   return (
     <MotionConfig reducedMotion="user">
     <div className="min-h-svh overflow-x-clip">
+      <ScrollProgress className="z-50 h-0.5 bg-linear-to-r from-indigo-500 via-sky-500 to-emerald-500" />
       <Header r={r} />
       <Hero r={r} />
+      <Keywords />
       <section id="tinh-nang" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 sm:px-6">
         <BlurFade inView className="mx-auto max-w-2xl text-center">
           <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Mọi thứ để chạy nhiều tài khoản</h2>
@@ -60,12 +65,13 @@ export default function App() {
         </BlurFade>
         <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((f, i) => (
-            <BlurFade key={f.title} inView delay={0.05 + (i % 3) * 0.08} className="h-full">
+            <ScrollRise key={f.title} index={i}>
               <FeatureCard f={f} />
-            </BlurFade>
+            </ScrollRise>
           ))}
         </div>
       </section>
+      <Statement />
       <Stats r={r} />
       <Api />
       <Install r={r} />
@@ -81,11 +87,15 @@ export default function App() {
 }
 
 function Header({ r }: { r: Release }) {
+  const { scrollY } = useScroll()
+  const [scrolled, setScrolled] = useState(false)
+  useMotionValueEvent(scrollY, 'change', (y) => setScrolled(y > 24))
   return (
-    <header className="sticky top-0 z-30 border-b bg-background/75 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+    <header className={cn('sticky top-0 z-30 border-b transition-[background-color,border-color,box-shadow] duration-300',
+      scrolled ? 'border-border bg-background/80 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/65' : 'border-transparent bg-transparent')}>
+      <div className={cn('mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 transition-[height] duration-300 sm:px-6', scrolled ? 'h-14' : 'h-16')}>
         <a href="#" className="flex items-center gap-2.5 font-semibold">
-          <img src={ICON} alt="" className="size-7 rounded-md" /> Galax Login
+          <img src={ICON} alt="" className={cn('rounded-md transition-[width,height] duration-300', scrolled ? 'size-7' : 'size-8')} /> Galax Login
         </a>
         <nav className="flex items-center gap-1 text-sm">
           <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex"><a href="#tinh-nang">Tính năng</a></Button>
@@ -100,17 +110,30 @@ function Header({ r }: { r: Release }) {
 function Hero({ r }: { r: Release }) {
   const dark = useDark()
   const reduce = useReducedMotion()
+  const ref = useRef<HTMLElement>(null)
+  // Parallax while the hero scrolls away: the icon rises and shrinks, the text fades, the grid lags.
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] })
+  const iconY = useTransform(scrollYProgress, [0, 1], [0, -90])
+  const iconScale = useTransform(scrollYProgress, [0, 1], [1, 0.7])
+  const textY = useTransform(scrollYProgress, [0, 1], [0, 70])
+  const textOpacity = useTransform(scrollYProgress, [0, 0.75], [1, 0])
+  const gridY = useTransform(scrollYProgress, [0, 1], [0, 140])
   return (
-    <section className="relative overflow-hidden border-b">
+    <section ref={ref} className="relative -mt-16 overflow-hidden border-b pt-16">
+      <motion.div className="absolute inset-0" style={reduce ? undefined : { y: gridY }}>
       <AnimatedGridPattern numSquares={24} maxOpacity={0.12} duration={3} repeatDelay={1}
         className="text-primary [mask-image:radial-gradient(640px_circle_at_center,white,transparent)] inset-x-0 h-full" />
+      </motion.div>
       {!reduce && <Particles className="absolute inset-0" quantity={90} ease={70} size={0.6} staticity={40} color={dark ? '#c7d2fe' : '#6366f1'} refresh={dark} />}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,color-mix(in_oklab,var(--primary)_18%,transparent),transparent)]" />
       <div className="relative mx-auto flex max-w-3xl flex-col items-center px-4 pt-16 pb-20 text-center sm:pt-24 sm:pb-28">
+        <motion.div style={reduce ? undefined : { y: iconY, scale: iconScale }}>
         <BlurFade delay={0.05}>
           <motion.img src={ICON} alt="Galax Login" className="size-24 rounded-[22px] shadow-2xl shadow-primary/30 sm:size-28"
             animate={{ y: [0, -8, 0], rotate: [0, 1.5, 0] }} transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }} />
         </BlurFade>
+        </motion.div>
+        <motion.div className="flex flex-col items-center" style={reduce ? undefined : { y: textY, opacity: textOpacity }}>
         <BlurFade delay={0.15}>
           <Badge variant="secondary" className="mt-8 gap-1.5">
             <span className="relative flex size-1.5">
@@ -142,6 +165,7 @@ function Hero({ r }: { r: Release }) {
             Windows 10 / 11 · 64-bit{r.size ? ` · ${megabytes(r.size)}` : ''} · tự cập nhật trong app
           </p>
         </BlurFade>
+        </motion.div>
       </div>
     </section>
   )
@@ -155,6 +179,61 @@ function DownloadButton({ href, children, className }: { href: string; children:
       className={cn('h-12 gap-2 px-7 text-base font-semibold shadow-lg shadow-primary/30', className)}>
       <ArrowDownToLineIcon className="size-5" /> {children}
     </ShimmerButton>
+  )
+}
+
+const KEYWORDS_A = ['Profile cô lập', 'Vân tay riêng', 'Proxy xoay', 'Đổi IP nóng', 'Tương thích GPM', 'MCP cho AI', 'Kịch bản tự động']
+const KEYWORDS_B = ['Đồng bộ thao tác', 'Chia lưới cửa sổ', 'Nhập từ Excel', 'Cookie & bookmark', 'REST API', 'Tự cập nhật', 'Chữ ký Ed25519']
+
+/** Two rows of keywords drifting in opposite directions; scrolling faster makes them run faster. */
+function Keywords() {
+  const reduce = useReducedMotion()
+  const row = (words: string[]) => (
+    <span className="flex items-center">
+      {words.map((w) => (
+        <span key={w} className="flex items-center px-5 text-xl font-semibold tracking-tight sm:text-2xl">
+          {w}<span aria-hidden className="ml-10 size-1.5 rounded-full bg-primary/50" />
+        </span>
+      ))}
+    </span>
+  )
+  if (reduce) {
+    return <div className="border-b py-6 text-center text-sm text-muted-foreground">{[...KEYWORDS_A, ...KEYWORDS_B].join(' · ')}</div>
+  }
+  return (
+    <section aria-label="Tính năng nổi bật" className="relative border-b py-8 [mask-image:linear-gradient(to_right,transparent,black_12%,black_88%,transparent)]">
+      <ScrollVelocityContainer className="flex flex-col gap-4">
+        <ScrollVelocityRow baseVelocity={1.6} direction={1} className="text-foreground">{row(KEYWORDS_A)}</ScrollVelocityRow>
+        <ScrollVelocityRow baseVelocity={1.6} direction={-1} className="text-muted-foreground">{row(KEYWORDS_B)}</ScrollVelocityRow>
+      </ScrollVelocityContainer>
+    </section>
+  )
+}
+
+const STATEMENT = 'Mỗi profile là một trình duyệt riêng: cookie, vân tay, proxy và múi giờ của riêng nó. Hàng trăm tài khoản chạy cùng lúc mà không dính vào nhau.'
+
+/** One sentence that lights up word by word as it is scrolled through. */
+function Statement() {
+  const reduce = useReducedMotion()
+  if (reduce) {
+    return <p className="mx-auto max-w-4xl px-6 py-24 text-2xl font-bold tracking-tight sm:text-4xl">{STATEMENT}</p>
+  }
+  return <TextReveal className="h-[170vh] [&_span]:tracking-tight">{STATEMENT}</TextReveal>
+}
+
+/** A card that rises, sharpens and grows into place as it scrolls into view (column-staggered). */
+function ScrollRise({ children, index }: { children: React.ReactNode; index: number }) {
+  const reduce = useReducedMotion()
+  const ref = useRef<HTMLDivElement>(null)
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'start 60%'] })
+  const lag = (index % 3) * 0.12
+  const y = useTransform(scrollYProgress, [0, 1], [70 + lag * 200, 0])
+  const opacity = useTransform(scrollYProgress, [0, 0.4 + lag, 1], [0, 0.35, 1])
+  const scale = useTransform(scrollYProgress, [0, 1], [0.94, 1])
+  return (
+    <motion.div ref={ref} className="h-full" style={reduce ? undefined : { y, opacity, scale }}>
+      {children}
+    </motion.div>
   )
 }
 
@@ -244,20 +323,33 @@ function Install({ r }: { r: Release }) {
       <div className="grid gap-10 lg:grid-cols-[1fr_380px]">
         <div>
           <BlurFade inView><h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Cài đặt trong một phút</h2></BlurFade>
-          <ol className="mt-8 space-y-6">
-            {steps.map((s, i) => (
-              <BlurFade key={s.title} inView delay={i * 0.12} direction="right">
-              <li className="flex gap-4">
-                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{i + 1}</span>
-                <div><div className="font-medium">{s.title}</div><p className="mt-1 text-sm text-muted-foreground">{s.text}</p></div>
-              </li>
-              </BlurFade>
-            ))}
-          </ol>
+          <InstallSteps steps={steps} />
         </div>
         <BlurFade inView delay={0.15} className="self-start"><DownloadCard r={r} /></BlurFade>
       </div>
     </section>
+  )
+}
+
+/** The steps, joined by a line that draws itself as the list scrolls past. */
+function InstallSteps({ steps }: { steps: { title: string; text: string }[] }) {
+  const reduce = useReducedMotion()
+  const ref = useRef<HTMLOListElement>(null)
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start 75%', 'end 45%'] })
+  return (
+    <ol ref={ref} className="relative mt-8 space-y-8">
+      <span aria-hidden className="absolute top-4 bottom-4 left-4 w-px -translate-x-1/2 bg-border" />
+      <motion.span aria-hidden className="absolute top-4 bottom-4 left-4 w-0.5 origin-top -translate-x-1/2 rounded-full bg-gradient-to-b from-indigo-500 via-sky-500 to-emerald-500"
+        style={reduce ? undefined : { scaleY: scrollYProgress }} />
+      {steps.map((s, i) => (
+        <BlurFade key={s.title} inView delay={i * 0.12} direction="right">
+          <li className="relative flex gap-4">
+            <span className="relative z-10 grid size-8 shrink-0 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground ring-4 ring-background">{i + 1}</span>
+            <div><div className="font-medium">{s.title}</div><p className="mt-1 text-sm text-muted-foreground">{s.text}</p></div>
+          </li>
+        </BlurFade>
+      ))}
+    </ol>
   )
 }
 
