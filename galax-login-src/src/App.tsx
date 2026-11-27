@@ -1,9 +1,18 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { MotionConfig, motion, useReducedMotion } from 'motion/react'
 import {
   ArrowDownToLineIcon, BotIcon, CheckIcon, CopyIcon, FileSpreadsheetIcon, FingerprintIcon, GlobeIcon, LayersIcon,
   MonitorIcon, NetworkIcon, PlugIcon, RefreshCwIcon, ShieldCheckIcon, WorkflowIcon,
 } from 'lucide-react'
 import { AnimatedGridPattern } from '@/components/ui/animated-grid-pattern'
+import { AuroraText } from '@/components/ui/aurora-text'
+import { BlurFade } from '@/components/ui/blur-fade'
+import { BorderBeam } from '@/components/ui/border-beam'
+import { MagicCard } from '@/components/ui/magic-card'
+import { NumberTicker } from '@/components/ui/number-ticker'
+import { Particles } from '@/components/ui/particles'
+import { ShimmerButton } from '@/components/ui/shimmer-button'
+import { AnimatedSpan, Terminal, TypingAnimation } from '@/components/ui/terminal'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,29 +33,40 @@ const FEATURES: { icon: React.ReactNode; title: string; text: string }[] = [
   { icon: <FileSpreadsheetIcon />, title: 'Nhập từ Excel', text: 'Tạo profile từ .xlsx/.csv (dùng được file mẫu của GPM), kèm cookie và bookmark. Thêm, xoá, thay bookmark cho nhiều profile cùng lúc.' },
 ]
 
+/** The page follows the system theme (main.tsx toggles .dark); canvas effects need the colour too. */
+function useDark(): boolean {
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
+  useEffect(() => {
+    const o = new MutationObserver(() => setDark(document.documentElement.classList.contains('dark')))
+    o.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    return () => o.disconnect()
+  }, [])
+  return dark
+}
+
+const BRAND = ['#6366f1', '#0ea5e9', '#10b981', '#8b5cf6']
+
 export default function App() {
   const r = useRelease()
   return (
-    <div className="min-h-svh">
+    <MotionConfig reducedMotion="user">
+    <div className="min-h-svh overflow-x-clip">
       <Header r={r} />
       <Hero r={r} />
       <section id="tinh-nang" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 sm:px-6">
-        <div className="mx-auto max-w-2xl text-center">
+        <BlurFade inView className="mx-auto max-w-2xl text-center">
           <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Mọi thứ để chạy nhiều tài khoản</h2>
           <p className="mt-3 text-muted-foreground">Viết bằng Tauri v2 và Rust: nhẹ, mở nhanh, không cần cài thêm gì ngoài Chrome hoặc Edge có sẵn.</p>
-        </div>
+        </BlurFade>
         <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map((f) => (
-            <Card key={f.title} className="gap-3 transition-shadow hover:shadow-md">
-              <CardHeader className="gap-3">
-                <div className="grid size-10 place-items-center rounded-lg bg-primary/10 text-primary [&_svg]:size-5">{f.icon}</div>
-                <CardTitle className="text-base">{f.title}</CardTitle>
-              </CardHeader>
-              <CardContent><CardDescription className="leading-relaxed">{f.text}</CardDescription></CardContent>
-            </Card>
+          {FEATURES.map((f, i) => (
+            <BlurFade key={f.title} inView delay={0.05 + (i % 3) * 0.08} className="h-full">
+              <FeatureCard f={f} />
+            </BlurFade>
           ))}
         </div>
       </section>
+      <Stats r={r} />
       <Api />
       <Install r={r} />
       <footer className="border-t">
@@ -56,6 +76,7 @@ export default function App() {
         </div>
       </footer>
     </div>
+    </MotionConfig>
   )
 }
 
@@ -77,33 +98,97 @@ function Header({ r }: { r: Release }) {
 }
 
 function Hero({ r }: { r: Release }) {
+  const dark = useDark()
+  const reduce = useReducedMotion()
   return (
     <section className="relative overflow-hidden border-b">
       <AnimatedGridPattern numSquares={24} maxOpacity={0.12} duration={3} repeatDelay={1}
         className="text-primary [mask-image:radial-gradient(640px_circle_at_center,white,transparent)] inset-x-0 h-full" />
+      {!reduce && <Particles className="absolute inset-0" quantity={90} ease={70} size={0.6} staticity={40} color={dark ? '#c7d2fe' : '#6366f1'} refresh={dark} />}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,color-mix(in_oklab,var(--primary)_18%,transparent),transparent)]" />
       <div className="relative mx-auto flex max-w-3xl flex-col items-center px-4 pt-16 pb-20 text-center sm:pt-24 sm:pb-28">
-        <img src={ICON} alt="Galax Login" className="size-24 rounded-[22px] shadow-2xl shadow-primary/30 sm:size-28" />
-        <Badge variant="secondary" className="mt-8 gap-1.5">
-          <span className="size-1.5 rounded-full bg-emerald-500" />
-          {r.version ? `Phiên bản ${r.version}${r.released ? ` · ${vnDate(r.released)}` : ''}` : 'Bản mới nhất'}
-        </Badge>
-        <h1 className="mt-5 text-4xl font-bold tracking-tight text-balance sm:text-5xl">
-          Mỗi profile một danh tính,{' '}
-          <span className="bg-gradient-to-r from-indigo-500 via-sky-500 to-emerald-500 bg-clip-text text-transparent">chạy cả trăm cùng lúc</span>
-        </h1>
-        <p className="mt-5 max-w-xl text-base text-muted-foreground text-pretty sm:text-lg">
-          Galax Login quản lý profile trình duyệt cô lập với vân tay riêng, proxy riêng, tự động hoá và API tương thích GPM Login.
-        </p>
-        <div className="mt-8 flex w-full flex-col items-center justify-center gap-3 sm:w-auto sm:flex-row">
-          <Button asChild size="lg" className="h-11 w-full px-6 text-base sm:w-auto">
-            <a href={r.latest_url}><ArrowDownToLineIcon data-icon="inline-start" /> Tải cho Windows</a>
-          </Button>
-          <Button asChild size="lg" variant="outline" className="h-11 w-full px-6 text-base sm:w-auto"><a href="#tinh-nang">Xem tính năng</a></Button>
-        </div>
-        <p className="mt-4 text-xs text-muted-foreground">
-          Windows 10 / 11 · 64-bit{r.size ? ` · ${megabytes(r.size)}` : ''} · tự cập nhật trong app
-        </p>
+        <BlurFade delay={0.05}>
+          <motion.img src={ICON} alt="Galax Login" className="size-24 rounded-[22px] shadow-2xl shadow-primary/30 sm:size-28"
+            animate={{ y: [0, -8, 0], rotate: [0, 1.5, 0] }} transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }} />
+        </BlurFade>
+        <BlurFade delay={0.15}>
+          <Badge variant="secondary" className="mt-8 gap-1.5">
+            <span className="relative flex size-1.5">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
+            </span>
+            {r.version ? `Phiên bản ${r.version}${r.released ? ` · ${vnDate(r.released)}` : ''}` : 'Bản mới nhất'}
+          </Badge>
+        </BlurFade>
+        <BlurFade delay={0.25}>
+          <h1 className="mt-5 text-4xl font-bold tracking-tight text-balance sm:text-5xl">
+            Mỗi profile một danh tính,{' '}
+            <AuroraText colors={BRAND} speed={1.2}>chạy cả trăm cùng lúc</AuroraText>
+          </h1>
+        </BlurFade>
+        <BlurFade delay={0.35}>
+          <p className="mt-5 max-w-xl text-base text-muted-foreground text-pretty sm:text-lg">
+            Galax Login quản lý profile trình duyệt cô lập với vân tay riêng, proxy riêng, tự động hoá và API tương thích GPM Login.
+          </p>
+        </BlurFade>
+        <BlurFade delay={0.45} className="w-full sm:w-auto">
+          <div className="mt-8 flex w-full flex-col items-center justify-center gap-3 sm:flex-row">
+            <DownloadButton href={r.latest_url} className="w-full sm:w-auto">Tải cho Windows</DownloadButton>
+            <Button asChild size="lg" variant="outline" className="h-12 w-full rounded-full px-6 text-base sm:w-auto"><a href="#tinh-nang">Xem tính năng</a></Button>
+          </div>
+        </BlurFade>
+        <BlurFade delay={0.55}>
+          <p className="mt-4 text-xs text-muted-foreground">
+            Windows 10 / 11 · 64-bit{r.size ? ` · ${megabytes(r.size)}` : ''} · tự cập nhật trong app
+          </p>
+        </BlurFade>
+      </div>
+    </section>
+  )
+}
+
+/** The main download action: a shimmering pill (a real link would nest a button, so it navigates). */
+function DownloadButton({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) {
+  return (
+    <ShimmerButton onClick={() => { window.location.href = href }} aria-label={`${children} (tải file cài)`}
+      background="linear-gradient(135deg, oklch(0.47 0.2 275), oklch(0.5 0.17 250))" shimmerColor="#a5f3fc" shimmerDuration="2.6s"
+      className={cn('h-12 gap-2 px-7 text-base font-semibold shadow-lg shadow-primary/30', className)}>
+      <ArrowDownToLineIcon className="size-5" /> {children}
+    </ShimmerButton>
+  )
+}
+
+function FeatureCard({ f }: { f: (typeof FEATURES)[number] }) {
+  const dark = useDark()
+  return (
+    <MagicCard gradientColor={dark ? '#312e81' : '#e0e7ff'} gradientOpacity={dark ? 0.55 : 0.9} className="h-full rounded-xl">
+      <div className="flex h-full flex-col gap-3 p-6">
+        <div className="grid size-10 place-items-center rounded-lg bg-primary/10 text-primary transition-transform duration-300 group-hover:scale-110 [&_svg]:size-5">{f.icon}</div>
+        <div className="font-semibold">{f.title}</div>
+        <p className="text-sm leading-relaxed text-muted-foreground">{f.text}</p>
+      </div>
+    </MagicCard>
+  )
+}
+
+function Stats({ r }: { r: Release }) {
+  const items: { value: number; decimals?: number; suffix?: string; label: string }[] = [
+    { value: 200, label: 'profile tạo trong một lần' },
+    { value: 19, label: 'nhà cung cấp proxy xoay ở Việt Nam' },
+    { value: 48, label: 'công cụ MCP cho trợ lý AI' },
+    { value: r.size ? r.size / 1048576 : 7, decimals: 1, suffix: ' MB', label: 'dung lượng bản cài' },
+  ]
+  return (
+    <section className="border-t">
+      <div className="mx-auto grid max-w-6xl grid-cols-2 gap-y-10 px-4 py-14 sm:px-6 lg:grid-cols-4">
+        {items.map((it, i) => (
+          <BlurFade key={it.label} inView delay={i * 0.08} className="text-center">
+            <div className="text-4xl font-bold tracking-tight tabular-nums sm:text-5xl">
+              <NumberTicker value={it.value} decimalPlaces={it.decimals ?? 0} className="text-foreground" />{it.suffix}
+            </div>
+            <div className="mx-auto mt-2 max-w-[12rem] text-sm text-muted-foreground">{it.label}</div>
+          </BlurFade>
+        ))}
       </div>
     </section>
   )
@@ -113,7 +198,7 @@ function Api() {
   return (
     <section className="border-y bg-muted/40">
       <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-20 sm:px-6 lg:grid-cols-2">
-        <div>
+        <BlurFade inView direction="right">
           <Badge variant="outline">Cho người viết script</Badge>
           <h2 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">Script GPM cũ chạy được ngay</h2>
           <p className="mt-3 text-muted-foreground">
@@ -122,25 +207,27 @@ function Api() {
             Chỉ cần đổi cổng 9495 thành 19995.
           </p>
           <ul className="mt-6 space-y-2 text-sm">
-            {['REST /api/v3 đầy đủ: profile, nhóm, proxy, kịch bản', 'Máy chủ MCP 48 công cụ cho trợ lý AI', 'Mọi công cụ MCP cũng gọi được qua REST'].map((t) => (
-              <li key={t} className="flex items-start gap-2"><CheckIcon className="mt-0.5 size-4 shrink-0 text-primary" /> {t}</li>
+            {['REST /api/v3 đầy đủ: profile, nhóm, proxy, kịch bản', 'Máy chủ MCP 48 công cụ cho trợ lý AI', 'Mọi công cụ MCP cũng gọi được qua REST'].map((t, i) => (
+              <BlurFade key={t} inView delay={0.2 + i * 0.1} direction="right">
+                <li className="flex items-start gap-2"><CheckIcon className="mt-0.5 size-4 shrink-0 text-primary" /> {t}</li>
+              </BlurFade>
             ))}
           </ul>
-        </div>
-        <Card className="overflow-hidden py-0">
-          <div className="flex items-center gap-1.5 border-b bg-muted/60 px-4 py-2.5">
-            {['bg-red-400', 'bg-amber-400', 'bg-emerald-400'].map((c) => <span key={c} className={cn('size-2.5 rounded-full', c)} />)}
-            <span className="ml-2 text-xs text-muted-foreground">PowerShell</span>
-          </div>
-          <pre className="overflow-x-auto p-4 text-[13px] leading-relaxed"><code>{`# Danh sách profile (như GPM, chỉ đổi cổng)
-curl http://127.0.0.1:19995/api/v1/profiles
-
-# Mở một profile, nhận cổng CDP để nối Playwright
-curl http://127.0.0.1:19995/api/v1/profiles/start/<id>
-
-# Đổi IP proxy xoay khi trình duyệt đang chạy
-curl http://127.0.0.1:19995/api/v3/profiles/change-ip/<id>`}</code></pre>
-        </Card>
+        </BlurFade>
+        <BlurFade inView direction="left" className="relative min-w-0">
+          <Terminal className="relative max-w-none bg-background">
+            <AnimatedSpan className="text-muted-foreground"># Danh sách profile (như GPM, chỉ đổi cổng)</AnimatedSpan>
+            <TypingAnimation duration={18}>curl http://127.0.0.1:19995/api/v1/profiles</TypingAnimation>
+            <AnimatedSpan className="text-emerald-500">✔ 200 OK · {'{'} "data": [ … ] {'}'}</AnimatedSpan>
+            <AnimatedSpan className="mt-2 text-muted-foreground"># Mở một profile, nhận cổng CDP để nối Playwright</AnimatedSpan>
+            <TypingAnimation duration={18}>curl http://127.0.0.1:19995/api/v1/profiles/start/&lt;id&gt;</TypingAnimation>
+            <AnimatedSpan className="text-emerald-500">✔ "remote_debugging_port": 40213</AnimatedSpan>
+            <AnimatedSpan className="mt-2 text-muted-foreground"># Đổi IP proxy xoay khi trình duyệt đang chạy</AnimatedSpan>
+            <TypingAnimation duration={18}>curl http://127.0.0.1:19995/api/v3/profiles/change-ip/&lt;id&gt;</TypingAnimation>
+            <AnimatedSpan className="text-sky-500">↻ IP mới đã áp, kết nối cũ đã cắt</AnimatedSpan>
+          </Terminal>
+          <BorderBeam size={120} duration={9} colorFrom="#6366f1" colorTo="#10b981" />
+        </BlurFade>
       </div>
     </section>
   )
@@ -156,17 +243,19 @@ function Install({ r }: { r: Release }) {
     <section id="cai-dat" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 sm:px-6">
       <div className="grid gap-10 lg:grid-cols-[1fr_380px]">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Cài đặt trong một phút</h2>
+          <BlurFade inView><h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Cài đặt trong một phút</h2></BlurFade>
           <ol className="mt-8 space-y-6">
             {steps.map((s, i) => (
-              <li key={s.title} className="flex gap-4">
+              <BlurFade key={s.title} inView delay={i * 0.12} direction="right">
+              <li className="flex gap-4">
                 <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{i + 1}</span>
                 <div><div className="font-medium">{s.title}</div><p className="mt-1 text-sm text-muted-foreground">{s.text}</p></div>
               </li>
+              </BlurFade>
             ))}
           </ol>
         </div>
-        <DownloadCard r={r} />
+        <BlurFade inView delay={0.15} className="self-start"><DownloadCard r={r} /></BlurFade>
       </div>
     </section>
   )
@@ -186,7 +275,9 @@ function DownloadCard({ r }: { r: Release }) {
     ['Hệ điều hành', 'Windows 10 / 11, 64-bit'],
   ].filter(([, v]) => v) as [string, string][]
   return (
-    <Card className="self-start">
+    <Card className="relative overflow-hidden">
+      <BorderBeam size={140} duration={7} colorFrom="#6366f1" colorTo="#0ea5e9" />
+      <BorderBeam size={140} duration={7} delay={3.5} colorFrom="#10b981" colorTo="#8b5cf6" />
       <CardHeader className="flex-row items-center gap-3">
         <img src={ICON} alt="" className="size-11 rounded-xl" />
         <div><CardTitle>Galax Login</CardTitle><CardDescription>Bản cài cho Windows</CardDescription></div>
@@ -197,7 +288,7 @@ function DownloadCard({ r }: { r: Release }) {
             <div key={k} className="flex justify-between py-2"><dt className="text-muted-foreground">{k}</dt><dd className="font-medium tabular-nums">{v}</dd></div>
           ))}
         </dl>
-        <Button asChild size="lg" className="h-11 text-base"><a href={r.latest_url}><ArrowDownToLineIcon data-icon="inline-start" /> Tải về</a></Button>
+        <DownloadButton href={r.latest_url} className="w-full">Tải về</DownloadButton>
         {r.sha256 && (
           <button type="button" onClick={() => void copy()} title="Chép mã SHA-256 để kiểm tra file"
             className="group flex items-center gap-2 rounded-md text-left text-xs text-muted-foreground hover:text-foreground">
