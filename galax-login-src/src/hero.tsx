@@ -9,10 +9,11 @@ import { BlurFade } from '@/components/ui/blur-fade'
 import { Button } from '@/components/ui/button'
 import { Particles } from '@/components/ui/particles'
 import { AppShot } from './app-shot'
-import { megabytes, vnDate, type Release } from './release'
+import { megabytes, useDownloads, vnDate, type Release } from './release'
 import { BRAND, DownloadButton, ICON, useDark, useWide } from './shared'
 
 function Title({ r }: { r: Release }) {
+  const { main, other } = useDownloads(r)
   return (
     <div className="flex flex-col items-center text-center">
       <BlurFade delay={0.05}><img src={ICON} alt="Galax Login" className="size-16 rounded-2xl shadow-xl shadow-primary/30 sm:size-20" /></BlurFade>
@@ -38,11 +39,11 @@ function Title({ r }: { r: Release }) {
       </BlurFade>
       <BlurFade delay={0.4} className="w-full sm:w-auto">
         <div className="mt-8 flex w-full flex-col items-center justify-center gap-3 sm:flex-row">
-          <DownloadButton href={r.latest_url} className="w-full sm:w-auto">Tải cho Windows</DownloadButton>
+          <DownloadButton href={main.url} className="w-full sm:w-auto">Tải cho {main.name}</DownloadButton>
           <Button asChild size="lg" variant="ghost" className="h-12 rounded-full px-6 text-base text-primary"><a href="#xem-ky">Xem kỹ hơn ›</a></Button>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">Windows 10 / 11 · 64-bit{r.size ? ` · ${megabytes(r.size)}` : ''}
-          {r.mac_url && <> · <a href={r.mac_url} className="underline underline-offset-2 hover:text-foreground">Bản macOS</a></>}</p>
+        <p className="mt-3 text-xs text-muted-foreground">{main.system}{main.size ? ` · ${megabytes(main.size)}` : ''}
+          {' · '}<a href={other.url} className="underline underline-offset-2 hover:text-foreground">Bản {other.name}</a></p>
       </BlurFade>
     </div>
   )

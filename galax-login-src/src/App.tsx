@@ -9,7 +9,7 @@ import { AnimatedSpan, Terminal, TypingAnimation } from '@/components/ui/termina
 import { cn } from '@/lib/utils'
 import { CloserLook } from './closer-look'
 import { Hero } from './hero'
-import { megabytes, RELEASES_PAGE, useRelease, vnDate, type Release } from './release'
+import { megabytes, RELEASES_PAGE, useDownloads, useRelease, vnDate, type Download, type Release } from './release'
 import { DownloadButton, ICON } from './shared'
 import { Statement } from './statement'
 
@@ -69,7 +69,7 @@ export default function App() {
         <footer className="border-t">
           <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:px-6">
             <div className="flex items-center gap-2"><img src={ICON} alt="" className="size-5 rounded" /> Galax Login</div>
-            <div>Dành cho Windows 10 / 11 (64-bit)</div>
+            <div>Windows 10 / 11 (64-bit) · macOS 11+</div>
           </div>
         </footer>
       </div>
@@ -79,6 +79,7 @@ export default function App() {
 
 /** The apple.com product bar: name on the left, sections and a small "Tải về" pill on the right. */
 function SubNav({ r }: { r: Release }) {
+  const { main } = useDownloads(r)
   const { scrollY } = useScroll()
   const [scrolled, setScrolled] = useState(false)
   useMotionValueEvent(scrollY, 'change', (y) => setScrolled(y > 8))
@@ -91,7 +92,7 @@ function SubNav({ r }: { r: Release }) {
           <a href="#xem-ky" className="hidden text-muted-foreground hover:text-foreground sm:inline">Tính năng</a>
           <a href="#api" className="hidden text-muted-foreground hover:text-foreground sm:inline">API</a>
           <a href="#cai-dat" className="hidden text-muted-foreground hover:text-foreground sm:inline">Cài đặt</a>
-          <a href={r.latest_url} className="rounded-full bg-primary px-3.5 py-1 font-medium text-primary-foreground hover:bg-primary/90">Tải về</a>
+          <a href={main.url} className="rounded-full bg-primary px-3.5 py-1 font-medium text-primary-foreground hover:bg-primary/90">Tải về</a>
         </nav>
       </div>
     </header>
@@ -176,12 +177,22 @@ function Api() {
   )
 }
 
-function Install({ r }: { r: Release }) {
-  const steps = [
+const STEPS = {
+  windows: [
     { title: 'Tải bản cài', text: 'Bấm "Tải cho Windows" để lấy file Galax-Login-Setup.exe.' },
     { title: 'Chạy file cài', text: 'Nếu Windows SmartScreen cảnh báo, chọn "More info" → "Run anyway". Cài cho riêng tài khoản của bạn, không cần quyền quản trị.' },
     { title: 'Mở và tạo profile', text: 'Galax Login dùng Chrome nếu có, không thì dùng Edge sẵn trong Windows. Bản mới tự cập nhật ngay trong app.' },
-  ]
+  ],
+  mac: [
+    { title: 'Tải bản macOS', text: 'Bấm "Tải cho macOS" để lấy file Galax-Login-macOS.dmg (chạy được cả Apple Silicon lẫn Intel).' },
+    { title: 'Kéo vào Applications', text: 'Mở file .dmg, kéo Galax Login vào Applications. Lần đầu mở: bấm chuột phải vào app → Open, vì bản này chưa ký bằng tài khoản Apple.' },
+    { title: 'Mở và tạo profile', text: 'Galax Login dùng Chrome, Brave hoặc Edge có sẵn trên máy. Bản macOS chưa tự cập nhật: khi có bản mới, tải lại ở trang này.' },
+  ],
+}
+
+function Install({ r }: { r: Release }) {
+  const { main, other } = useDownloads(r)
+  const steps = STEPS[main.os]
   return (
     <section id="cai-dat" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 sm:px-6">
       <div className="grid gap-10 lg:grid-cols-[1fr_380px]">
@@ -189,7 +200,7 @@ function Install({ r }: { r: Release }) {
           <BlurFade inView><h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Cài đặt trong một phút</h2></BlurFade>
           <InstallSteps steps={steps} />
         </div>
-        <BlurFade inView delay={0.15} className="self-start"><DownloadCard r={r} /></BlurFade>
+        <BlurFade inView delay={0.15} className="self-start"><DownloadCard r={r} main={main} other={other} /></BlurFade>
       </div>
     </section>
   )
@@ -217,18 +228,18 @@ function InstallSteps({ steps }: { steps: { title: string; text: string }[] }) {
   )
 }
 
-function DownloadCard({ r }: { r: Release }) {
+function DownloadCard({ r, main, other }: { r: Release; main: Download; other: Download }) {
   const [copied, setCopied] = useState(false)
   const copy = async () => {
-    await navigator.clipboard.writeText(r.sha256).catch(() => {})
+    await navigator.clipboard.writeText(main.sha256).catch(() => {})
     setCopied(true)
     setTimeout(() => setCopied(false), 1600)
   }
   const rows: [string, string][] = [
     ['Phiên bản', r.version || 'Mới nhất'],
     ['Phát hành', vnDate(r.released)],
-    ['Dung lượng', megabytes(r.size)],
-    ['Hệ điều hành', 'Windows 10 / 11, 64-bit'],
+    ['Dung lượng', megabytes(main.size)],
+    ['Hệ điều hành', main.system],
   ].filter(([, v]) => v) as [string, string][]
   return (
     <Card className="relative overflow-hidden">
@@ -236,7 +247,7 @@ function DownloadCard({ r }: { r: Release }) {
       <BorderBeam size={140} duration={7} delay={3.5} colorFrom="#10b981" colorTo="#8b5cf6" />
       <CardHeader className="flex-row items-center gap-3">
         <img src={ICON} alt="" className="size-11 rounded-xl" />
-        <div><CardTitle>Galax Login</CardTitle><CardDescription>Bản cài cho Windows</CardDescription></div>
+        <div><CardTitle>Galax Login</CardTitle><CardDescription>Bản cài cho {main.name}</CardDescription></div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <dl className="divide-y text-sm">
@@ -244,21 +255,20 @@ function DownloadCard({ r }: { r: Release }) {
             <div key={k} className="flex justify-between py-2"><dt className="text-muted-foreground">{k}</dt><dd className="font-medium tabular-nums">{v}</dd></div>
           ))}
         </dl>
-        <DownloadButton href={r.latest_url} className="w-full">Tải về</DownloadButton>
-        {r.sha256 && (
+        <DownloadButton href={main.url} className="w-full">Tải cho {main.name}</DownloadButton>
+        {main.sha256 && (
           <button type="button" onClick={() => void copy()} title="Chép mã SHA-256 để kiểm tra file"
             className="group flex items-center gap-2 rounded-md text-left text-xs text-muted-foreground hover:text-foreground">
             <span className="shrink-0">SHA-256</span>
-            <code className="truncate font-mono">{r.sha256}</code>
+            <code className="truncate font-mono">{main.sha256}</code>
             {copied ? <CheckIcon className="size-3.5 shrink-0 text-emerald-500" /> : <CopyIcon className="size-3.5 shrink-0 opacity-60 group-hover:opacity-100" />}
           </button>
         )}
-        {r.mac_url && (
-          <a href={r.mac_url} className="flex items-center justify-center gap-1.5 rounded-md border py-2 text-sm font-medium hover:bg-muted">
-            <ArrowDownToLineIcon className="size-4" /> Bản macOS (.dmg{r.mac_size ? `, ${megabytes(r.mac_size)}` : ''})
-          </a>
-        )}
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><RefreshCwIcon className="size-3" /> Đã cài rồi thì cập nhật ngay trong app{r.mac_url ? ' (Windows)' : ''}.</p>
+        <a href={other.url} className="flex items-center justify-center gap-1.5 rounded-md border py-2 text-sm font-medium hover:bg-muted">
+          <ArrowDownToLineIcon className="size-4" /> Bản {other.name}{other.size ? ` (${megabytes(other.size)})` : ''}
+        </a>
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><RefreshCwIcon className="size-3" />
+          {main.os === 'mac' ? 'Bản macOS chưa tự cập nhật, tải lại ở đây khi có bản mới.' : 'Đã cài rồi thì cập nhật ngay trong app.'}</p>
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><GlobeIcon className="size-3" /> Tải từ GitHub ·{' '}
           <a href={RELEASES_PAGE} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">các bản trước</a></p>
       </CardContent>
